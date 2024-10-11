@@ -91,35 +91,50 @@ class JSObfuscator(Obfuscator):
     ]
 
     @staticmethod
-    def obfuscate(js_code):
-        with tempfile.NamedTemporaryFile(
-            mode="w+", suffix=".js", delete=True
-        ) as temp_file:
-            temp_file.write(js_code)
-            temp_file.flush()
+    def is_uglifyjs_available():
+        try:
+            subprocess.run(["uglifyjs", "--version"], capture_output=True, check=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
 
-            try:
-                result = subprocess.run(
-                    JSObfuscator.UGLIFYJS_COMMAND + [temp_file.name],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                return result.stdout
-            except subprocess.CalledProcessError as e:
-                logger.error(f"Error occurred while obfuscating: {e}")
-                return js_code
+    @staticmethod
+    def simple_minify(js_code):
+        # Remove comments
+        js_code = re.sub(r"/\*[\s\S]*?\*/|//.*", "", js_code)
+        # Remove whitespace
+        js_code = re.sub(r"\s+", " ", js_code)
+        # Remove spaces around operators
+        js_code = re.sub(r"\s*([+\-*/=<>!&|,;:?{}()])\s*", r"\1", js_code)
+        return js_code.strip()
 
     @classmethod
-    def obfuscate_html(cls, html_content):
-        soup = BeautifulSoup(html_content, "html.parser")
-        for script in soup.find_all("script", string=True):
-            script.string = cls.obfuscate(script.string)
-        return str(soup)
+    def obfuscate(cls, js_code):
+        if cls.is_uglifyjs_available():
+            with tempfile.NamedTemporaryFile(
+                mode="w+", suffix=".js", delete=True
+            ) as temp_file:
+                temp_file.write(js_code)
+                temp_file.flush()
+
+                try:
+                    result = subprocess.run(
+                        cls.UGLIFYJS_COMMAND + [temp_file.name],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                    return result.stdout
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Error occurred while obfuscating with UglifyJS: {e}")
+                    return cls.simple_minify(js_code)
+        else:
+            logger.warning("UglifyJS not found. Falling back to simple minification.")
+            return cls.simple_minify(js_code)
 
 
 def obfuscate_html_and_js(html_content):
-    return HTMLObfuscator.obfuscate(JSObfuscator.obfuscate_html(html_content))
+    return HTMLObfuscator.obfuscate(JSObfuscator.obfuscate(html_content))
 
 
 def process_file(input_file: str, output_file: str, obfuscation_func: Callable):
