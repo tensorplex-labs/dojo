@@ -68,7 +68,7 @@ def _obfuscate_html_content(synthetic_qa: SyntheticQA) -> None:
                     )
             except Exception as e:
                 logger.error(
-                    f"Error during obfuscation for response {response.completion_id}: {e}"
+                    f"Error during obfuscation for response {response.completion_id}: {e}. But will still continue to process without obfuscation."
                 )
         else:
             logger.warning(
