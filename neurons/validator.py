@@ -21,7 +21,7 @@ import dojo
 from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dojo_task_tracker import DojoTaskTracker
-from commons.obfuscation.obfuscation_utils import JSObfuscator, obfuscate_html_and_js
+from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid, init_wandb, set_expire_time
 from database.client import connect_db
@@ -309,20 +309,15 @@ class Validator(BaseNeuron):
 
     @staticmethod
     def _obfuscate_completion_files(completion_responses: List[CompletionResponses]):
-        """Obfuscate the files in each completion response."""
+        """Obfuscate HTML files in each completion response."""
         for completion in completion_responses:
             if hasattr(completion.completion, "files"):
                 for file in completion.completion.files:
-                    if file.language.lower() in ["html", "htm"]:
+                    if file.name.lower().endswith(".html"):
                         try:
                             file.content = obfuscate_html_and_js(file.content)
                         except Exception as e:
-                            logger.error(f"Error obfuscating HTML: {e}")
-                    elif file.language.lower() == "javascript":
-                        try:
-                            file.content = JSObfuscator.obfuscate(file.content)
-                        except Exception as e:
-                            logger.error(f"Error obfuscating JavaScript: {e}")
+                            logger.error(f"Error obfuscating {file.name}: {e}")
 
     async def get_miner_uids(self, is_external_request: bool, request_id: str):
         async with self._lock:
