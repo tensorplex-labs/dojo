@@ -21,6 +21,7 @@ import template
 from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dojo_task_tracker import DojoTaskTracker
+from commons.obfuscation.obfuscation_utils import JSObfuscator, obfuscate_html_and_js
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid, init_wandb, set_expire_time
 from template.base.neuron import BaseNeuron
@@ -264,6 +265,10 @@ class Validator(BaseNeuron):
                 synapse.completion_responses,
                 k=len(synapse.completion_responses),
             )
+
+            # Apply obfuscation to each completion's files
+            Validator._obfuscate_completion_files(shuffled_completions)
+
             criteria_types = []
             # ensure criteria options same order as completion_responses
             for criteria in synapse.criteria_types:
@@ -303,6 +308,23 @@ class Validator(BaseNeuron):
         ]
 
         return flat_responses
+
+    @staticmethod
+    def _obfuscate_completion_files(completion_responses: List[CompletionResponses]):
+        """Obfuscate the files in each completion response."""
+        for completion in completion_responses:
+            if hasattr(completion.completion, "files"):
+                for file in completion.completion.files:
+                    if file.language.lower() in ["html", "htm"]:
+                        try:
+                            file.content = obfuscate_html_and_js(file.content)
+                        except Exception as e:
+                            logger.error(f"Error obfuscating HTML: {e}")
+                    elif file.language.lower() == "javascript":
+                        try:
+                            file.content = JSObfuscator.obfuscate(file.content)
+                        except Exception as e:
+                            logger.error(f"Error obfuscating JavaScript: {e}")
 
     async def get_miner_uids(self, is_external_request: bool, request_id: str):
         async with self._lock:
