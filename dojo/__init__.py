@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from template.utils.config import source_dotenv
+from dojo.utils.config import source_dotenv
 
 source_dotenv()
 
@@ -36,8 +36,8 @@ TASK_DEADLINE = 8 * 60 * 60
 
 # Define the time intervals for various tasks.
 VALIDATOR_RUN = 300
-VALIDATOR_HEARTBEAT = 60
-VALIDATOR_UPDATE_SCORE = 60
+VALIDATOR_HEARTBEAT = 150
+VALIDATOR_UPDATE_SCORE = 1200
 VALIDATOR_STATUS = 60
 MINER_STATUS = 60
 DOJO_TASK_MONITORING = 60

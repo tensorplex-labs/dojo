@@ -17,15 +17,16 @@ from fastapi.encoders import jsonable_encoder
 from tenacity import RetryError
 from torch.nn import functional as F
 
-import template
+import dojo
 from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dojo_task_tracker import DojoTaskTracker
 from commons.obfuscation.obfuscation_utils import JSObfuscator, obfuscate_html_and_js
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid, init_wandb, set_expire_time
-from template.base.neuron import BaseNeuron
-from template.protocol import (
+from database.client import connect_db
+from dojo.base.neuron import BaseNeuron
+from dojo.protocol import (
     CompletionResponses,
     DendriteQueryResponse,
     FeedbackRequest,
@@ -34,8 +35,8 @@ from template.protocol import (
     ScoringResult,
     TaskType,
 )
-from template.utils.config import get_config
-from template.utils.uids import MinerUidSelector, extract_miner_uids
+from dojo.utils.config import get_config
+from dojo.utils.uids import MinerUidSelector, extract_miner_uids
 
 
 class Validator(BaseNeuron):
@@ -79,11 +80,8 @@ class Validator(BaseNeuron):
         only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
         """
         while True:
-            await asyncio.sleep(template.VALIDATOR_UPDATE_SCORE)
+            await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
             try:
-                logger.debug(
-                    f"Scheduled update score and send feedback triggered at time: {time.time()}"
-                )
                 data: List[DendriteQueryResponse] | None = await DataManager.load()
                 if not data:
                     logger.debug(
@@ -120,9 +118,6 @@ class Validator(BaseNeuron):
                         try:
                             del DojoTaskTracker._rid_to_mhotkey_to_task_id[request_id]
                         except KeyError:
-                            logger.warning(
-                                f"Failed to remove request id: {request_id} from dojo task tracker"
-                            )
                             pass
                         await DataManager.remove_responses([d])
                         continue
@@ -142,6 +137,13 @@ class Validator(BaseNeuron):
 
                     async def log_wandb():
                         # calculate mean across all criteria
+
+                        if not criteria_to_miner_score.values() or not hotkey_to_score:
+                            logger.warning(
+                                "No criteria to miner scores available. Skipping calculating averages for wandb."
+                            )
+                            return
+
                         mean_weighted_consensus_scores = (
                             torch.stack(
                                 [
@@ -164,15 +166,12 @@ class Validator(BaseNeuron):
                         )
 
                         logger.info(
-                            f"mean miner scores across differerent criteria: consensus shape{mean_weighted_consensus_scores.shape}, gt shape:{mean_weighted_gt_scores.shape}"
+                            f"mean miner scores across differerent criteria: consensus shape:{mean_weighted_consensus_scores}, gt shape:{mean_weighted_gt_scores}"
                         )
 
                         score_data = {}
                         # update the scores based on the rewards
-                        score_data["scores_by_hotkey"] = {
-                            hotkey: score.dict()
-                            for hotkey, score in hotkey_to_score.items()
-                        }
+                        score_data["scores_by_hotkey"] = hotkey_to_score
                         score_data["mean"] = {
                             "consensus": mean_weighted_consensus_scores,
                             "ground_truth": mean_weighted_gt_scores,
@@ -194,8 +193,7 @@ class Validator(BaseNeuron):
 
                         wandb.log(wandb_data, commit=True)
 
-                    loop = asyncio.get_running_loop()
-                    await loop.run_in_executor(None, log_wandb)
+                    asyncio.create_task(log_wandb())
 
                     # once we have scored a response, just remove it
                     await DataManager.remove_responses([d])
@@ -221,11 +219,11 @@ class Validator(BaseNeuron):
     async def send_heartbeats(self):
         """Perform a health check periodically to ensure miners are reachable"""
         while True:
-            await asyncio.sleep(template.VALIDATOR_HEARTBEAT)
+            await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
             self.resync_metagraph()
             try:
                 all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
-                logger.debug(f"⬆️ Sending heartbeats to {len(all_miner_uids)} miners")
+                logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
                 axons: List[bt.AxonInfo] = [
                     self.metagraph.axons[uid]
                     for uid in all_miner_uids
@@ -352,7 +350,7 @@ class Validator(BaseNeuron):
         # typically the request may come from an external source however,
         # initially will seed it with some data for miners to get started
         if len(self._active_miner_uids) == 0:
-            logger.warning("🤷 No active miners to send request to... skipping")
+            logger.info("No active miners to send request to... skipping")
             return
 
         request_id = get_new_uuid()
@@ -394,7 +392,7 @@ class Validator(BaseNeuron):
                 return
 
             obfuscated_model_to_model = self.obfuscate_model_names(data.responses)
-            expire_at = set_expire_time(template.TASK_DEADLINE)
+            expire_at = set_expire_time(dojo.TASK_DEADLINE)
             synapse = FeedbackRequest(
                 request_id=request_id,
                 task_type=str(TaskType.CODE_GENERATION),
@@ -509,7 +507,7 @@ class Validator(BaseNeuron):
 
                     # # Check if we should exit.
                     if self._should_exit:
-                        logger.info("Validator should stop...")
+                        logger.debug("Validator should stop...")
                         break
 
                     # Sync metagraph and potentially set weights.
@@ -519,7 +517,7 @@ class Validator(BaseNeuron):
                 except Exception as e:
                     logger.error(f"Error during validator run: {e}")
                     pass
-                await asyncio.sleep(template.VALIDATOR_RUN)
+                await asyncio.sleep(dojo.VALIDATOR_RUN)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -558,13 +556,25 @@ class Validator(BaseNeuron):
 
         logger.info("Attempting to set weights")
 
+        safe_uids = self.metagraph.uids
+        if isinstance(self.metagraph.uids, np.ndarray):
+            pass
+        elif isinstance(self.metagraph.uids, torch.Tensor):
+            safe_uids = self.metagraph.uids.to("cpu").numpy()
+
+        safe_normalized_weights = normalized_weights
+        if isinstance(normalized_weights, np.ndarray):
+            pass
+        elif isinstance(normalized_weights, torch.Tensor):
+            safe_normalized_weights = normalized_weights.to("cpu").numpy()
+
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
             processed_weights,
-        ) = bt.utils.weight_utils.process_weights_for_netuid(
-            uids=self.metagraph.uids.to("cpu"),
-            weights=normalized_weights.to("cpu"),
+        ) = bt.utils.weight_utils.process_weights_for_netuid(  # type: ignore
+            uids=safe_uids,
+            weights=safe_normalized_weights,
             netuid=self.config.netuid,
             subtensor=self.subtensor,
             metagraph=self.metagraph,
@@ -582,10 +592,8 @@ class Validator(BaseNeuron):
             wait_for_inclusion=True,
             version_key=self.spec_version,
         )
-        if result is True:
-            logger.success("Validator set weights on chain successfully!")
-        else:
-            logger.error("set_weights failed")
+
+        logger.info(f"set_weights result: {result}")
         return result
 
     def resync_metagraph(self):
@@ -673,9 +681,15 @@ class Validator(BaseNeuron):
     def load_state(self):
         """Loads the state of the validator from a file."""
         loop = asyncio.get_event_loop()
+        loop.run_until_complete(connect_db())
         state_data = loop.run_until_complete(DataManager.validator_load())
         if state_data is None:
-            logger.error("Failed to load validator state data")
+            if self.step == 0:
+                logger.warning(
+                    "Failed to load validator state data, this is okay on start, or if you're running for the first time."
+                )
+            else:
+                logger.error("Failed to load validator state data")
             return
 
         self.scores = state_data[ValidatorStateKeys.SCORES]
@@ -691,4 +705,4 @@ class Validator(BaseNeuron):
     async def log_validator_status(cls):
         while not cls._should_exit:
             logger.info(f"Validator running... {time.time()}")
-            await asyncio.sleep(template.VALIDATOR_STATUS)
+            await asyncio.sleep(dojo.VALIDATOR_STATUS)
