@@ -145,14 +145,11 @@ def obfuscate_html_and_js(html_content):
 
     # Obfuscate JavaScript content
     for script in soup.find_all("script"):
-        if script.string:  # Only process scripts with content
+        if script.string:
             obfuscated_js = JSObfuscator.obfuscate(script.string)
             script.string = obfuscated_js
 
-    # Convert the soup back to a string
     obfuscated_html = str(soup)
-
-    # Now apply HTML obfuscation
     return HTMLObfuscator.obfuscate(obfuscated_html)
 
 
