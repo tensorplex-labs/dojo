@@ -313,11 +313,11 @@ class Validator(BaseNeuron):
         for completion in completion_responses:
             if hasattr(completion.completion, "files"):
                 for file in completion.completion.files:
-                    if file.name.lower().endswith(".html"):
+                    if file.filename.lower().endswith(".html"):
                         try:
                             file.content = obfuscate_html_and_js(file.content)
                         except Exception as e:
-                            logger.error(f"Error obfuscating {file.name}: {e}")
+                            logger.error(f"Error obfuscating {file.filename}: {e}")
 
     async def get_miner_uids(self, is_external_request: bool, request_id: str):
         async with self._lock:
