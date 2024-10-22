@@ -102,6 +102,8 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     config.hotkey = wallet.hotkey.ss58_address
     config.run_name = run_name
     config.version = dojo.__version__
+    # NOTE: @dev set to None to avoid exposing
+    config.subtensor = None
 
     # Initialize the wandb run for the single project
     kwargs = {
@@ -117,8 +119,6 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     # Sign the run to ensure it's from the correct hotkey
     signature = wallet.hotkey.sign(run.id.encode()).hex()
     config.signature = signature
-    # NOTE: @dev set to None to avoid exposing
-    config.subtensor = None
     wandb.config.update(config, allow_val_change=True)
 
     logger.success(f"Started wandb run with {kwargs=}")

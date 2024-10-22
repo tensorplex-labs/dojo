@@ -66,6 +66,7 @@ class Validator(BaseNeuron):
 
     def __init__(self):
         super().__init__()
+        self.loop = asyncio.get_event_loop()
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
@@ -576,8 +577,7 @@ class Validator(BaseNeuron):
                         break
 
                     # Sync metagraph and potentially set weights.
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(self.executor, self.sync)
+                    await self.loop.run_in_executor(self.executor, self.sync)
 
                     self.step += 1
                 except Exception as e:
@@ -669,9 +669,6 @@ class Validator(BaseNeuron):
 
             Args:
                 lock (threading.Lock): Lock parameter passed to separate thread
-
-            Raises:
-                SetWeightsFailed: Raised if max attempts reached to set weights
 
             Returns:
                 tuple[bool, str]: Returns a tuple of a boolean and a string
@@ -813,7 +810,8 @@ class Validator(BaseNeuron):
 
         try:
             if np.count_nonzero(self.scores) == 0:
-                raise EmptyScores("Skipping save as scores are all empty")
+                logger.warning("Scores are all zeros, but saving anyway!")
+                # raise EmptyScores("Skipping save as scores are all empty")
 
             await ORM.create_or_update_validator_score(self.scores)
             logger.success(f"📦 Saved validator state with scores: {self.scores}")
@@ -825,13 +823,7 @@ class Validator(BaseNeuron):
     def save_state(self):
         """Saves the state of the validator to a file."""
         try:
-            loop = asyncio.get_running_loop()
-            loop.run_until_complete(self._save_state())
-        except RuntimeError:
-            logger.trace("No running loop, creating a new one")
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self._save_state())
+            self.loop.run_until_complete(self._save_state())
         except Exception as e:
             logger.error(f"Failed to save validator state: {e}")
             pass
@@ -866,13 +858,7 @@ class Validator(BaseNeuron):
     def load_state(self):
         """Loads the state of the validator from a file."""
         try:
-            loop = asyncio.get_running_loop()
-            loop.run_until_complete(self._load_state())
-        except RuntimeError:
-            logger.trace("No running loop, creating a new one")
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self._load_state())
+            self.loop.run_until_complete(self._load_state())
         except Exception as e:
             logger.error(f"Failed to load validator state: {e}")
             pass
