@@ -1,16 +1,13 @@
 import argparse
 import asyncio
-import base64
 import hashlib
 import os
 import random
 import re
 import string
-import subprocess
-import tempfile
-import time
 from functools import partial
 
+import minify_html
 from bittensor.btlogging import logging as logger
 from bs4 import BeautifulSoup
 from jsmin import jsmin
@@ -25,130 +22,239 @@ class Obfuscator:
             + random.choices(string.ascii_letters + string.digits, k=length - 1)
         )
 
-    @staticmethod
-    def simple_encrypt(text, key):
-        return base64.b64encode(bytes([ord(c) ^ key for c in text])).decode()
 
-    @classmethod
-    def obfuscate(cls, content):
-        raise NotImplementedError("Subclasses must implement this method")
-
-
-# Obfuscator for HTML content
-# Encrypts the HTML content and generates a JavaScript snippet to decrypt it
-# The JavaScript snippet is then embedded in the HTML content
 class HTMLObfuscator(Obfuscator):
-    @staticmethod
-    def generate_random_string(length=8):
-        return "".join(
-            random.choices(string.ascii_letters, k=1)
-            + random.choices(string.ascii_letters + string.digits, k=length - 1)
-        )
+    @classmethod
+    def obfuscate_html(cls, html_content):
+        try:
+            minify_params = {
+                "do_not_minify_doctype": True,
+                "ensure_spec_compliant_unquoted_attribute_values": True,
+                "keep_comments": True,
+                "keep_html_and_head_opening_tags": True,
+                "keep_input_type_text_attr": True,
+                "keep_spaces_between_attributes": True,
+                "keep_ssi_comments": True,
+                "preserve_brace_template_syntax": True,
+                "preserve_chevron_percent_template_syntax": True,
+                "remove_bangs": True,
+                "remove_processing_instructions": True,
+            }
 
-    @staticmethod
-    def simple_encrypt(text, key):
-        return base64.b64encode(bytes(c ^ key for c in text.encode())).decode()
+            # Always include keep_closing_tags=True to avoid breaking the HTML structure
+            selected_params = {"keep_closing_tags": True}
+            random_params = random.sample(minify_params.items(), 5)
+            selected_params.update(random_params)
+
+            # Use minify to obfuscate the JavaScript code
+            minified_content = minify_html.minify(
+                html_content,
+                **selected_params,
+            )
+
+            # Apply a random number of obfuscation techniques
+            obfuscated_content = cls.apply_techniques(minified_content)
+
+            # Optionally add random comments (50% chance)
+            if random.random() < 0.5:
+                obfuscated_content = cls.add_enclosing_comments(obfuscated_content)
+
+            return obfuscated_content
+        except Exception as e:
+            logger.error(f"Obfuscation failed for HTML: {str(e)}")
+            return html_content
 
     @classmethod
-    def obfuscate(cls, html_content):
-        soup = BeautifulSoup(html_content, "html.parser")
-        scripts = soup.find_all("script")
+    def apply_techniques(cls, content):
+        techniques = [
+            cls.add_random_attributes,
+            cls.add_dummy_elements,
+            cls.shuffle_attributes,
+        ]
+        num_techniques = random.randint(1, len(techniques))
+        chosen_techniques = random.sample(techniques, num_techniques)
 
-        # Obfuscate the remaining HTML
-        body_content = str(soup.body)
-        body_content = re.sub(r"\s+", " ", body_content).replace("> <", "><")
-
-        encryption_key = random.randint(1, 255)
-        encrypted_content = cls.simple_encrypt(body_content, encryption_key)
-
-        decrypt_func, result_var = (
-            cls.generate_random_string(),
-            cls.generate_random_string(),
-        )
-
-        js_code = (
-            f"function {decrypt_func}(e,t){{try{{var r=atob(e),n='';for(var i=0;i<r.length;i++){{n+=String.fromCharCode(r.charCodeAt(i)^t)}}return n}}catch(err){{console.error('Decryption failed:',err);return e}}}}"
-            f"var {result_var}={decrypt_func}('{encrypted_content}',{encryption_key});"
-            f"if({result_var}.indexOf('<')!==-1){{document.body.innerHTML={result_var};}}else{{console.error('Decryption produced invalid HTML');document.body.innerHTML=atob('{encrypted_content}');}}"
-        )
-
-        new_script = soup.new_tag("script")
-        new_script.string = js_code
-
-        soup.body.clear()
-        soup.body.append(new_script)
-        soup.body.extend(scripts)
-
+        soup = BeautifulSoup(content, "html.parser")
+        for technique in chosen_techniques:
+            soup = technique(soup)
         return str(soup)
 
+    @classmethod
+    def add_enclosing_comments(cls, content):
+        return (
+            f"<!-- {cls.generate_random_string(16)} -->\n"
+            f"{content}\n"
+            f"<!-- {cls.generate_random_string(16)} -->"
+        )
 
-# Obfuscator for JavaScript code
-# Uses UglifyJS to minify and obfuscate the JavaScript code
-class JSObfuscator(Obfuscator):
-    UGLIFYJS_COMMAND = [
-        "uglifyjs",
-        "--compress",
-        "--mangle",
-        "--mangle-props",
-        "--toplevel",
-    ]
-    MAX_RETRIES = 5
-    RETRY_DELAY = 1
-    TIMEOUT = 3
+    @classmethod
+    def add_random_attributes(cls, soup):
+        for tag in soup.find_all():
+            if random.random() < 0.3:
+                tag[cls.generate_random_string(5)] = cls.generate_random_string(8)
+        return soup
+
+    @classmethod
+    def add_dummy_elements(cls, soup):
+        dummy_elements = [
+            soup.new_tag(
+                "div", style="display:none;", string=cls.generate_random_string(20)
+            )
+            for _ in range(random.randint(1, 5))
+        ]
+        soup.body.extend(dummy_elements)
+        return soup
 
     @staticmethod
-    def is_uglifyjs_available():
-        try:
-            subprocess.run(["uglifyjs", "--version"], capture_output=True, check=True)
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
+    def shuffle_attributes(soup):
+        for tag in soup.find_all():
+            tag.attrs = dict(random.sample(list(tag.attrs.items()), len(tag.attrs)))
+        return soup
 
+
+# Todo: Test further JS obfuscation techniques and enable it
+class JSObfuscator(Obfuscator):
     @staticmethod
     def simple_minify(js_code):
         return jsmin(js_code)
 
     @classmethod
-    def obfuscate(cls, js_code):
-        if cls.is_uglifyjs_available():
-            with tempfile.NamedTemporaryFile(
-                mode="w+", suffix=".js", delete=True
-            ) as temp_file:
-                temp_file.write(js_code)
-                temp_file.flush()
+    def obfuscate_javascript(cls, html_content: str) -> str:
+        """Find and obfuscate all JavaScript content using BeautifulSoup."""
+        soup = BeautifulSoup(html_content, "html.parser")
 
-                for attempt in range(cls.MAX_RETRIES):
-                    try:
-                        result = subprocess.run(
-                            cls.UGLIFYJS_COMMAND + [temp_file.name],
-                            capture_output=True,
-                            text=True,
-                            check=True,
-                            timeout=cls.TIMEOUT,
-                        )
-                        return result.stdout
-                    except subprocess.TimeoutExpired:
-                        logger.warning(
-                            f"Attempt {attempt + 1} timed out after {cls.TIMEOUT} seconds. Retrying..."
-                        )
-                    except subprocess.CalledProcessError as e:
-                        logger.warning(f"Attempt {attempt + 1} failed: {e}")
-                        logger.warning(f"UglifyJS stderr: {e.stderr}")
-                    except Exception as e:
-                        logger.warning(
-                            f"Attempt {attempt + 1} failed with unexpected error: {str(e)}"
-                        )
+        # Find and obfuscate <script> tags
+        for script in soup.find_all("script"):
+            if script.string:  # Only process if there's content
+                script.string = cls.apply_js_obfuscation(script.string)
 
-                    if attempt < cls.MAX_RETRIES - 1:
-                        time.sleep(cls.RETRY_DELAY)
-                    else:
-                        logger.error(
-                            f"All {cls.MAX_RETRIES} attempts to obfuscate with UglifyJS failed. Falling back to simple minification."
-                        )
-                        return cls.simple_minify(js_code)
-        else:
-            logger.warning("UglifyJS not found. Falling back to simple minification.")
-            return cls.simple_minify(js_code)
+        # Find and obfuscate inline event handlers
+        for tag in soup.find_all():
+            for attr in list(tag.attrs):
+                if attr.startswith("on"):  # onclick, onload, etc.
+                    tag[attr] = cls.apply_js_obfuscation(tag[attr])
+
+        return str(soup)
+
+    @classmethod
+    def apply_js_obfuscation(cls, js_code: str) -> str:
+        """Apply multiple JavaScript obfuscation techniques."""
+        techniques = [
+            # cls.add_string_encoding,
+            cls.add_dead_code,
+            # cls.add_control_flow_obfuscation,
+            # cls.add_self_defending_code,
+        ]
+
+        obfuscated_code = js_code
+        # Apply 2-3 random techniques
+        for technique in random.sample(techniques, 1):  # random.randint(2, 3)
+            obfuscated_code = technique(obfuscated_code)
+        return obfuscated_code
+
+    @classmethod
+    def add_string_encoding(cls, js_code: str) -> str:
+        """Safely encode string literals using hex encoding."""
+        # Only match simple string literals, avoiding template literals and regex
+        string_pattern = re.compile(r'(["\']).+?\1')
+
+        def encode_string(match):
+            # Get the string without quotes
+            full_str = match.group(0)
+            content = full_str[1:-1]
+
+            # Skip if string is empty or already looks encoded
+            if not content or "\\" in content:
+                return full_str
+
+            # Skip strings that look like HTML IDs, classes, or event names
+            if any(skip in content.lower() for skip in ["#", ".", "on"]):
+                return full_str
+
+            # 30% chance to encode each string
+            if random.random() > 0.3:
+                return full_str
+
+            # Use simple hex encoding which is reliable
+            hex_array = []
+            for char in content:
+                hex_array.append(hex(ord(char)))
+
+            # Create a string from hex values
+            return f"String.fromCharCode({','.join(hex_array)})"
+
+        return string_pattern.sub(encode_string, js_code)
+
+    @classmethod
+    def add_dead_code(cls, js_code: str) -> str:
+        """Add harmless dead code that will be optimized out."""
+        # Dead code that's safe to insert and will be optimized away
+        dead_code_samples = [
+            # "if (false) { console.log('unreachable'); }",
+            "while (false) { break; }",
+            # "try { if (0) throw 0; } catch(e) {}",
+            # f"var _{cls.generate_random_string(5)} = function() {{ return false; }}();",
+            # "switch (false) { case true: break; default: break; }",
+            # "for (var i = 0; i < 0; i++) { console.log(i); }",
+        ]
+
+        # Split code into statements using semicolons
+        statements = js_code.split(";")
+
+        # Only insert after complete statements
+        for _ in range(random.randint(1, 2)):
+            if len(statements) > 1:  # Only if we have multiple statements
+                # Choose a position between statements
+                position = random.randint(1, len(statements) - 1)
+                dead_code = random.choice(dead_code_samples)
+                statements.insert(position, dead_code)
+
+        # Rejoin with semicolons
+        return ";".join(statements)
+
+    @classmethod
+    def add_control_flow_obfuscation(cls, js_code: str) -> str:
+        """Add control flow obfuscation using switch-case or conditional statements."""
+        # Wrap the entire code in a self-executing function with control flow logic
+        switch_var = cls.generate_random_string(5)
+        wrapped_code = f"""
+                        (function() {{
+                            var {switch_var} = {random.randint(1, 100)};
+                            switch({switch_var} % 3) {{
+                                case 0:
+                                    if ({switch_var} % 2) {{
+                                        {js_code}
+                                    }} else {{
+                                        {js_code}
+                                    }}
+                                    break;
+                                case 1:
+                                    while({switch_var}-- > {switch_var}-1) {{
+                                        {js_code}
+                                        break;
+                                    }}
+                                    break;
+                                default:
+                                    {js_code}
+                            }}
+                        }})();
+                        """
+        return wrapped_code
+
+    @classmethod
+    def add_self_defending_code(cls, js_code: str) -> str:
+        """Add code that makes debugging and analysis more difficult."""
+        random_key = cls.generate_random_string(8)
+        protected_code = f"""
+                        (function() {{
+                            var {random_key} = new Date().getTime();
+                            if (new Date().getTime() - {random_key} > 100) {{
+                                return;
+                            }}
+                            {js_code}
+                        }})();
+                        """
+        return protected_code
 
 
 async def obfuscate_html_and_js(html_content, timeout=30):
@@ -165,20 +271,14 @@ async def obfuscate_html_and_js(html_content, timeout=30):
         return html_content  # Return original content if obfuscation times out
 
 
-def _obfuscate_html_and_js_sync(html_content):
-    logger.info("Obfuscating HTML and JavaScript content...")
-    soup = BeautifulSoup(html_content, "html.parser")
-
-    # Obfuscate JavaScript content
-    for script in soup.find_all("script"):
-        if script.string:
-            obfuscated_js = JSObfuscator.obfuscate(script.string)
-            script.string = obfuscated_js
-
-    obfuscated_html = str(soup)
-    final_obfuscated_html = HTMLObfuscator.obfuscate(obfuscated_html)
-    logger.info("Obfuscation complete")
-    return final_obfuscated_html
+def _obfuscate_html_and_js_sync(content):
+    try:
+        obfuscated_html = HTMLObfuscator.obfuscate_html(content)
+        return obfuscated_html
+    except Exception as e:
+        logger.error(f"Minification failed: {str(e)}")
+        logger.warning("Falling back to simple minification.")
+        return JSObfuscator.simple_minify(content)
 
 
 async def process_file(input_file: str, output_file: str):
