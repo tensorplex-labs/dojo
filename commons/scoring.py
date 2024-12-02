@@ -413,10 +413,7 @@ class Scoring:
         miner_outputs = miner_outputs_normalised
         logger.debug(f"scoring: raw miner outputs with nans\n{miner_outputs}")
 
-        # use minmax scale to ensure ground truth is in the range [0, 1]
-        ground_truth_arr = minmax_scale(
-            np.array([rank for _, rank in cid_with_rank_sorted])
-        ).numpy()
+        ground_truth_arr = np.array([0, 0.45, 0.55, 1])
         logger.debug(f"scoring: ground truth\n{ground_truth_arr}")
 
         logger.info(f"scoring: Miner outputs\n{miner_outputs}")
