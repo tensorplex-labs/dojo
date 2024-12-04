@@ -46,6 +46,15 @@ fi
 
 # If the first argument is 'validator', run the validator script
 if [ "$1" = 'validator' ]; then
+
+    echo 'Running Prisma migrations...'
+    prisma migrate deploy || { echo "Prisma migrations failed."; exit 1; }
+    echo 'Migrations applied successfully.'
+
+    echo 'Generating Prisma client...'
+    prisma generate || { echo "Prisma client generation failed."; exit 1; }
+    echo 'Prisma client generated successfully.'
+
     echo "Environment variables:"
     echo "WALLET_COLDKEY: ${WALLET_COLDKEY}"
     echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"

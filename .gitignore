@@ -4,6 +4,7 @@
 .env.*
 !.env.miner.example
 !.env.validator.example
+!.env.example
 
 .aider*
 package.json
