@@ -72,6 +72,9 @@ Repository = "https://github.com/tensorplex-labs/dojo"
 [tool.commitizen]
 name = "cz_conventional_commits"
 
+[tool.pyright]
+exclude = ["**/__pycache__", "database/prisma", "wandb"]
+
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
