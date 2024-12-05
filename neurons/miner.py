@@ -13,7 +13,13 @@ from commons.human_feedback.dojo import DojoAPI
 from commons.utils import get_epoch_time
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.base.miner import BaseMinerNeuron
-from dojo.protocol import FeedbackRequest, Heartbeat, ScoringResult, TaskResultRequest
+from dojo.protocol import (
+    FeedbackRequest,
+    Heartbeat,
+    ScoringResult,
+    TaskResultRequest,
+    TaskSynapseObject,
+)
 from dojo.utils.config import get_config
 from dojo.utils.uids import is_miner
 
@@ -29,7 +35,7 @@ class Miner(BaseMinerNeuron):
         # Attach determiners which functions are called when servicing a request.
         logger.info("Attaching forward function to miner axon.")
         self.axon.attach(
-            forward_fn=self.forward_feedback_request,
+            forward_fn=self.forward_task_request,
             blacklist_fn=self.blacklist_feedback_request,
             priority_fn=self.priority_ranking,
         ).attach(forward_fn=self.forward_result).attach(forward_fn=self.ack_heartbeat)
@@ -85,38 +91,41 @@ class Miner(BaseMinerNeuron):
 
         return synapse
 
-    async def forward_feedback_request(
-        self, synapse: FeedbackRequest
-    ) -> FeedbackRequest:
+    async def forward_task_request(
+        self, synapse: TaskSynapseObject
+    ) -> TaskSynapseObject:
+        # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
+        if not all(
+            [
+                synapse,
+                synapse.dendrite,
+                synapse.dendrite.hotkey,
+                synapse.completion_responses,
+            ]
+        ):
+            logger.error("Invalid synapse: missing required fields")
+            return synapse
         try:
-            # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
-            if not synapse or not synapse.dendrite or not synapse.dendrite.hotkey:
-                logger.error("Invalid synapse: dendrite or dendrite.hotkey is None.")
-                return synapse
-
             logger.info(
-                f"Miner received request id: {synapse.request_id} from {synapse.dendrite.hotkey}, with expire_at: {synapse.expire_at}"
+                f"Miner received task id: {synapse.task_id} from {synapse.dendrite.hotkey}, with expire_at: {synapse.expire_at}"
             )
-
-            if not synapse.completion_responses:
-                logger.error("Invalid synapse: response field is None.")
-                return synapse
 
             self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
 
-            task_ids = await DojoAPI.create_task(synapse)
-            assert len(task_ids) == 1
-            synapse.dojo_task_id = task_ids[0]
+            # Create task and store ID
+            if task_ids := await DojoAPI.create_task(synapse):
+                synapse.dojo_task_id = task_ids[0]
+                # Clear completion field in completion_responses to optimize network traffic
+                for response in synapse.completion_responses:
+                    response.completion = None
+            else:
+                logger.error("Failed to create task: no task IDs returned")
 
-            # Clear completion field in completion_responses to optimize network traffic
-            for completion_response in synapse.completion_responses:
-                completion_response.completion = None
-
-        except Exception:
-            traceback.print_exc()
+        except Exception as e:
             logger.error(
-                f"Error occurred while processing request id: {synapse.request_id}, error: {traceback.format_exc()}"
+                f"Error processing request id: {getattr(synapse, 'task_id', 'unknown')}: {str(e)}"
             )
+            logger.debug(f"Detailed error: {traceback.format_exc()}")
 
         return synapse
 

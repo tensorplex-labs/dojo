@@ -6,7 +6,7 @@ from bittensor.btlogging import logging as logger
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
 from commons.utils import set_expire_time
-from dojo.protocol import FeedbackRequest, MultiScoreCriteria, TaskType
+from dojo.protocol import FeedbackRequest, MultiScoreCriteria, TaskTypeEnum
 
 
 async def main():
@@ -32,7 +32,7 @@ async def main():
 
     expire_at = set_expire_time(8 * 3600)
     synapse = FeedbackRequest(
-        task_type=str(TaskType.CODE_GENERATION),
+        task_type=str(TaskTypeEnum.CODE_GENERATION),
         criteria_types=[
             MultiScoreCriteria(
                 options=[completion.model for completion in data.responses],

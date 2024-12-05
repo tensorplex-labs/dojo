@@ -22,23 +22,139 @@ from database.prisma.models import (
 )
 from database.prisma.types import (
     Completion_Response_ModelCreateInput,
+    CompletionCreateInput,
     Criteria_Type_ModelCreateInput,
     Criteria_Type_ModelCreateWithoutRelationsInput,
+    CriterionCreateInput,
     Feedback_Request_ModelCreateInput,
+    GroundTruthCreateInput,
+    MinerResponseCreateInput,
+    ValidatorTaskCreateInput,
 )
 from dojo.protocol import (
-    CompletionResponses,
+    CompletionResponse,
     CriteriaType,
     FeedbackRequest,
     MultiScoreCriteria,
     MultiSelectCriteria,
     RankingCriteria,
     ScoreCriteria,
+    TaskSynapseObject,
 )
+
 
 # ---------------------------------------------------------------------------- #
 #                 MAP PROTOCOL OBJECTS TO DATABASE MODEL INPUTS                #
 # ---------------------------------------------------------------------------- #
+def map_task_synapse_object_to_validator_task(
+    synapse: TaskSynapseObject,
+) -> ValidatorTaskCreateInput:
+    """Maps a TaskSynapseObject to ValidatorTask database model input.
+
+    Args:
+        synapse (TaskSynapseObject): The task synapse object to map
+
+    Returns:
+        ValidatorTaskCreateInput: The database model input
+    """
+    # Map completions and their associated criteria
+    completions = []
+    for resp in synapse.completion_responses:
+        completion = CompletionCreateInput(
+            validator_task_id=synapse.task_id,
+            model=resp.model,
+            completion=Json(json.dumps(resp.completion, default=vars)),
+        )
+
+        # Add criteria for each completion if they exist
+        if hasattr(resp, "criteria_types") and resp.criteria_types:
+            criteria = [
+                CriterionCreateInput(
+                    criteria_type=_map_criteria_type_to_enum(criterion),
+                    config=Json(json.dumps(_get_criteria_config(criterion))),
+                )
+                for criterion in resp.criteria_types
+            ]
+            completion.criterion = {"create": criteria}
+
+        completions.append(completion)
+
+    # Map ground truths if present
+    ground_truths = (
+        [
+            GroundTruthCreateInput(
+                validator_task_id=synapse.task_id,
+                obfuscated_model_id=model_id,
+                real_model_id=model_id,
+                rank_id=rank_id,
+                # ground_truth_score=float(rank_id), # TODO: Add normalised gt score
+            )
+            for model_id, rank_id in synapse.ground_truth.items()
+        ]
+        if synapse.ground_truth
+        else []
+    )
+
+    return ValidatorTaskCreateInput(
+        id=synapse.task_id,
+        previous_task_id=synapse.previous_task_id,
+        prompt=synapse.prompt,
+        task_type=synapse.task_type,
+        expire_at=synapse.expire_at,
+        is_processed=False,
+        completions={"create": completions},
+        ground_truth={"create": ground_truths},
+    )
+
+
+def _map_criteria_type_to_enum(criteria: CriteriaType) -> CriteriaTypeEnum:
+    """Helper function to map CriteriaType to CriteriaTypeEnum."""
+    if isinstance(criteria, ScoreCriteria):
+        return CriteriaTypeEnum.SCORE
+    elif isinstance(criteria, MultiSelectCriteria):
+        return CriteriaTypeEnum.MULTI_SELECT
+    else:
+        raise ValueError(f"Unknown criteria type: {type(criteria)}")
+
+
+def _get_criteria_config(criteria: CriteriaType) -> dict:
+    """Helper function to extract configuration from criteria."""
+    config = {}
+
+    if isinstance(criteria, ScoreCriteria):
+        config["min"] = criteria.min
+        config["max"] = criteria.max
+    elif isinstance(criteria, MultiSelectCriteria):
+        config["options"] = criteria.options
+
+    return config
+
+
+def map_task_synapse_object_to_miner_response(
+    synapse: TaskSynapseObject,
+    validator_task_id: str,
+) -> MinerResponseCreateInput:
+    """Maps a TaskSynapseObject to MinerResponse database model input.
+
+    Args:
+        synapse (TaskSynapseObject): The task synapse object to map
+        validator_task_id (str): The ID of the parent validator task
+
+    Returns:
+        MinerResponseCreateInput: The database model input
+    """
+    if not synapse.miner_hotkey or not synapse.miner_coldkey:
+        raise ValueError("Miner hotkey and coldkey are required")
+
+    if not synapse.dojo_task_id:
+        raise ValueError("Dojo task ID is required")
+
+    return MinerResponseCreateInput(
+        validator_task_id=validator_task_id,
+        dojo_task_id=synapse.dojo_task_id,
+        hotkey=synapse.miner_hotkey,
+        coldkey=synapse.miner_coldkey,
+    )
 
 
 def map_criteria_type_to_model(
@@ -111,7 +227,7 @@ def map_criteria_type_model_to_criteria_type(
 
 
 def map_completion_response_to_model(
-    response: CompletionResponses, feedback_request_id: str
+    response: CompletionResponse, feedback_request_id: str
 ) -> Completion_Response_ModelCreateInput:
     result = Completion_Response_ModelCreateInput(
         completion_id=response.completion_id,
@@ -207,7 +323,7 @@ def map_feedback_request_model_to_feedback_request(
             raise InvalidCompletion("No completion responses found to map")
 
         completion_responses = [
-            CompletionResponses(
+            CompletionResponse(
                 completion_id=completion.completion_id,
                 model=completion.model,
                 completion=json.loads(completion.completion),
