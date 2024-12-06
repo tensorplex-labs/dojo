@@ -73,7 +73,7 @@ Repository = "https://github.com/tensorplex-labs/dojo"
 name = "cz_conventional_commits"
 
 [tool.pyright]
-exclude = ["**/__pycache__", "database/prisma", "wandb"]
+exclude = ["**/__pycache__", "database/prisma", "wandb", ".nox"]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
