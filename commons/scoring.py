@@ -79,8 +79,11 @@ def _reward_cubic(
     # shape: (num_miners,)
     # number range [-1, 1]
     x = F.cosine_similarity(
-        torch.from_numpy(miner_outputs), torch.from_numpy(ground_truth), dim=1
+        torch.from_numpy(miner_outputs.copy()),
+        torch.from_numpy(ground_truth.copy()),
+        dim=1,
     ).numpy()
+
     # Convert nans to -1 to send it to the bottom
     x = np.where(np.isnan(x), -1, x)
 
@@ -455,7 +458,7 @@ class Scoring:
             logger.debug(f"scoring: error calculating segment sums: {e}")
             pass
 
-        return torch.from_numpy(cubic_reward)
+        return torch.from_numpy(cubic_reward.copy())
 
     @staticmethod
     def cmp_ground_truth(
