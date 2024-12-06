@@ -414,7 +414,6 @@ class Scoring:
         )
 
         miner_outputs = miner_outputs_normalised
-        logger.debug(f"scoring: raw miner outputs with nans\n{miner_outputs}")
 
         # use minmax scale to ensure ground truth is in the range [0, 1]
         ground_truth_arr = minmax_scale(
@@ -426,7 +425,6 @@ class Scoring:
         # after minmax scale: [0, 0.33, 0.667, 1]
         # but we want the reverse, so: [1, 0.667, 0.33, 0], since cid1 is the best
         ground_truth_arr = ground_truth_arr[::-1]
-        logger.debug(f"scoring: ground truth\n{ground_truth_arr}")
 
         logger.info(f"scoring: Miner outputs\n{miner_outputs}")
         logger.info(f"scoring: Ground truth\n{ground_truth_arr}")
