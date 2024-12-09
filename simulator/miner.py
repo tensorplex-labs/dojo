@@ -156,7 +156,7 @@ class MinerSim(Miner):
             if self.is_bad_miner:
                 deviation = random.randint(-5, 5)
             else:
-                deviation = random.randint(-2, 2)
+                deviation = random.randint(-1, 1)
             random_score = max(0, min(9, base_weight + deviation))
             score = int((random_score / (10 - 1)) * (100 - 1) + 1)
             scores[k] = score
