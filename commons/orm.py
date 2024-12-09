@@ -1,92 +1,63 @@
 import asyncio
-import gc
-import json
-import math
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List
 
-import torch
 from bittensor.btlogging import logging as logger
 
 from commons.exceptions import (
     ExpiredFromMoreThanExpireTo,
-    InvalidCompletion,
     InvalidMinerResponse,
-    InvalidTask,
     NoNewExpiredTasksYet,
 )
 from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
 from database.mappers import (
-    map_child_feedback_request_to_model,
-    map_completion_response_to_model,
-    map_criteria_type_to_model,
-    map_feedback_request_model_to_feedback_request,
-    map_parent_feedback_request_to_model,
+    map_task_synapse_object_to_miner_response,
+    map_task_synapse_object_to_validator_task,
 )
-from database.prisma import Json
 from database.prisma.errors import PrismaError
 from database.prisma.models import (
-    Feedback_Request_Model,
-    Ground_Truth_Model,
-    Score_Model,
+    GroundTruth,
+    ValidatorTask,
 )
 from database.prisma.types import (
-    Completion_Response_ModelWhereInput,
-    Completion_Response_ModelWhereUniqueInput,
-    Feedback_Request_ModelInclude,
-    Feedback_Request_ModelWhereInput,
-    Ground_Truth_ModelCreateInput,
-    Score_ModelCreateInput,
-    Score_ModelUpdateInput,
+    ValidatorTaskWhereInput,
 )
 from dojo import TASK_DEADLINE
-from dojo.protocol import (
-    CodeAnswer,
-    CompletionResponses,
-    DendriteQueryResponse,
-    FeedbackRequest,
-)
+from dojo.protocol import TaskSynapseObject
 
 
 class ORM:
     @staticmethod
     async def get_expired_tasks(
-        validator_hotkeys: list[str],
         batch_size: int = 10,
         expire_from: datetime | None = None,
         expire_to: datetime | None = None,
-    ) -> AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]:
-        """Returns a batch of Feedback_Request_Model and a boolean indicating if there are more batches.
-        Depending on the `expire_from` and `expire_to` provided, it will return different results.
-
-        YOUR LOGIC ON WHETHER TASKS ARE EXPIRED OR NON-EXPIRED SHOULD BE HANDLED BY SETTING EXPIRE_FROM and EXPIRE_TO YOURSELF.
+    ) -> AsyncGenerator[tuple[List[ValidatorTask], bool], None]:
+        """Returns batches of expired ValidatorTask records and a boolean indicating if there are more batches.
 
         Args:
-            validator_hotkeys (list[str]): List of validator hotkeys.
             batch_size (int, optional): Number of tasks to return in a batch. Defaults to 10.
-
-            1 task == 1 validator request, N miner responses
             expire_from: (datetime | None) If provided, only tasks with expire_at after expire_from will be returned.
             expire_to: (datetime | None) If provided, only tasks with expire_at before expire_to will be returned.
             You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
 
         Raises:
+            ExpiredFromMoreThanExpireTo: If expire_from is greater than expire_to
             NoNewExpiredTasksYet: If no expired tasks are found for processing.
 
         Yields:
-            Iterator[AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]]:
-                Returns a batch of DendriteQueryResponse and a boolean indicating if there are more batches
-
+            tuple[List[ValidatorTask], bool]: Each yield returns:
+            - List of ValidatorTask records with their related completions, miner_responses, and GroundTruth
+            - Boolean indicating if there are more batches to process
         """
 
         # find all validator requests first
-        include_query = Feedback_Request_ModelInclude(
+        include_query = ValidatorTaskWhereInput(
             {
                 "completions": True,
-                "criteria_types": True,
-                "ground_truths": True,
-                "parent_request": True,
+                "miner_responses": True,
+                "GroundTruth": True,
             }
         )
 
@@ -108,22 +79,26 @@ class ORM:
                 "expire_from should be less than expire_to."
             )
 
-        vali_where_query_unprocessed = Feedback_Request_ModelWhereInput(
+        vali_where_query_unprocessed = ValidatorTaskWhereInput(
             {
-                "hotkey": {"in": validator_hotkeys, "mode": "insensitive"},
-                "child_requests": {"some": {}},
                 # only check for expire at since miner may lie
                 "expire_at": {
                     "gt": expire_from,
                     "lt": expire_to,
                 },
-                "is_processed": {"equals": False},
+                "is_processed": False,
             }
         )
 
-        # count first total including non
-        task_count_unprocessed = await Feedback_Request_Model.prisma().count(
-            where=vali_where_query_unprocessed,
+        # Get total count and first batch in parallel
+        task_count_unprocessed, first_batch = await asyncio.gather(
+            ValidatorTask.prisma().count(where=vali_where_query_unprocessed),
+            ValidatorTask.prisma().find_many(
+                include=include_query,
+                where=vali_where_query_unprocessed,
+                order={"created_at": "desc"},
+                take=batch_size,
+            ),
         )
 
         logger.debug(f"Count of unprocessed tasks: {task_count_unprocessed}")
@@ -133,453 +108,607 @@ class ORM:
                 f"No expired tasks found for processing, please wait for tasks to pass the task deadline of {TASK_DEADLINE} seconds."
             )
 
-        for i in range(0, task_count_unprocessed, batch_size):
-            # find all unprocesed validator requests
-            validator_requests = await Feedback_Request_Model.prisma().find_many(
+        # Yield first batch
+        yield first_batch, task_count_unprocessed > batch_size
+
+        # Process remaining batches
+        for skip in range(batch_size, task_count_unprocessed, batch_size):
+            validator_requests = await ValidatorTask.prisma().find_many(
                 include=include_query,
                 where=vali_where_query_unprocessed,
                 order={"created_at": "desc"},
-                skip=i,
+                skip=skip,
                 take=batch_size,
             )
-
-            # find all miner responses
-            unprocessed_validator_request_ids = [r.id for r in validator_requests]
-            miner_responses = await Feedback_Request_Model.prisma().find_many(
-                include=include_query,
-                where={
-                    "parent_id": {"in": unprocessed_validator_request_ids},
-                    "is_processed": {"equals": False},
-                },
-                order={"created_at": "desc"},
-            )
-
-            responses: list[DendriteQueryResponse] = []
-            for validator_request in validator_requests:
-                vali_request = map_feedback_request_model_to_feedback_request(
-                    validator_request
-                )
-
-                m_responses = list(
-                    map(
-                        lambda x: map_feedback_request_model_to_feedback_request(
-                            x, is_miner=True
-                        ),
-                        [
-                            m
-                            for m in miner_responses
-                            if m.parent_id == validator_request.id
-                        ],
-                    )
-                )
-
-                responses.append(
-                    DendriteQueryResponse(
-                        request=vali_request, miner_responses=m_responses
-                    )
-                )
-
-            # yield responses, so caller can do something
-            has_more_batches = True
-            yield responses, has_more_batches
-
-        yield [], False
+            has_more = (skip + batch_size) < task_count_unprocessed
+            yield validator_requests, has_more
 
     @staticmethod
-    async def get_real_model_ids(request_id: str) -> dict[str, str]:
-        """Fetches a mapping of obfuscated model IDs to real model IDs for a given request ID."""
-        ground_truths = await Ground_Truth_Model.prisma().find_many(
-            where={"request_id": request_id}
-        )
-        return {gt.obfuscated_model_id: gt.real_model_id for gt in ground_truths}
-
-    @staticmethod
-    async def mark_tasks_processed_by_request_ids(request_ids: list[str]) -> None:
-        """Mark records associated with validator's request and miner's responses as processed.
+    async def get_real_model_ids(validator_task_id: str) -> dict[str, str]:
+        """Fetches a mapping of obfuscated model IDs to real model IDs for a given request ID.
 
         Args:
-            request_ids (list[str]): List of request ids.
+            validator_task_id: The ID of the validator task
+
+        Returns:
+            A dictionary mapping obfuscated_model_id to real_model_id
+
+        Raises:
+            PrismaError: If database query fails
         """
-        if not request_ids:
-            logger.error("No request ids provided to mark as processed")
+        try:
+            ground_truths = await GroundTruth.prisma().find_many(
+                where={"validator_task_id": validator_task_id}
+            )
+            return {gt.obfuscated_model_id: gt.real_model_id for gt in ground_truths}
+        except PrismaError as e:
+            logger.error(
+                f"Database error fetching model IDs for task {validator_task_id}: {e}"
+            )
+            raise
+
+    @staticmethod
+    async def mark_validator_task_as_processed(
+        validator_task_ids: list[str],
+    ) -> None:
+        """Mark records associated with validator's tasks as processed.
+
+        Args:
+            validator_task_ids (list[str]): List of validator task ids.
+        """
+        if not validator_task_ids:
+            logger.error("No validator task ids provided to mark as processed")
             return
 
         try:
             async with transaction() as tx:
-                num_updated = await tx.feedback_request_model.update_many(
+                num_updated = await tx.validatortask.update_many(
                     data={"is_processed": True},
-                    where={"request_id": {"in": request_ids}},
+                    where={"id": {"in": validator_task_ids}},
                 )
-                logger.success(
-                    f"Marked {num_updated} records associated to {len(request_ids)} tasks as processed"
-                )
+                if num_updated:
+                    logger.success(
+                        f"Marked {num_updated} records as processed from {len(validator_task_ids)} task IDs"
+                    )
+                else:
+                    logger.warning("No records were updated")
+
+                return num_updated
         except PrismaError as exc:
             logger.error(f"Prisma error occurred: {exc}")
         except Exception as exc:
             logger.error(f"Unexpected error occurred: {exc}")
 
-    @staticmethod
-    async def get_task_by_request_id(request_id: str) -> DendriteQueryResponse | None:
-        try:
-            # find the parent id first
-            include_query = Feedback_Request_ModelInclude(
-                {
-                    "completions": True,
-                    "criteria_types": True,
-                    "ground_truths": True,
-                    "parent_request": True,
-                    "child_requests": True,
-                }
-            )
-            all_requests = await Feedback_Request_Model.prisma().find_many(
-                where={
-                    "request_id": request_id,
-                },
-                include=include_query,
-            )
+    # @staticmethod
+    # async def get_task_by_request_id(request_id: str) -> DendriteQueryResponse | None:
+    #     try:
+    #         # find the parent id first
+    #         include_query = Feedback_Request_ModelInclude(
+    #             {
+    #                 "completions": True,
+    #                 "criteria_types": True,
+    #                 "ground_truths": True,
+    #                 "parent_request": True,
+    #                 "child_requests": True,
+    #             }
+    #         )
+    #         all_requests = await Feedback_Request_Model.prisma().find_many(
+    #             where={
+    #                 "request_id": request_id,
+    #             },
+    #             include=include_query,
+    #         )
 
-            validator_requests = [r for r in all_requests if r.parent_id is None]
-            assert len(validator_requests) == 1, "Expected only one validator request"
-            validator_request = validator_requests[0]
-            if not validator_request.child_requests:
-                raise InvalidTask(
-                    f"Validator request {validator_request.id} must have child requests"
-                )
+    #         validator_requests = [r for r in all_requests if r.parent_id is None]
+    #         assert len(validator_requests) == 1, "Expected only one validator request"
+    #         validator_request = validator_requests[0]
+    #         if not validator_request.child_requests:
+    #             raise InvalidTask(
+    #                 f"Validator request {validator_request.id} must have child requests"
+    #             )
 
-            miner_responses = [
-                map_feedback_request_model_to_feedback_request(r, is_miner=True)
-                for r in validator_request.child_requests
-            ]
-            return DendriteQueryResponse(
-                request=map_feedback_request_model_to_feedback_request(
-                    model=validator_request, is_miner=False
-                ),
-                miner_responses=miner_responses,
-            )
+    #         miner_responses = [
+    #             map_feedback_request_model_to_feedback_request(r, is_miner=True)
+    #             for r in validator_request.child_requests
+    #         ]
+    #         return DendriteQueryResponse(
+    #             request=map_feedback_request_model_to_feedback_request(
+    #                 model=validator_request, is_miner=False
+    #             ),
+    #             miner_responses=miner_responses,
+    #         )
 
-        except Exception as e:
-            logger.error(f"Failed to get feedback request by request_id: {e}")
-            return None
+    #     except Exception as e:
+    #         logger.error(f"Failed to get feedback request by request_id: {e}")
+    #         return None
 
     @staticmethod
     async def get_num_processed_tasks() -> int:
-        return await Feedback_Request_Model.prisma().count(
-            where={"is_processed": True, "parent_id": None}
-        )
+        return await ValidatorTask.prisma().count(where={"is_processed": True})
 
-    @staticmethod
-    async def update_miner_completions_by_request_id(
-        miner_responses: List[FeedbackRequest],
-        batch_size: int = 10,
-        max_retries: int = 20,
-    ) -> tuple[bool, list[int]]:
-        """
-        Update the miner's provided rank_id / scores etc. for a list of miner responses that it is responding to validator. This exists because over the course of a task, a miner may recruit multiple workers and we
-        need to recalculate the average score / rank_id etc. across all workers.
-        """
-        if not len(miner_responses):
-            logger.debug("Updating completion responses: nothing to update, skipping.")
-            return True, []
+    # TODO: How to store miner scores
+    # @staticmethod
+    # async def update_miner_completions(
+    #     miner_responses: List[MinerResponse],
+    #     batch_size: int = 10,
+    #     max_retries: int = 20,
+    # ) -> tuple[bool, list[int]]:
+    #     """
+    #     Update the miner's provided rank_id / scores etc. for a list of miner responses that it is responding to validator. This exists because over the course of a task, a miner may recruit multiple workers and we
+    #     need to recalculate the average score / rank_id etc. across all workers.
+    #     """
+    #     if not len(miner_responses):
+    #         logger.debug("Updating completion responses: nothing to update, skipping.")
+    #         return True, []
 
-        num_batches = math.ceil(len(miner_responses) / batch_size)
-        failed_batch_indices = []
+    #     num_batches = math.ceil(len(miner_responses) / batch_size)
+    #     failed_batch_indices = []
 
-        for batch_id in range(num_batches):
-            start_idx = batch_id * batch_size
-            end_idx = min((batch_id + 1) * batch_size, len(miner_responses))
-            batch_responses = miner_responses[start_idx:end_idx]
+    #     for batch_id in range(num_batches):
+    #         start_idx = batch_id * batch_size
+    #         end_idx = min((batch_id + 1) * batch_size, len(miner_responses))
+    #         batch_responses = miner_responses[start_idx:end_idx]
 
-            for attempt in range(max_retries):
-                try:
-                    async with prisma.tx(timeout=timedelta(seconds=30)) as tx:
-                        for miner_response in batch_responses:
-                            if (
-                                not miner_response.axon
-                                or not miner_response.axon.hotkey
-                            ):
-                                raise InvalidMinerResponse(
-                                    f"Miner response {miner_response} must have a hotkey"
-                                )
+    #         for attempt in range(max_retries):
+    #             try:
+    #                 async with prisma.tx(timeout=timedelta(seconds=30)) as tx:
+    #                     for miner_response in batch_responses:
+    #                         # TODO: Check if this is really necessary
+    #                         # if (
+    #                         #     not miner_response.axon
+    #                         #     or not miner_response.axon.hotkey
+    #                         # ):
+    #                         #     raise InvalidMinerResponse(
+    #                         #         f"Miner response {miner_response} must have a hotkey"
+    #                         #     )
 
-                            hotkey = miner_response.axon.hotkey
-                            request_id = miner_response.request_id
+    #                         hotkey = miner_response.axon.hotkey
+    #                         request_id = miner_response.request_id
 
-                            curr_miner_response = (
-                                await tx.feedback_request_model.find_first(
-                                    where=Feedback_Request_ModelWhereInput(
-                                        request_id=request_id,
-                                        hotkey=hotkey,
-                                    )
-                                )
-                            )
+    #                         curr_miner_response = (
+    #                             await tx.feedback_request_model.find_first(
+    #                                 where=Feedback_Request_ModelWhereInput(
+    #                                     request_id=request_id,
+    #                                     hotkey=hotkey,
+    #                                 )
+    #                             )
+    #                         )
 
-                            if not curr_miner_response:
-                                raise ValueError(
-                                    f"Miner response not found for request_id: {request_id}, hotkey: {hotkey}"
-                                )
+    #                         if not curr_miner_response:
+    #                             raise ValueError(
+    #                                 f"Miner response not found for request_id: {request_id}, hotkey: {hotkey}"
+    #                             )
 
-                            completion_ids = [
-                                c.completion_id
-                                for c in miner_response.completion_responses
-                            ]
+    #                         completion_ids = [
+    #                             c.completion_id
+    #                             for c in miner_response.completion_responses
+    #                         ]
 
-                            completion_records = (
-                                await tx.completion_response_model.find_many(
-                                    where=Completion_Response_ModelWhereInput(
-                                        feedback_request_id=curr_miner_response.id,
-                                        completion_id={"in": completion_ids},
-                                    )
-                                )
-                            )
+    #                         completion_records = (
+    #                             await tx.completion_response_model.find_many(
+    #                                 where=Completion_Response_ModelWhereInput(
+    #                                     feedback_request_id=curr_miner_response.id,
+    #                                     completion_id={"in": completion_ids},
+    #                                 )
+    #                             )
+    #                         )
 
-                            completion_id_record_id = {
-                                c.completion_id: c.id for c in completion_records
-                            }
+    #                         completion_id_record_id = {
+    #                             c.completion_id: c.id for c in completion_records
+    #                         }
 
-                            for completion in miner_response.completion_responses:
-                                await tx.completion_response_model.update(
-                                    data={
-                                        "score": completion.score,
-                                        "rank_id": completion.rank_id,
-                                    },
-                                    where=Completion_Response_ModelWhereUniqueInput(
-                                        id=completion_id_record_id[
-                                            completion.completion_id
-                                        ],
-                                    ),
-                                )
+    #                         for completion in miner_response.completion_responses:
+    #                             await tx.completion_response_model.update(
+    #                                 data={
+    #                                     "score": completion.score,
+    #                                     "rank_id": completion.rank_id,
+    #                                 },
+    #                                 where=Completion_Response_ModelWhereUniqueInput(
+    #                                     id=completion_id_record_id[
+    #                                         completion.completion_id
+    #                                     ],
+    #                                 ),
+    #                             )
 
-                    logger.debug(
-                        f"Updating completion responses: updated batch {batch_id+1}/{num_batches}"
-                    )
-                    break
-                except Exception as e:
-                    if attempt == max_retries - 1:
-                        logger.error(
-                            f"Failed to update batch {batch_id+1}/{num_batches} after {max_retries} attempts: {e}"
-                        )
-                        failed_batch_indices.extend(range(start_idx, end_idx))
-                    else:
-                        logger.warning(
-                            f"Retrying batch {batch_id+1}/{num_batches}, attempt {attempt+2}/{max_retries}"
-                        )
-                        await asyncio.sleep(2**attempt)
+    #                 logger.debug(
+    #                     f"Updating completion responses: updated batch {batch_id+1}/{num_batches}"
+    #                 )
+    #                 break
+    #             except Exception as e:
+    #                 if attempt == max_retries - 1:
+    #                     logger.error(
+    #                         f"Failed to update batch {batch_id+1}/{num_batches} after {max_retries} attempts: {e}"
+    #                     )
+    #                     failed_batch_indices.extend(range(start_idx, end_idx))
+    #                 else:
+    #                     logger.warning(
+    #                         f"Retrying batch {batch_id+1}/{num_batches}, attempt {attempt+2}/{max_retries}"
+    #                     )
+    #                     await asyncio.sleep(2**attempt)
 
-                await asyncio.sleep(0.1)
+    #             await asyncio.sleep(0.1)
 
-        if not failed_batch_indices:
-            logger.success(
-                f"Successfully updated all {num_batches} batches for {len(miner_responses)} responses"
-            )
-            gc.collect()
-            return True, []
+    #     if not failed_batch_indices:
+    #         logger.success(
+    #             f"Successfully updated all {num_batches} batches for {len(miner_responses)} responses"
+    #         )
+    #         gc.collect()
+    #         return True, []
 
-        return False, failed_batch_indices
+    #     return False, failed_batch_indices
 
     @staticmethod
     async def save_task(
-        validator_request: FeedbackRequest,
-        miner_responses: List[FeedbackRequest],
+        validator_task: TaskSynapseObject,
+        miner_responses: List[TaskSynapseObject],
         ground_truth: dict[str, int],
-    ) -> Feedback_Request_Model | None:
+    ) -> ValidatorTask | None:
         """Saves a task, which consists of both the validator's request and the miners' responses.
 
         Args:
-            validator_request (FeedbackRequest): The request made by the validator.
-            miner_responses (List[FeedbackRequest]): The responses made by the miners.
-            ground_truth (dict[str, str]): The ground truth for the task, where dict
+            validator_task (ValidatorTask): The task created by the validator.
+            miner_responses (List[MinerResponse]): The responses made by the miners.
+            ground_truth (dict[str, int]): Mapping of completion_id to rank_id for ground truth.
 
         Returns:
-            Feedback_Request_Model | None: Only validator's feedback request model, or None if failed.
+            ValidatorTask | None: The created validator task, or None if failed.
         """
         try:
-            feedback_request_model: Feedback_Request_Model | None = None
             async with prisma.tx(timeout=timedelta(seconds=30)) as tx:
                 logger.trace("Starting transaction for saving task.")
 
-                feedback_request_model = await tx.feedback_request_model.create(
-                    data=map_parent_feedback_request_to_model(validator_request)
+                # Map validator task using mapper function
+                validator_task_data = map_task_synapse_object_to_validator_task(
+                    validator_task
                 )
+                created_task = await tx.validatortask.create(data=validator_task_data)
 
-                # Create related criteria types
-                criteria_create_input = [
-                    map_criteria_type_to_model(criteria, feedback_request_model.id)
-                    for criteria in validator_request.criteria_types
-                ]
-                await tx.criteria_type_model.create_many(criteria_create_input)
-
-                # Create related miner responses (child) and their completion responses
-                created_miner_models: list[Feedback_Request_Model] = []
+                # Pre-process all valid miner responses
+                valid_miner_data = []
                 for miner_response in miner_responses:
                     try:
-                        create_miner_model_input = map_child_feedback_request_to_model(
+                        miner_data = map_task_synapse_object_to_miner_response(
                             miner_response,
-                            feedback_request_model.id,
-                            expire_at=feedback_request_model.expire_at,
+                            created_task.id,
                         )
-
-                        created_miner_model = await tx.feedback_request_model.create(
-                            data=create_miner_model_input
-                        )
-
-                        created_miner_models.append(created_miner_model)
-
-                        criteria_create_input = [
-                            map_criteria_type_to_model(criteria, created_miner_model.id)
-                            for criteria in miner_response.criteria_types
-                        ]
-                        await tx.criteria_type_model.create_many(criteria_create_input)
-
-                        # Create related completions for miner responses
-                        for completion in miner_response.completion_responses:
-                            # remove the completion field, since the miner receives an obfuscated completion_response anyways
-                            # therefore it is useless for training
-                            try:
-                                completion_copy = completion.model_dump()
-                                completion_copy["completion"] = CodeAnswer(files=[])
-                            except KeyError:
-                                pass
-                            completion_input = map_completion_response_to_model(
-                                CompletionResponses.model_validate(completion_copy),
-                                created_miner_model.id,
-                            )
-                            await tx.completion_response_model.create(
-                                data=completion_input
-                            )
-                            logger.trace(
-                                f"Created completion response: {completion_input}"
-                            )
-
-                    # we catch exceptions here because whether a miner responds well should not affect other miners
+                        valid_miner_data.append(miner_data)
                     except InvalidMinerResponse as e:
-                        miner_hotkey = (
-                            miner_response.axon.hotkey if miner_response.axon else "??"
-                        )
+                        miner_hotkey = getattr(miner_response, "miner_hotkey", "??")
                         logger.debug(
                             f"Miner response from hotkey: {miner_hotkey} is invalid: {e}"
                         )
-                    except InvalidCompletion as e:
-                        miner_hotkey = (
-                            miner_response.axon.hotkey if miner_response.axon else "??"
-                        )
-                        logger.debug(
-                            f"Completion response from hotkey: {miner_hotkey} is invalid: {e}"
-                        )
 
-                if len(created_miner_models) == 0:
-                    raise InvalidTask(
-                        "A task must consist of at least one miner response, along with validator's request"
+                if valid_miner_data:
+                    # Bulk create all miner responses
+                    await tx.minerresponse.create_many(
+                        data=[
+                            {**miner_data, "validator_task_id": created_task.id}
+                            for miner_data in valid_miner_data
+                        ]
                     )
 
-                # this is dependent on how we obfuscate in `validator.send_request`
-                for completion_id, rank_id in ground_truth.items():
-                    gt_create_input = {
-                        "rank_id": rank_id,
-                        "obfuscated_model_id": completion_id,
-                        "request_id": validator_request.request_id,
-                        "real_model_id": completion_id,
-                        "feedback_request_id": feedback_request_model.id,
-                    }
-                    await tx.ground_truth_model.create(
-                        data=Ground_Truth_ModelCreateInput(**gt_create_input)
-                    )
-                for vali_completion in validator_request.completion_responses:
-                    vali_completion_input = map_completion_response_to_model(
-                        vali_completion,
-                        feedback_request_model.id,
-                    )
-                    await tx.completion_response_model.create(
-                        data=vali_completion_input
-                    )
+                return created_task
 
-                feedback_request_model.child_requests = created_miner_models
-            return feedback_request_model
         except Exception as e:
-            logger.error(f"Failed to save dendrite query response: {e}")
+            logger.error(f"Failed to save task: {e}")
             return None
 
-    @staticmethod
-    async def create_or_update_validator_score(scores: torch.Tensor) -> None:
-        # Save scores as a single record
-        score_model = await Score_Model.prisma().find_first()
-        scores_list = scores.tolist()
-        if score_model:
-            await Score_Model.prisma().update(
-                where={"id": score_model.id},
-                data=Score_ModelUpdateInput(score=Json(json.dumps(scores_list))),
-            )
-        else:
-            await Score_Model.prisma().create(
-                data=Score_ModelCreateInput(
-                    score=Json(json.dumps(scores_list)),
-                )
-            )
+    # Remove this as scores will be saved in .pt file instead
+    # @staticmethod
+    # async def create_or_update_validator_score(scores: torch.Tensor) -> None:
+    #     # Save scores as a single record
+    #     score_model = await Score_Model.prisma().find_first()
+    #     scores_list = scores.tolist()
+    #     if score_model:
+    #         await Score_Model.prisma().update(
+    #             where={"id": score_model.id},
+    #             data=Score_ModelUpdateInput(score=Json(json.dumps(scores_list))),
+    #         )
+    #     else:
+    #         await Score_Model.prisma().create(
+    #             data=Score_ModelCreateInput(
+    #                 score=Json(json.dumps(scores_list)),
+    #             )
+    #         )
 
-    @staticmethod
-    async def get_validator_score() -> torch.Tensor | None:
-        score_record = await Score_Model.prisma().find_first(
-            order={"created_at": "desc"}
+    # TODO: Remove this as scores will be saved in .pt file instead
+    # @staticmethod
+    # async def get_validator_score() -> torch.Tensor | None:
+    #     score_record = await Score_Model.prisma().find_first(
+    #         order={"created_at": "desc"}
+    #     )
+    #     if not score_record:
+    #         return None
+
+    #     return torch.tensor(json.loads(score_record.score))
+
+    # TODO: Remove this as this was only used for wandb logging
+    # @staticmethod
+    # async def get_scores_and_ground_truth_by_dojo_task_id(
+    #     dojo_task_id: str,
+    # ) -> dict[str, dict[str, float | int | None]]:
+    #     """
+    #     Fetch the scores, model IDs from Completion_Response_Model for a given Dojo task ID.
+    #     Also fetches rank IDs from Ground_Truth_Model for the given Dojo task ID.
+
+    #     Args:
+    #         dojo_task_id (str): The Dojo task ID to search for.
+
+    #     Returns:
+    #         dict[str, dict[str, float | int | None]]: A dictionary mapping model ID to a dict containing score and rank_id.
+    #     """
+    #     try:
+    #         # First, find the Feedback_Request_Model with the given dojo_task_id
+    #         feedback_request = await Feedback_Request_Model.prisma().find_first(
+    #             where=Feedback_Request_ModelWhereInput(dojo_task_id=dojo_task_id),
+    #             include={
+    #                 "completions": True,
+    #                 "parent_request": {"include": {"ground_truths": True}},
+    #             },
+    #         )
+
+    #         if not feedback_request:
+    #             logger.warning(
+    #                 f"No Feedback_Request_Model found for dojo_task_id: {dojo_task_id}"
+    #             )
+    #             return {}
+
+    #         parent_request = feedback_request.parent_request
+    #         if not parent_request:
+    #             logger.warning(
+    #                 f"No parent request found for dojo_task_id: {dojo_task_id}"
+    #             )
+    #             return {}
+
+    #         rank_id_map = {
+    #             gt.obfuscated_model_id: gt.rank_id
+    #             for gt in parent_request.ground_truths
+    #         }
+
+    #         # Extract scores from the completions
+    #         scores_and_gts = {
+    #             completion.model: {
+    #                 "score": completion.score,
+    #                 "ground_truth_rank_id": rank_id_map.get(completion.completion_id),
+    #             }
+    #             for completion in feedback_request.completions
+    #         }
+
+    #         return scores_and_gts
+
+    #     except Exception as e:
+    #         logger.error(
+    #             f"Error fetching completion scores and ground truths for dojo_task_id {dojo_task_id}: {e}"
+    #         )
+    #         return {}
+
+
+# ---------------------------------------------------------------------------- #
+#                          Test custom ORM functions                           #
+# ---------------------------------------------------------------------------- #
+
+
+async def test_get_expired_tasks():
+    """Test function for get_expired_tasks."""
+    from database.client import connect_db, disconnect_db
+
+    # Connect to database first
+    await connect_db()
+
+    try:
+        orm = ORM()
+        batch_size = 5
+        expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(days=1)
+        expire_to = datetime_as_utc(datetime.now(timezone.utc))
+
+        total_tasks = 0
+        async for tasks, has_more in orm.get_expired_tasks(
+            batch_size, expire_from, expire_to
+        ):
+            total_tasks += len(tasks)
+            if not has_more:
+                break
+        logger.info(f"Total number of unprocessed expired tasks: {total_tasks}")
+    except NoNewExpiredTasksYet as e:
+        print(f"No new expired tasks: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        # Always disconnect when done
+        await disconnect_db()
+
+
+async def test_get_real_model_ids():
+    """Test function for get_real_model_ids."""
+    from database.client import connect_db, disconnect_db
+
+    # Connect to database first
+    await connect_db()
+
+    try:
+        orm = ORM()
+        # Use a known validator_task_id from your database
+        validator_task_id = "5c91e4b4-a675-47e8-a06b-c2e66ec67239"
+
+        model_id_mapping = await orm.get_real_model_ids(validator_task_id)
+        logger.info(f"Model ID mapping: {model_id_mapping}")
+
+        # Print the number of mappings found
+        logger.info(f"Number of model ID mappings found: {len(model_id_mapping)}")
+
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+    finally:
+        # Always disconnect when done
+        await disconnect_db()
+
+
+async def test_mark_validator_task_as_processed():
+    """Test function for mark_validator_task_as_processed."""
+    from database.client import connect_db, disconnect_db
+
+    # Connect to database first
+    await connect_db()
+
+    try:
+        orm = ORM()
+        # Use a list of known validator_task_ids from your database
+        validator_task_ids = [
+            "5c91e4b4-a675-47e8-a06b-c2e66ec67239",
+        ]
+
+        # Get initial processed state
+        initial_tasks = await ValidatorTask.prisma().find_many(
+            where={"id": {"in": validator_task_ids}}
         )
-        if not score_record:
-            return None
+        logger.info(
+            f"Initial processed state: {[task.is_processed for task in initial_tasks]}"
+        )
 
-        return torch.tensor(json.loads(score_record.score))
+        # Mark tasks as processed
+        num_updated = await orm.mark_validator_task_as_processed(validator_task_ids)
+        logger.info(f"Number of tasks marked as processed: {num_updated}")
 
-    @staticmethod
-    async def get_scores_and_ground_truth_by_dojo_task_id(
-        dojo_task_id: str,
-    ) -> dict[str, dict[str, float | int | None]]:
-        """
-        Fetch the scores, model IDs from Completion_Response_Model for a given Dojo task ID.
-        Also fetches rank IDs from Ground_Truth_Model for the given Dojo task ID.
+        # Verify the update
+        updated_tasks = await ValidatorTask.prisma().find_many(
+            where={"id": {"in": validator_task_ids}}
+        )
+        logger.info(
+            f"Updated processed state: {[task.is_processed for task in updated_tasks]}"
+        )
 
-        Args:
-            dojo_task_id (str): The Dojo task ID to search for.
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+    finally:
+        # Always disconnect when done
+        await disconnect_db()
 
-        Returns:
-            dict[str, dict[str, float | int | None]]: A dictionary mapping model ID to a dict containing score and rank_id.
-        """
-        try:
-            # First, find the Feedback_Request_Model with the given dojo_task_id
-            feedback_request = await Feedback_Request_Model.prisma().find_first(
-                where=Feedback_Request_ModelWhereInput(dojo_task_id=dojo_task_id),
-                include={
-                    "completions": True,
-                    "parent_request": {"include": {"ground_truths": True}},
-                },
-            )
 
-            if not feedback_request:
-                logger.warning(
-                    f"No Feedback_Request_Model found for dojo_task_id: {dojo_task_id}"
-                )
-                return {}
+async def test_get_num_processed_tasks():
+    """Test function for get_num_processed_tasks."""
+    from database.client import connect_db, disconnect_db
 
-            parent_request = feedback_request.parent_request
-            if not parent_request:
-                logger.warning(
-                    f"No parent request found for dojo_task_id: {dojo_task_id}"
-                )
-                return {}
+    # Connect to database first
+    await connect_db()
 
-            rank_id_map = {
-                gt.obfuscated_model_id: gt.rank_id
-                for gt in parent_request.ground_truths
-            }
+    try:
+        orm = ORM()
+        num_processed = await orm.get_num_processed_tasks()
+        logger.info(f"Number of processed tasks: {num_processed}")
 
-            # Extract scores from the completions
-            scores_and_gts = {
-                completion.model: {
-                    "score": completion.score,
-                    "ground_truth_rank_id": rank_id_map.get(completion.completion_id),
-                }
-                for completion in feedback_request.completions
-            }
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+    finally:
+        # Always disconnect when done
+        await disconnect_db()
 
-            return scores_and_gts
 
-        except Exception as e:
-            logger.error(
-                f"Error fetching completion scores and ground truths for dojo_task_id {dojo_task_id}: {e}"
-            )
-            return {}
+# TODO: Update this test
+# async def test_save_task():
+#     """Test function for save_task."""
+#     from database.client import connect_db, disconnect_db
+#     from datetime import datetime, timezone
+#     from dojo.protocol import TaskType, CodeAnswer, CompletionResponses, FileObject
+
+#     # Connect to database first
+#     await connect_db()
+
+#     try:
+#         orm = ORM()
+
+#         # Create test validator task
+#         test_validator_task = ValidatorTask(
+#             prompt="Test prompt",
+#             task_type=TaskType.CODE_GENERATION.value,
+#             expire_at=datetime_as_utc(datetime.now(timezone.utc)),
+#             completions=[
+#                 Completion(
+#                     model="model1",
+#                     completion=CodeAnswer(
+#                         files=[
+#                             FileObject(
+#                                 filename="fibonacci.py",
+#                                 content="""def fibonacci(n):
+#                                         if n <= 1:
+#                                             return n
+#                                         return fibonacci(n-1) + fibonacci(n-2)""",
+#                                 language="python",
+#                             )
+#                         ]
+#                     ),
+#                     criterion=[],
+#                 ),
+#                 Completion(
+#                     model="model2",
+#                     completion=CodeAnswer(
+#                         files=[
+#                             FileObject(
+#                                 filename="fibonacci.py",
+#                                 content="""def fibonacci(n):
+#                                         a, b = 0, 1
+#                                         for _ in range(n):
+#                                             a, b = b, a + b
+#                                         return a""",
+#                                 language="python",
+#                             )
+#                         ]
+#                     ),
+#                     criterion=[],
+#                 ),
+#             ],
+#         )
+
+#         # Create test miner responses
+#         test_miner_responses = [
+#             MinerResponse(
+#                 dojo_task_id="test_task_1",
+#                 hotkey="test_hotkey_1",
+#                 coldkey="test_coldkey_1",
+#                 task_result=CompletionResponses(responses=[{"model1": 1, "model2": 2}]),
+#             )
+#         ]
+
+#         # Create test ground truth
+#         test_ground_truth = {"model1": 1, "model2": 2}
+
+#         # Save the task
+#         created_task = await orm.save_task(
+#             test_validator_task, test_miner_responses, test_ground_truth
+#         )
+
+#         if created_task:
+#             logger.success(f"Successfully created task with ID: {created_task.id}")
+
+#             # Verify the saved data
+#             saved_task = await ValidatorTask.prisma().find_unique(
+#                 where={"id": created_task.id},
+#                 include={
+#                     "completions": True,
+#                     "miner_responses": True,
+#                     "GroundTruth": True,
+#                 },
+#             )
+
+#             logger.info(f"Number of completions: {len(saved_task.completions)}")
+#             logger.info(f"Number of miner responses: {len(saved_task.miner_responses)}")
+#             logger.info(f"Number of ground truths: {len(saved_task.GroundTruth)}")
+#         else:
+#             logger.error("Failed to create task")
+
+#     except Exception as e:
+#         logger.error(f"An error occurred: {e}")
+#     finally:
+#         # Always disconnect when done
+#         await disconnect_db()
+
+
+if __name__ == "__main__":
+
+    async def run_tests():
+        # await test_get_expired_tasks()
+        # await test_get_real_model_ids()
+        # await test_mark_validator_task_as_processed()
+        await test_get_num_processed_tasks()
+        # await test_save_task()
+
+    asyncio.run(run_tests())
