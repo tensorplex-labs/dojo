@@ -110,6 +110,8 @@ class Validator:
         )
         self.check_registered()
 
+        init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
+
         # Run score migration before loading state
         migration_success = self.loop.run_until_complete(ScoreStorage.migrate_from_db())
         if not migration_success:
@@ -120,8 +122,6 @@ class Validator:
 
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.load_state()
-
-        init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
@@ -134,7 +134,7 @@ class Validator:
             )
 
         await self.dendrite.forward(
-            axons=axons, synapse=synapse, deserialize=False, timeout=30
+            axons=axons, synapse=synapse, deserialize=False, timeout=60
         )
 
     def obfuscate_model_names(
@@ -166,7 +166,7 @@ class Validator:
                 ]
 
                 responses: List[Heartbeat] = await self.dendrite.forward(  # type: ignore
-                    axons=axons, synapse=Heartbeat(), deserialize=False, timeout=30
+                    axons=axons, synapse=Heartbeat(), deserialize=False, timeout=60
                 )
                 active_hotkeys = [r.axon.hotkey for r in responses if r.ack and r.axon]
                 active_uids = [
@@ -237,7 +237,7 @@ class Validator:
                         axons=[axon],
                         synapse=shuffled_synapse,
                         deserialize=False,
-                        timeout=30,
+                        timeout=60,
                     )
                 )
 
@@ -814,7 +814,7 @@ class Validator:
                 axons=[miner_axon],
                 synapse=task_synapse,
                 deserialize=False,
-                timeout=30,
+                timeout=60,
             )
 
             if response and response[0]:
