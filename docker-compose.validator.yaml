@@ -107,7 +107,7 @@ services:
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_DEBUG=true
-      - WATCHTOWER_POLL_INTERVAL=3600 # 1hr
+      - WATCHTOWER_POLL_INTERVAL=600
       - WATCHTOWER_LABEL_ENABLE=true
     restart: always
     volumes:
@@ -116,7 +116,7 @@ services:
   dataset-service:
     image: ghcr.io/tensorplex-labs/dojo:dataset
     env_file:
-      - .env.validator
+      - .env
     ports:
       - "127.0.0.1:9999:9999"
     command: ["dataset-service"]
@@ -125,13 +125,13 @@ services:
   extract-dataset:
     image: ghcr.io/tensorplex-labs/dojo:dataset
     env_file:
-      - .env.validator
+      - .env
     command: ["extract-dataset"]
     networks:
       - dojo-validator
     volumes:
       - ./:/app
-      - ./.env.validator:/app/.env
+      - ./.env:/app/.env
       - prisma-binary:/root/prisma-python
       - $HOME/.bittensor:/root/.bittensor
     logging: *default-logging

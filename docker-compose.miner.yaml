@@ -2,6 +2,23 @@ x-logging: &default-logging
   options:
     max-size: "50m"
 
+x-miner-defaults: &miner-defaults
+  image: ghcr.io/tensorplex-labs/dojo:main
+  env_file:
+    - .env
+  working_dir: /app
+  volumes:
+    - ./:/app
+    - ./.env:/app/.env
+    - $BITTENSOR_DIR:/root/.bittensor
+  command: ["miner"]
+  ports:
+    - ${AXON_PORT}:${AXON_PORT}
+  networks:
+    - dojo-miner
+    - subtensor
+  logging: *default-logging
+
 volumes:
   postgres-miner-volume:
   redis-miner-volume:
@@ -138,41 +155,13 @@ services:
 
   # ============== MINER ============== #
 
+  miner-centralised:
+    <<: *miner-defaults
+
   miner-decentralised:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    env_file:
-      - .env
-    working_dir: /app
-    volumes:
-      - ./:/app
-      - ./.env:/app/.env
-      - $BITTENSOR_DIR:/root/.bittensor
-    command: ["miner"]
+    <<: *miner-defaults
     depends_on:
       worker-api:
         condition: service_healthy
       worker-ui:
         condition: service_healthy
-    ports:
-      - ${AXON_PORT}:${AXON_PORT}
-    networks:
-      - dojo-miner
-      - subtensor
-    logging: *default-logging
-
-  miner-centralised:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    env_file:
-      - .env
-    working_dir: /app
-    volumes:
-      - ./:/app
-      - ./.env:/app/.env
-      - $BITTENSOR_DIR:/root/.bittensor
-    command: ["miner"]
-    ports:
-      - ${AXON_PORT}:${AXON_PORT}
-    networks:
-      - dojo-miner
-      - subtensor
-    logging: *default-logging
