@@ -10,7 +10,7 @@ from tenacity import RetryError
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.orm import ORM
-from commons.utils import get_epoch_time, get_new_uuid, set_expire_time, ttl_get_block
+from commons.utils import get_epoch_time, get_new_uuid, set_expire_time
 from dojo.protocol import (
     DendriteQueryResponse,
     FeedbackRequest,
@@ -22,73 +22,73 @@ from neurons.validator import Validator
 
 class ValidatorSim(Validator):
     def __init__(self):
-        self._last_block = None
-        self._block_check_attempts = 0
-        self.MAX_BLOCK_CHECK_ATTEMPTS = 3
-        self._connection_lock = asyncio.Lock()
+        # self._last_block = None
+        # self._block_check_attempts = 0
+        # self.MAX_BLOCK_CHECK_ATTEMPTS = 3
+        # self._connection_lock = asyncio.Lock()
 
         super().__init__()
         logger.info("Starting Validator Simulator")
 
-    async def _try_reconnect_subtensor(self):
-        self._block_check_attempts += 1
-        if self._block_check_attempts >= self.MAX_BLOCK_CHECK_ATTEMPTS:
-            logger.error(
-                f"Failed to reconnect after {self.MAX_BLOCK_CHECK_ATTEMPTS} attempts"
-            )
-            return False
+    # async def _try_reconnect_subtensor(self):
+    #     self._block_check_attempts += 1
+    #     if self._block_check_attempts >= self.MAX_BLOCK_CHECK_ATTEMPTS:
+    #         logger.error(
+    #             f"Failed to reconnect after {self.MAX_BLOCK_CHECK_ATTEMPTS} attempts"
+    #         )
+    #         return False
+    #
+    #     try:
+    #         logger.info(
+    #             f"Attempting to reconnect to subtensor (attempt {self._block_check_attempts}/{self.MAX_BLOCK_CHECK_ATTEMPTS})..."
+    #         )
+    #         if hasattr(self.subtensor.substrate, "websocket"):
+    #             self.subtensor.substrate.websocket.close()
+    #
+    #         self.subtensor = bt.subtensor(self.subtensor.config)
+    #         await asyncio.sleep(1)
+    #         return True
+    #     except Exception as e:
+    #         logger.error(f"Failed to reconnect to subtensor: {e}")
+    #         return await self._try_reconnect_subtensor()
 
-        try:
-            logger.info(
-                f"Attempting to reconnect to subtensor (attempt {self._block_check_attempts}/{self.MAX_BLOCK_CHECK_ATTEMPTS})..."
-            )
-            if hasattr(self.subtensor.substrate, "websocket"):
-                self.subtensor.substrate.websocket.close()
+    # async def _ensure_subtensor_connection(self):
+    #     async with self._connection_lock:
+    #         try:
+    #             self.subtensor.get_current_block()
+    #             self._block_check_attempts = 0
+    #             return True
+    #         except (BrokenPipeError, ConnectionError):
+    #             logger.warning("Connection lost, attempting immediate reconnection")
+    #             return await self._try_reconnect_subtensor()
+    #         except Exception as e:
+    #             logger.error(f"Unexpected error checking connection: {e}")
+    #             return False
 
-            self.subtensor = bt.subtensor(self.subtensor.config)
-            await asyncio.sleep(1)
-            return True
-        except Exception as e:
-            logger.error(f"Failed to reconnect to subtensor: {e}")
-            return await self._try_reconnect_subtensor()
+    # @property
+    # def block(self):
+    #     try:
+    #         if not asyncio.get_event_loop().run_until_complete(
+    #             self._ensure_subtensor_connection()
+    #         ):
+    #             logger.warning(
+    #                 "Subtensor connection failed - returning last known block"
+    #             )
+    #             return self._last_block if self._last_block is not None else 0
+    #
+    #         self._last_block = ttl_get_block(self.subtensor)
+    #         self._block_check_attempts = 0
+    #         return self._last_block
+    #     except Exception as e:
+    #         logger.error(f"Error getting block number: {e}")
+    #         return self._last_block if self._last_block is not None else 0
 
-    async def _ensure_subtensor_connection(self):
-        async with self._connection_lock:
-            try:
-                self.subtensor.get_current_block()
-                self._block_check_attempts = 0
-                return True
-            except (BrokenPipeError, ConnectionError):
-                logger.warning("Connection lost, attempting immediate reconnection")
-                return await self._try_reconnect_subtensor()
-            except Exception as e:
-                logger.error(f"Unexpected error checking connection: {e}")
-                return False
-
-    @property
-    def block(self):
-        try:
-            if not asyncio.get_event_loop().run_until_complete(
-                self._ensure_subtensor_connection()
-            ):
-                logger.warning(
-                    "Subtensor connection failed - returning last known block"
-                )
-                return self._last_block if self._last_block is not None else 0
-
-            self._last_block = ttl_get_block(self.subtensor)
-            self._block_check_attempts = 0
-            return self._last_block
-        except Exception as e:
-            logger.error(f"Error getting block number: {e}")
-            return self._last_block if self._last_block is not None else 0
-
-    async def sync(self):
-        has_connection = await self._ensure_subtensor_connection()
-        if not has_connection:
-            logger.warning("Subtensor connection failed - continuing with partial sync")
-
-        await super().sync()
+    # async def sync(self):
+    #     has_connection = await self._ensure_subtensor_connection()
+    #     if not has_connection:
+    #         logger.warning("Subtensor connection failed - continuing with partial sync")
+    #
+    #     await super().sync()
 
     async def send_request(
         self,

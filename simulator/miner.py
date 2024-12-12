@@ -152,11 +152,11 @@ class MinerSim(Miner):
         max_rank = max(ground_truth.values())
 
         for k, v in ground_truth.items():
-            base_weight = int(10 - (v * (10 / max_rank)))
+            base_weight = int(8 - (v * (7 / max_rank)))
             if self.is_bad_miner:
                 deviation = random.randint(-5, 5)
             else:
-                deviation = random.randint(-2, 2)
+                deviation = random.randint(-1, 1)
             random_score = max(0, min(9, base_weight + deviation))
             score = int((random_score / (10 - 1)) * (100 - 1) + 1)
             scores[k] = score
