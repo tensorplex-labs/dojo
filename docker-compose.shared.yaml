@@ -8,6 +8,7 @@ networks:
 
 services:
   btcli:
+    container_name: btcli
     image: ghcr.io/tensorplex-labs/dojo:main
     volumes:
       - ./:/app
@@ -19,8 +20,8 @@ services:
     stdin_open: true
 
   redis:
-    image: redis/redis-stack-server:7.4.0-v0
     container_name: redis
+    image: redis/redis-stack-server:7.4.0-v0
     env_file:
       - .env
     expose:
@@ -33,8 +34,8 @@ services:
     logging: *default-logging
 
   postgres:
-    image: postgres:15.7
     container_name: postgres
+    image: postgres:15.7
     env_file:
       - .env
     command: >

@@ -34,8 +34,8 @@ services:
       - dojo-validator
 
   synthetic-api:
-    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
     container_name: synthetic-api
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     env_file:
@@ -58,27 +58,30 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     logging: *default-logging
 
-  # TODO: remove prisma-setup-vali
-  # prisma-setup-vali:
-  #   image: ghcr.io/tensorplex-labs/dojo:main
-  #   container_name: prisma-setup-vali
-  #   labels:
-  #     com.centurylinklabs.watchtower.enable: "true"
-  #   command: ["prisma-setup-vali"]
-  #   working_dir: /app
-  #   volumes:
-  #     - prisma-pip-cache:/root/.cache/pip
-  #     - prisma-binary:/root/prisma-python
-  #     - ./:/app
-  #   networks:
-  #     - dojo-validator
-  #   depends_on:
-  #     - postgres
-  #   logging: *default-logging
+  prisma-setup-vali:
+    container_name: prisma-setup-vali
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.validator.prisma
+    command: >
+      sh -c "prisma migrate deploy && prisma generate"
+    env_file:
+      - .env
+    working_dir: /app
+    volumes:
+      - prisma-pip-cache:/root/.cache/pip
+      - prisma-binary:/root/prisma-python
+      - ./:/app
+    networks:
+      - dojo-validator
+    depends_on:
+      - postgres
+    logging: *default-logging
 
   validator:
-    image: ghcr.io/tensorplex-labs/dojo:main
     container_name: validator
+    image: ghcr.io/tensorplex-labs/dojo:main
     labels:
       com.centurylinklabs.watchtower.enable: "true"
       com.centurylinklabs.watchtower.depends-on: "synthetic-api,postgres"
@@ -100,11 +103,13 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      prisma-setup-vali:
+        condition: service_completed_successfully
     logging: *default-logging
 
   watchtower:
-    image: containrrr/watchtower
     container_name: watchtower
+    image: containrrr/watchtower
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_DEBUG=true
@@ -115,8 +120,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
   dataset-service:
-    image: ghcr.io/tensorplex-labs/dojo:dataset
     container_name: dataset-service
+    image: ghcr.io/tensorplex-labs/dojo:dataset
     env_file:
       - .env
     ports:
@@ -125,8 +130,8 @@ services:
     logging: *default-logging
 
   extract-dataset:
-    image: ghcr.io/tensorplex-labs/dojo:dataset
     container_name: extract-dataset
+    image: ghcr.io/tensorplex-labs/dojo:dataset
     env_file:
       - .env
     command: ["extract-dataset"]
@@ -136,5 +141,5 @@ services:
       - ./:/app
       - ./.env:/app/.env
       - prisma-binary:/root/prisma-python
-      - $HOME/.bittensor:/root/.bittensor
+      - $BITTENSOR_DIR:/root/.bittensor
     logging: *default-logging

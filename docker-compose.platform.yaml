@@ -32,7 +32,8 @@ services:
     networks:
       - dojo-platform
 
-  prisma-setup-miner:
+  prisma-setup-platform:
+    container_name: prisma-setup-platform
     platform: linux/amd64
     env_file:
       - .env
@@ -47,8 +48,8 @@ services:
     logging: *default-logging
 
   sidecar:
-    image: docker.io/parity/substrate-api-sidecar:v19.0.2
     container_name: substrate-sidecar
+    image: docker.io/parity/substrate-api-sidecar:v19.0.2
     env_file:
       - .env
     read_only: true
@@ -76,13 +77,13 @@ services:
     logging: *default-logging
 
   worker-api:
+    container_name: worker-api
+    image: ghcr.io/tensorplex-labs/dojo-worker-api:main
     platform: linux/amd64
     env_file:
       - .env
     volumes:
       - ./.env:/dojo-api/.env
-    image: ghcr.io/tensorplex-labs/dojo-worker-api:main
-    container_name: worker-api
     ports:
       - "8080:8080"
     expose:
@@ -108,8 +109,8 @@ services:
     logging: *default-logging
 
   worker-ui:
-    image: ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod
     container_name: worker-ui
+    image: ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod
     ports:
       - "3000:3000"
     healthcheck:

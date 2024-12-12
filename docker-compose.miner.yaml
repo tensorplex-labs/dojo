@@ -30,8 +30,8 @@ networks:
 
 services:
   dojo-cli:
-    image: ghcr.io/tensorplex-labs/dojo:main
     container_name: dojo-cli
+    image: ghcr.io/tensorplex-labs/dojo:main
     volumes:
       - ./:/app
       - ./.env:/app/.env
@@ -43,8 +43,8 @@ services:
       - dojo-miner
 
   miner:
-    image: ghcr.io/tensorplex-labs/dojo:main
     container_name: miner
+    image: ghcr.io/tensorplex-labs/dojo:main
     env_file:
       - .env
     working_dir: /app
