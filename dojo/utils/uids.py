@@ -1,12 +1,9 @@
 import bisect
-import random
 import uuid
 from collections import defaultdict
 from typing import List
 
 import bittensor as bt
-import torch
-from bittensor.btlogging import logging as logger
 
 from commons.utils import keccak256_hash
 
@@ -32,34 +29,16 @@ def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
     return stakes[uid] < VALIDATOR_MIN_STAKE
 
 
-def get_random_miner_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
-    """Returns k available random uids from the metagraph."""
-    avail_uids = []
-
-    for uid in range(metagraph.n.item()):
-        if metagraph.axons[uid].is_serving and is_miner(metagraph, uid):
-            avail_uids.append(uid)
-
-    # Check if candidate_uids contain enough for querying, if not grab all available uids
-    logger.info(f"available uids: {avail_uids}")
-    if not len(avail_uids):
-        return torch.tensor([])
-
-    # If `k` is larger than the number of available `uids`, set `k` to the number of available `uids`.
-    if len(avail_uids) < k:
-        return torch.tensor(avail_uids)
-
-    uids = torch.tensor(random.sample(avail_uids, k))
-    return uids
-
-
 def extract_miner_uids(metagraph: bt.metagraph):
-    uids = [
+    """Extracts active miner uids from the metagraph."""
+    stakes = metagraph.S.tolist()
+    from dojo import VALIDATOR_MIN_STAKE
+
+    return [
         uid
         for uid in range(metagraph.n.item())
-        if metagraph.axons[uid].is_serving and is_miner(metagraph, uid)
+        if metagraph.axons[uid].is_serving and stakes[uid] < VALIDATOR_MIN_STAKE
     ]
-    return uids
 
 
 class MinerUidSelector:
