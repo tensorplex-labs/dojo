@@ -2,30 +2,13 @@ x-logging: &default-logging
   options:
     max-size: "50m"
 
-x-miner-defaults: &miner-defaults
-  image: ghcr.io/tensorplex-labs/dojo:main
-  env_file:
-    - .env
-  working_dir: /app
-  volumes:
-    - ./:/app
-    - ./.env:/app/.env
-    - $BITTENSOR_DIR:/root/.bittensor
-  command: ["miner"]
-  ports:
-    - ${AXON_PORT}:${AXON_PORT}
-  networks:
-    - dojo-miner
-    - subtensor
-  logging: *default-logging
-
 volumes:
-  postgres-miner-volume:
-  redis-miner-volume:
+  postgres-platform-volume:
+  redis-platform-volume:
 
 networks:
-  dojo-miner:
-    driver: bridge
+  dojo-platform:
+    name: dojo-platform
   # Applicable only for sidecar and miner service
   subtensor:
     name: subtensor
@@ -36,18 +19,18 @@ services:
       file: docker-compose.shared.yaml
       service: redis
     volumes:
-      - redis-miner-volume:/data
+      - redis-platform-volume:/data
     networks:
-      - dojo-miner
+      - dojo-platform
 
   postgres:
     extends:
       file: docker-compose.shared.yaml
       service: postgres
     volumes:
-      - postgres-miner-volume:/var/lib/postgresql/data
+      - postgres-platform-volume:/var/lib/postgresql/data
     networks:
-      - dojo-miner
+      - dojo-platform
 
   prisma-setup-miner:
     platform: linux/amd64
@@ -60,16 +43,18 @@ services:
     depends_on:
       - postgres
     networks:
-      - dojo-miner
+      - dojo-platform
     logging: *default-logging
 
   sidecar:
     image: docker.io/parity/substrate-api-sidecar:v19.0.2
     container_name: substrate-sidecar
+    env_file:
+      - .env
     read_only: true
-    environment:
-      SAS_SUBSTRATE_URL: ${SUBTENSOR_ENDPOINT:-wss://entrypoint-finney.opentensor.ai}
-      SAS_EXPRESS_PORT: 8081
+#    environment:
+#      SAS_SUBSTRATE_URL: ${SUBTENSOR_ENDPOINT:-wss://entrypoint-finney.opentensor.ai}
+#      SAS_EXPRESS_PORT: 8081
     expose:
       - 8081
     healthcheck:
@@ -86,7 +71,7 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - dojo-miner
+      - dojo-platform
       - subtensor
     logging: *default-logging
 
@@ -98,14 +83,6 @@ services:
       - ./.env:/dojo-api/.env
     image: ghcr.io/tensorplex-labs/dojo-worker-api:main
     container_name: worker-api
-    environment:
-      RUNTIME_ENV: local
-      SERVER_PORT: 8080
-      SUBNET_UID: 98
-      CORS_ALLOWED_ORIGINS: http://localhost*,http://worker-ui*,http://dojo-cli*
-      SUBSTRATE_API_URL: sidecar:8081
-      TOKEN_EXPIRY: 24
-      VALIDATOR_MIN_STAKE: 20000
     ports:
       - "8080:8080"
     expose:
@@ -127,7 +104,7 @@ services:
       retries: 5
       start_period: 90s # seems too long but let's just give enough time so that healthcheck doesn't fail
     networks:
-      - dojo-miner
+      - dojo-platform
     logging: *default-logging
 
   worker-ui:
@@ -141,33 +118,5 @@ services:
       timeout: 10s
       retries: 5
     networks:
-      - dojo-miner
+      - dojo-platform
     logging: *default-logging
-
-  dojo-cli:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    container_name: dojo-cli
-    volumes:
-      - ./:/app
-      - ./.env:/app/.env
-      - $BITTENSOR_DIR:/root/.bittensor
-    command: ["dojo-cli"]
-    tty: true
-    stdin_open: true
-    networks:
-      - dojo-miner
-
-  # ============== MINER ============== #
-
-  miner-centralised:
-    <<: *miner-defaults
-    container_name: miner-centralised
-
-  miner-decentralised:
-    <<: *miner-defaults
-    container_name: miner-decentralised
-    depends_on:
-      worker-api:
-        condition: service_healthy
-      worker-ui:
-        condition: service_healthy

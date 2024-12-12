@@ -102,3 +102,10 @@ subtensor-mainnet:
 
 subtensor-testnet:
 	docker compose -f docker-compose.subtensor.yaml up -d testnet-lite
+
+# ---------------------------------------------------------------------------- #
+#                             WORKER PLATFORM                                  #
+# ---------------------------------------------------------------------------- #
+
+subtensor-mainnet:
+	docker compose -f docker-compose.platform.yaml up -d mainnet-lite

@@ -104,6 +104,7 @@ services:
 
   watchtower:
     image: containrrr/watchtower
+    container_name: watchtower
     environment:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_DEBUG=true
@@ -115,6 +116,7 @@ services:
 
   dataset-service:
     image: ghcr.io/tensorplex-labs/dojo:dataset
+    container_name: dataset-service
     env_file:
       - .env
     ports:
@@ -124,6 +126,7 @@ services:
 
   extract-dataset:
     image: ghcr.io/tensorplex-labs/dojo:dataset
+    container_name: extract-dataset
     env_file:
       - .env
     command: ["extract-dataset"]
