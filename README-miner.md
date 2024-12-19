@@ -76,7 +76,7 @@ Start the dojo platform which Dojo CLI will interact with later.
 make dojo-platform
 ```
 
-Refer to option 1 to continue setting up the miner.
+Refer to [option 1](#option-1-centralised-method) to continue setting up the miner.
 
 ### Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring
 
