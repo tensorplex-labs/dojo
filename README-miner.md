@@ -23,7 +23,7 @@ Complete the .env file by changing / uncommenting the required variables
 | AXON_PORT           | Port for Axon server                      | 8091                                        |                                                                                                                                                             |
 | VALIDATOR_MIN_STAKE | Optional minimum stake requirement        | 20000                                       | Optional                                                                                                                                                    |
 
-Run Dojo CLI to retrieve API Key and Subscription Key. See [Dojo CLI](#dojo-cli) for usage. Note down the API key, subscription key and append the API key to your .env file. 
+Run Dojo CLI to retrieve API Key and Subscription Key. See [Dojo CLI](#dojo-cli) for usage. Note down the API key, subscription key and append the API key to your .env file.
 
 > You can use tab completions to see a list of commands
 
