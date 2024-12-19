@@ -15,6 +15,11 @@ networks:
     name: subtensor
 
 services:
+  watchtower:
+    extends:
+      file: docker-compose.shared.yaml
+      service: watchtower
+
   redis:
     extends:
       file: docker-compose.shared.yaml
@@ -106,18 +111,6 @@ services:
       prisma-setup-vali:
         condition: service_completed_successfully
     logging: *default-logging
-
-  watchtower:
-    container_name: watchtower
-    image: containrrr/watchtower
-    environment:
-      - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_DEBUG=true
-      - WATCHTOWER_POLL_INTERVAL=600
-      - WATCHTOWER_LABEL_ENABLE=true
-    restart: always
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
 
   dataset-service:
     container_name: dataset-service

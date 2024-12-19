@@ -1,40 +1,33 @@
-## Mining
+# Mining
+There are two options in setting up a miner for Dojo (centralised method and decentralised method)
 
-> **Note:** To connect to testnet, uncomment the testnet related configuration, specifically `NETUID`, `SUBTENSOR_CHAIN_ENDPOINT` and `SUBTENSOR_NETWORK`
-
-### Option 1: Centralised Method
-
-1. Configure .env file
+Before starting, create a .env file by making a copy of .env.example
 
 ```bash
-# Make a copy of .env.example
 cp .env.example .env
-
-# Fill envs under 'BITTENSOR ENV VARS' and 'MINER ENV VARS'
-# ---------------------------------------------------------------------------- #
-#                          BITTENSOR ENV VARS                                  #
-# ---------------------------------------------------------------------------- #
-
-BITTENSOR_DIR=$HOME/.bittensor # Your bittensor directory
-WALLET_COLDKEY= # Coldkey
-WALLET_HOTKEY= # Hotkey
-
-# ---------------------------------------------------------------------------- #
-#                          MINER ENV VARS                                      #
-# ---------------------------------------------------------------------------- #
-
-# Change to https://dojo-api-testnet.tensorplex.ai for testnet
-DOJO_API_BASE_URL="https://dojo-api.tensorplex.ai"
-DOJO_API_KEY= # Blank for now
-AXON_PORT=8091 # Change if required
 ```
 
-2. Run the CLI to retrieve API Key and Subscription Key, see [Dojo CLI](#dojo-cli) for usage.
+### Option 1: Centralised Method
+Complete the .env file by changing / uncommenting the required variables
+
+| Variable            | Description                               | Default Value                               | Remarks                                                                                                                                                     |
+|---------------------|-------------------------------------------|---------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| BITTENSOR_DIR       | Bittensor directory                       | $HOME/.bittensor                            |                                                                                                                                                             |
+| WALLET_COLDKEY      | Bittensor coldkey name                    | -                                           |                                                                                                                                                             |
+| WALLET_HOTKEY       | Bittensor hotkey name                     | -                                           |                                                                                                                                                             |
+| NETUID              | Subnet ID                                 | 52                                          | 52 for mainnet <br>98 for testnet                                                                                                                           |
+| SUBTENSOR_NETWORK   | Network name                              | mainnet                                     | finney (mainnet) <br>test (testnet) <br>local (local subtensor)                                                                                             |
+| SUBTENSOR_ENDPOINT  | WebSocket endpoint for network connection | <wss://entrypoint-finney.opentensor.ai:443> | <wss://test.finney.opentensor.ai:443> for testnet <br><ws://mainnet-lite:9944> for local subtensor <br><ws://testnet-lite:9944> for local testnet subtensor |
+| DOJO_API_BASE_URL   | Base URL for Dojo API                     | <https://dojo-api.tensorplex.ai>            | Dojo Worker API URL                                                                                                                                         |
+| DOJO_API_KEY        | Authentication key for Dojo API           | -                                           | Dojo API key                                                                                                                                                |
+| AXON_PORT           | Port for Axon server                      | 8091                                        |                                                                                                                                                             |
+| VALIDATOR_MIN_STAKE | Optional minimum stake requirement        | 20000                                       | Optional                                                                                                                                                    |
+
+Run Dojo CLI to retrieve API Key and Subscription Key. Note down the API Key and Subscription Key. see [Dojo CLI](#dojo-cli) for usage.
+> You can use tab completions to see a list of commands
 
 ```bash
 make dojo-cli
-
-# You can use tab completions to see a list of commands
 
 # Authenticate and generate keys
 authenticate
@@ -46,116 +39,44 @@ api_key list
 subscription_key list
 ```
 
-3. Complete the .env file with the variables below:
+Start the miner by running the following commands
 
 ```bash
-DOJO_API_KEY=# api key from step 2.
+make miner
 ```
-
-4. Start the miner by running the following commands:
-
-```bash
-make miner-centralised
-```
-
-To start with autoupdate for miners (**strongly recommended**), see the [Auto-updater](#auto-updater) section.
 
 ### Option 2: Decentralised Method
 
-1. Configure .env file
+Complete the .env file by changing / uncommenting the required variables
+
+| Variable                | Description                      | Default Value                                          | Remarks                                 |
+|-------------------------|----------------------------------|--------------------------------------------------------|-----------------------------------------|
+| SAS_SUBSTRATE_URL       | Substrate URL                    | Same as SUBTENSOR_ENDPOINT                             | Must match network configuration        |
+| SAS_EXPRESS_PORT        | Sidecar Express server port      | 8081                                                   | Internal service port                   |
+| SUBSTRATE_API_URL       | Substrate API URL                | sidecar:8081                                           | Internal service endpoint               |
+| NEXT_PUBLIC_BACKEND_URL | Backend URL for Dojo UI          | <http://localhost:3000>                                | Must be accessible from UI              |
+| REDIS_HOST              | Redis host                       | redis                                                  | Container name or IP                    |
+| REDIS_PORT              | Redis port                       | 6379                                                   | Default Redis port                      |
+| REDIS_USERNAME          | Redis username (Worker Platform) | -                                                      | For Redis ACL                           |
+| REDIS_PASSWORD          | Redis password (Worker Platform) | -                                                      | For Redis authentication                |
+| SERVER_PORT             | Worker API server port           | 8080                                                   | Must not conflict with other services   |
+| RUNTIME_ENV             | Runtime environment              | local                                                  | Options: local, development, production |
+| CORS_ALLOWED_ORIGINS    | Allowed CORS origins             | <http://localhost*,http://worker-ui*,http://dojo-cli>* | Comma-separated list                    |
+| TOKEN_EXPIRY            | JWT token expiration in hours    | 24                                                     | Adjust based on security requirements   |
+| JWT_SECRET              | Secret key for JWT tokens        | -                                                      | Use a strong random string              |
+| AWS_ACCESS_KEY_ID       | AWS access key ID                | -                                                      |                                         |
+| AWS_SECRET_ACCESS_KEY   | AWS secret access key            | -                                                      |                                         |
+| AWS_S3_BUCKET_NAME      | S3 bucket name                   | -                                                      |                                         |
+| S3_PUBLIC_URL           | Public URL for S3 bucket         | -                                                      |                                         |
+
+
+Start the dojo platform which Dojo CLI will interact with later.
 
 ```bash
-# Make a copy of .env.example
-cp .env.example .env
-
-# Fill envs under:
-# 1: BITTENSOR ENV VARS
-# 2: MINER ENV VARS
-# 3: MINER DECENTRALIZED ENV VARS
-# 4: MINER / VALIDATOR SHARED ENV VARS
-
-# ---------------------------------------------------------------------------- #
-#                          BITTENSOR ENV VARS                                  #
-# ---------------------------------------------------------------------------- #
-
-BITTENSOR_DIR=$HOME/.bittensor # Your bittensor directory
-WALLET_COLDKEY= # Coldkey
-WALLET_HOTKEY= # Hotkey
-
-# ---------------------------------------------------------------------------- #
-#                          MINER ENV VARS                                      #
-# ---------------------------------------------------------------------------- #
-
-DOJO_API_BASE_URL="http://worker-api:8080" # use this value
-DOJO_API_KEY= # Blank for now
-AXON_PORT=8091 # Change if required
-
-# ---------------------------------------------------------------------------- #
-#                          MINER DECENTRALIZED ENV VARS                        #
-# ---------------------------------------------------------------------------- #
-
-# For dojo-ui
-NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
-
-# For dojo-worker-api
-REDIS_USERNAME= # Set a non-default username
-REDIS_PASSWORD= # Generate and set a secure password
-
-# AWS credentials for S3
-AWS_ACCESS_KEY_ID= # Get from aws
-AWS_SECRET_ACCESS_KEY= # Get from aws
-AWS_S3_BUCKET_NAME= # Get from aws
-S3_PUBLIC_URL= # S3 bucket url that can be accessed publicly
-
-JWT_SECRET= # generate a random JWT key
-ETHEREUM_NODE= # get an ethereum endpoint URL from Infura, Alchemy or any other provider
-
-# ---------------------------------------------------------------------------- #
-#                     MINER / VALIDATOR SHARED ENV VARS                        #
-# ---------------------------------------------------------------------------- #
-
-DB_HOST=postgres:5432
-DB_NAME=db
-DB_USERNAME= # Set a non-default username
-DB_PASSWORD= # Generate and set a secure password
-DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
-
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_DB=0
+make dojo-platform
 ```
 
-2. Start the worker api which will be connected to the CLI later.
-
-```bash
-make miner-worker-api
-```
-
-3. Run the CLI to retrieve API Key and Subscription Key, see [Dojo CLI](#dojo-cli) for usage.
-
-```bash
-make dojo-cli
-```
-
-4. Grab the API key and add it to your .env file
-
-```bash
-DOJO_API_KEY=# api key from earlier
-```
-
-5. Now, run the full miner service.
-
-```bash
-make miner-decentralised
-```
-
-To start with autoupdate for miners (**strongly recommended**), see the [Auto-updater](#auto-updater) section.
-
-> [!IMPORTANT]
->
-> Don't be alarmed that the status of the `prisma-setup-miner` service shows exit code 0. This means it ran successfully.
->
-> Other services should also be healthy in order for the `miner-testnet-decentralised` service to run successfully.
+Refer to option 1 to continue setting up the miner.
 
 ### Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring
 
@@ -173,3 +94,52 @@ Note: URLs are different for testnet and mainnet. Please refer to [docs](https:/
 - Give your subscription a name, and enter your subscription key generated earlier before running the miner. _*Refer to step 4 of "Getting Started" if you need to retrieve your key*_ ![image](./assets/subscription/enter_details.png)
 - Click "Create" and your subscription will be saved. ![image](./assets/subscription/created_details.png)
 - Confirmed your subscription is created properly, and that you can view your tasks! ![image](./assets/subscription/tasks_shown.png)
+
+# Dojo CLI
+
+We provide a CLI that allows miners to manage their API and subscription keys either when connecting to our hosted Tensorplex API services or their own self-hosted miner backend.
+
+Features:
+
+- Tab completion
+- Prefix matching wallets
+
+You may use the dockerized version of the CLI using
+
+```bash
+make dojo-cli
+```
+
+Alternatively you can simply run the CLI inside of a virtual environment
+
+```bash
+# Start the dojo cli tool
+# Upon starting the CLI it will ask if you wanna use the default path for bittensor wallets, which is `~/.bittensor/wallets/`.
+# If you want to use a different path, please enter 'n' and then specify the path when prompted.
+dojo
+
+# TIP: During the whole process, you could actually use tab-completion to display the options, so you don't have to remember them all. Please TAB your way guys! 🙇‍♂️
+# It should be prompting you to enter you coldkey and hotkey
+# After entering the coldkey and hotkey, you should be in the command line interface for dojo, please authenticate by running the following command.
+# You should see a message saying "✅ Wallet coldkey name and hotkey name set successfully."
+authenticate
+
+# Afterwards, please generate an API Key with the following command.
+# You should see a message saying:  "✅ All API keys: ['sk-<KEY>]". Displaying a list of your API Keys.
+api_key generate
+
+# Lastly, please generate a Subscription Key with the following command.
+# You should see a message saying:  "✅ All Subscription keys: ['sk-<KEY>]". Displaying a list of your Subscription Keys.
+subscription_key generate
+
+# :rocket: You should now have all the required keys, and be able to start mining.
+
+# Other commands available to the CLI:
+# You can always run the following command to get your current keys.
+api_key list
+subscription_key list
+
+# You can also delete your keys with the following commands.
+api_key delete
+subscription_key delete
+```

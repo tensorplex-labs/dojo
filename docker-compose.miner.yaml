@@ -2,23 +2,6 @@ x-logging: &default-logging
   options:
     max-size: "50m"
 
-#x-miner-defaults: &miner-defaults
-#  image: ghcr.io/tensorplex-labs/dojo:main
-#  env_file:
-#    - .env
-#  working_dir: /app
-#  volumes:
-#    - ./:/app
-#    - ./.env:/app/.env
-#    - $BITTENSOR_DIR:/root/.bittensor
-#  command: ["miner"]
-#  ports:
-#    - ${AXON_PORT}:${AXON_PORT}
-#  networks:
-#    - dojo-miner
-#    - subtensor
-#  logging: *default-logging
-
 networks:
   dojo-miner:
     driver: bridge
@@ -29,6 +12,11 @@ networks:
     name: subtensor
 
 services:
+  watchtower:
+    extends:
+      file: docker-compose.shared.yaml
+      service: watchtower
+
   dojo-cli:
     container_name: dojo-cli
     image: ghcr.io/tensorplex-labs/dojo:main
@@ -45,6 +33,8 @@ services:
   miner:
     container_name: miner
     image: ghcr.io/tensorplex-labs/dojo:main
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     env_file:
       - .env
     working_dir: /app
@@ -60,16 +50,3 @@ services:
       - dojo-platform
       - subtensor
     logging: *default-logging
-
-#  miner-centralised:
-#    <<: *miner-defaults
-#    container_name: miner-centralised
-#
-#  miner-decentralised:
-#    <<: *miner-defaults
-#    container_name: miner-decentralised
-#    depends_on:
-#      worker-api:
-#        condition: service_healthy
-#      worker-ui:
-#        condition: service_healthy

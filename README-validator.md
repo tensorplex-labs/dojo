@@ -1,63 +1,40 @@
-## Validating
-
-> **Note:** To connect to testnet, uncomment the testnet related configuration, specifically `NETUID`, `SUBTENSOR_CHAIN_ENDPOINT` and `SUBTENSOR_NETWORK`
-
-Copy the validator .env file and set up the .env file
-
-```bash
-# Copy .env.validator.example
-cp .env.validator.example .env.validator
-
-# Fill envs under:
-# 1: BITTENSOR ENV VARS
-# 2: VALIDATOR ENV VARS
-# 3: MINER / VALIDATOR SHARED ENV VARS
-
-# ---------------------------------------------------------------------------- #
-#                          BITTENSOR ENV VARS                                  #
-# ---------------------------------------------------------------------------- #
-
-BITTENSOR_DIR=$HOME/.bittensor # Your bittensor directory
-WALLET_COLDKEY= # Coldkey
-WALLET_HOTKEY= # Hotkey
-
-# ---------------------------------------------------------------------------- #
-#                     MINER / VALIDATOR SHARED ENV VARS                        #
-# ---------------------------------------------------------------------------- #
-
-DB_HOST=postgres:5432
-DB_NAME=db
-DB_USERNAME= # Set a non-default username
-DB_PASSWORD= # Generate and set a secure password
-DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
-
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_DB=0
-
-# ---------------------------------------------------------------------------- #
-#                          VALIDATOR ENV VARS                                  #
-# ---------------------------------------------------------------------------- #
-
-# Head to https://wandb.ai/authorize to get your API key
-WANDB_API_KEY="<wandb_key>"
-WANDB_PROJECT_NAME=dojo-mainnet
-
-# For dojo-synthetic-api
-OPENROUTER_API_KEY="sk-or-v1-<KEY>"
-SYNTHETIC_API_URL=http://synthetic-api:5003
-
-# Langfuse free tier is more than enough
-LANGFUSE_SECRET_KEY=# head to langfuse.com
-LANGFUSE_PUBLIC_KEY=# head to langfuse.com
-LANGFUSE_HOST="https://us.cloud.langfuse.com" # 🇺🇸 US region
-
-# Other LLM API providers, Optional or if you've chosen it over Openrouter
-TOGETHER_API_KEY=
-OPENAI_API_KEY=
-```
+# Validating
 
 > **Note:** To ensure your validator runs smoothly, enable the auto top-up feature for Openrouter, this ensures that your validator will not fail to call synthetic API during task generation. The estimate cost of generating a task is approximately $0.20 USD.
+
+Before starting, create a .env file by making a copy of .env.example
+
+```bash
+cp .env.example .env
+```
+
+Complete the .env file by changing / uncommenting the required variables
+
+| Variable                 | Description                               | Default Value                                                        | Remarks                                                                                                                                                     |
+|--------------------------|-------------------------------------------|----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| BITTENSOR_DIR            | Bittensor directory                       | $HOME/.bittensor                                                     |                                                                                                                                                             |
+| WALLET_COLDKEY           | Bittensor coldkey name                    | -                                                                    |                                                                                                                                                             |
+| WALLET_HOTKEY            | Bittensor hotkey name                     | -                                                                    |                                                                                                                                                             |
+| NETUID                   | Subnet ID                                 | 52                                                                   | 52 for mainnet <br>98 for testnet                                                                                                                           |
+| SUBTENSOR_NETWORK        | Network name                              | mainnet                                                              | finney (mainnet) <br>test (testnet) <br>local (local subtensor)                                                                                             |
+| SUBTENSOR_ENDPOINT       | WebSocket endpoint for network connection | <wss://entrypoint-finney.opentensor.ai:443>                          | <wss://test.finney.opentensor.ai:443> for testnet <br><ws://mainnet-lite:9944> for local subtensor <br><ws://testnet-lite:9944> for local testnet subtensor |
+| WANDB_API_KEY            | Weights & Biases API key                  | -                                                                    | WanDB API Key                                                                                                                                               |
+| WANDB_PROJECT_NAME       | Project name in W&B                       | dojo-mainnet                                                         | WanDB Project Name                                                                                                                                          |
+| OPENROUTER_API_KEY       | OpenRouter API authentication key         | -                                                                    | OpenRouter API key                                                                                                                                          |
+| SYNTHETIC_API_URL        | Synthetic API service URL                 | <http://synthetic-api:5003>                                          | Internal service endpoint                                                                                                                                   |
+| LANGFUSE_SECRET_KEY      | Langfuse secret key                       | -                                                                    | Langfuse secret key                                                                                                                                         |
+| LANGFUSE_PUBLIC_KEY      | Langfuse public key                       | -                                                                    | Langfuse public key                                                                                                                                         |
+| LANGFUSE_HOST            | Langfuse host URL                         | <https://us.cloud.langfuse.com>                                      | Langfuse endpoint                                                                                                                                           |
+| REDIS_HOST               | Redis host                                | redis                                                                | Container name or IP                                                                                                                                        |
+| REDIS_PORT               | Redis port                                | 6379                                                                 | Default Redis port                                                                                                                                          |
+| REDIS_USERNAME           | Redis username                            | -                                                                    | Redis Username                                                                                                                                              |
+| REDIS_PASSWORD           | Redis password                            | -                                                                    | Redis Password                                                                                                                                              |
+| DB_HOST                  | Database host address                     | postgres:5432                                                        | Format: hostname:port                                                                                                                                       |
+| DB_NAME                  | Database name                             | db                                                                   | Database Name                                                                                                                                               |
+| DB_USERNAME              | Database username                         | -                                                                    | Database Username                                                                                                                                           |
+| DB_PASSWORD              | Database password                         | -                                                                    | Database Password                                                                                                                                           |
+| DATABASE_URL             | Full PostgreSQL connection string         | postgresql://\${DB_USERNAME}:\${DB_PASSWORD}@\${DB_HOST}/\${DB_NAME} |                                                                                                                                                             |
+| DATASET_SERVICE_BASE_URL | Data Collection Endpoint                  | <https://dojo-validator-api.tensorplex.ai>                           |                                                                                                                                                             |
 
 Start the validator
 
@@ -67,3 +44,12 @@ make validator
 ```
 
 To start with autoupdate for validators (**strongly recommended**), see the [Auto-updater](#auto-updater) section.
+
+## Data Collection
+
+To export all data that has been collected from the validator, ensure that you have the environment variables setup properly as in [validator-setup](#validating), then run the following:
+
+```bash
+make validator-pull
+make extract-dataset
+```

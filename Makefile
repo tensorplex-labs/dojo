@@ -49,21 +49,15 @@ miner-pull:
 validator-down:
 	docker compose -f docker-compose.validator.yaml down
 
-miner-decentralised-down:
-	docker compose -f docker-compose.miner.yaml down miner-decentralised
-
-miner-centralised-down:
-	docker compose -f docker-compose.miner.yaml down miner-centralised
+miner-down:
+	docker compose -f docker-compose.miner.yaml down
 
 # ---------------------------------------------------------------------------- #
 #                                 CORE SERVICES                                #
 # ---------------------------------------------------------------------------- #
 
-miner-decentralised:
-	docker compose -f docker-compose.miner.yaml up -d --build miner-decentralised
-
-miner-centralised:
-	docker compose -f docker-compose.miner.yaml up --build -d miner-centralised
+miner:
+	docker compose -f docker-compose.miner.yaml up -d
 
 validator:
 	docker compose -f docker-compose.validator.yaml up --build -d validator watchtower
@@ -71,8 +65,8 @@ validator:
 validator-up-deps:
 	docker compose -f docker-compose.validator.yaml up -d --build synthetic-api postgres-vali prisma-setup-vali
 
-miner-worker-api:
-	docker compose -f docker-compose.miner.yaml up -d worker-api
+dojo-platform:
+	docker compose -f docker-compose.platform.yaml up -d
 
 dojo-cli:
 	docker compose -f docker-compose.miner.yaml run --rm dojo-cli
@@ -107,5 +101,5 @@ subtensor-testnet:
 #                             WORKER PLATFORM                                  #
 # ---------------------------------------------------------------------------- #
 
-subtensor-mainnet:
-	docker compose -f docker-compose.platform.yaml up -d mainnet-lite
+worker-platform:
+	docker compose -f docker-compose.platform.yaml up -d

@@ -55,3 +55,15 @@ services:
       timeout: 5s
       retries: 5
     logging: *default-logging
+
+  watchtower:
+    container_name: watchtower
+    image: containrrr/watchtower
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_DEBUG=true
+      - WATCHTOWER_POLL_INTERVAL=600
+      - WATCHTOWER_LABEL_ENABLE=true
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
