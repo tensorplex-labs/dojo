@@ -66,13 +66,12 @@ Complete the .env file by changing / uncommenting the required variables
 | S3_PUBLIC_URL           | Public URL for S3 bucket          | -                                                                    |                                         |
 | REDIS_HOST              | Redis host                        | redis                                                                | Container name or IP                    |
 | REDIS_PORT              | Redis port                        | 6379                                                                 | Default Redis port                      |
-| REDIS_USERNAME          | Redis username                    | -                                                                    | For Redis ACL                           |
-| REDIS_PASSWORD          | Redis password                    | -                                                                    | For Redis authentication                |
+| REDIS_USERNAME          | Redis username                    | -                                                                    | (Optional) For Redis ACL                |
+| REDIS_PASSWORD          | Redis password                    | -                                                                    | (Optional) For Redis authentication     |
 | DB_HOST                 | Database host address             | postgres:5432                                                        | Format: hostname:port                   |
 | DB_NAME                 | Database name                     | db                                                                   | Database Name                           |
 | DB_USERNAME             | Database username                 | -                                                                    | Database Username                       |
 | DB_PASSWORD             | Database password                 | -                                                                    | Database Password                       |
-| DATABASE_URL            | Full PostgreSQL connection string | postgresql://\${DB_USERNAME}:\${DB_PASSWORD}@\${DB_HOST}/\${DB_NAME} |                                         |
 
 Start the dojo platform which Dojo CLI will interact with later.
 
