@@ -95,7 +95,7 @@ services:
         condition: service_healthy
       sidecar:
         condition: service_healthy
-      prisma-setup-miner:
+      prisma-setup-platform:
         condition: service_completed_successfully
     command: ["./service", "--debug"]
     healthcheck:

@@ -29,6 +29,7 @@ services:
     stdin_open: true
     networks:
       - dojo-miner
+      - dojo-platform
 
   miner:
     container_name: miner
