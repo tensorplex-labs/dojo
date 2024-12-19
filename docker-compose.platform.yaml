@@ -49,7 +49,7 @@ services:
 
   sidecar:
     container_name: substrate-sidecar
-    image: docker.io/parity/substrate-api-sidecar:v19.0.2
+    image: docker.io/parity/substrate-api-sidecar:v19.3.1
     env_file:
       - .env
     read_only: true

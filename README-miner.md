@@ -8,21 +8,6 @@ cp .env.example .env
 ```
 
 ### Option 1: Centralised Method
-Complete the .env file by changing / uncommenting the required variables
-
-| Variable            | Description                               | Default Value                               | Remarks                                                                                                                                                     |
-|---------------------|-------------------------------------------|---------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| BITTENSOR_DIR       | Bittensor directory                       | $HOME/.bittensor                            |                                                                                                                                                             |
-| WALLET_COLDKEY      | Bittensor coldkey name                    | -                                           |                                                                                                                                                             |
-| WALLET_HOTKEY       | Bittensor hotkey name                     | -                                           |                                                                                                                                                             |
-| NETUID              | Subnet ID                                 | 52                                          | 52 for mainnet <br>98 for testnet                                                                                                                           |
-| SUBTENSOR_NETWORK   | Network name                              | mainnet                                     | finney (mainnet) <br>test (testnet) <br>local (local subtensor)                                                                                             |
-| SUBTENSOR_ENDPOINT  | WebSocket endpoint for network connection | <wss://entrypoint-finney.opentensor.ai:443> | <wss://test.finney.opentensor.ai:443> for testnet <br><ws://mainnet-lite:9944> for local subtensor <br><ws://testnet-lite:9944> for local testnet subtensor |
-| DOJO_API_BASE_URL   | Base URL for Dojo API                     | <https://dojo-api.tensorplex.ai>            | Dojo Worker API URL                                                                                                                                         |
-| DOJO_API_KEY        | Authentication key for Dojo API           | -                                           | Dojo API key                                                                                                                                                |
-| AXON_PORT           | Port for Axon server                      | 8091                                        |                                                                                                                                                             |
-| VALIDATOR_MIN_STAKE | Optional minimum stake requirement        | 20000                                       | Optional                                                                                                                                                    |
-
 Run Dojo CLI to retrieve API Key and Subscription Key. Note down the API Key and Subscription Key. see [Dojo CLI](#dojo-cli) for usage.
 > You can use tab completions to see a list of commands
 
@@ -38,6 +23,22 @@ subscription_key generate
 api_key list
 subscription_key list
 ```
+
+Complete the .env file by changing / uncommenting the required variables
+
+| Variable            | Description                               | Default Value                               | Remarks                                                                                                                                                     |
+|---------------------|-------------------------------------------|---------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| BITTENSOR_DIR       | Bittensor directory                       | $HOME/.bittensor                            |                                                                                                                                                             |
+| WALLET_COLDKEY      | Bittensor coldkey name                    | -                                           |                                                                                                                                                             |
+| WALLET_HOTKEY       | Bittensor hotkey name                     | -                                           |                                                                                                                                                             |
+| NETUID              | Subnet ID                                 | 52                                          | 52 for mainnet <br>98 for testnet                                                                                                                           |
+| SUBTENSOR_NETWORK   | Network name                              | mainnet                                     | finney (mainnet) <br>test (testnet) <br>local (local subtensor)                                                                                             |
+| SUBTENSOR_ENDPOINT  | WebSocket endpoint for network connection | <wss://entrypoint-finney.opentensor.ai:443> | <wss://test.finney.opentensor.ai:443> for testnet <br><ws://mainnet-lite:9944> for local subtensor <br><ws://testnet-lite:9944> for local testnet subtensor |
+| DOJO_API_BASE_URL   | Base URL for Dojo API                     | <https://dojo-api.tensorplex.ai>            | Dojo Worker API URL                                                                                                                                         |
+| DOJO_API_KEY        | Authentication key for Dojo API           | -                                           | Dojo API key generated from the previous step                                                                                                               |
+| AXON_PORT           | Port for Axon server                      | 8091                                        |                                                                                                                                                             |
+| VALIDATOR_MIN_STAKE | Optional minimum stake requirement        | 20000                                       | Optional                                                                                                                                                    |
+
 
 Start the miner by running the following commands
 
