@@ -15,35 +15,36 @@ networks:
     name: subtensor
 
 services:
-  # ============== COMMON SERVICES ============== #
-  redis-service:
-    image: redis/redis-stack-server:7.4.0-v0
-    env_file:
-      - .env.validator
-    expose:
-      - 6379
+  watchtower:
+    extends:
+      file: docker-compose.shared.yaml
+      service: watchtower
+
+  redis:
+    extends:
+      file: docker-compose.shared.yaml
+      service: redis
     volumes:
       - redis-validator-volume:/data
     networks:
       - dojo-validator
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    logging: *default-logging
+
+  postgres:
+    extends:
+      file: docker-compose.shared.yaml
+      service: postgres
+    volumes:
+      - postgres-validator-volume:/var/lib/postgresql/data
+    networks:
+      - dojo-validator
 
   synthetic-api:
+    container_name: synthetic-api
     image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     env_file:
-      - .env.validator
-    environment:
-      # leave env vars that'll never change down here, don't source any env vars
-      # here because we're not looking in .env and variable substitution will
-      # happen too early
-      - REDIS_HOST=redis-service
-      - REDIS_PORT=6379
-      - REDIS_DB=0
+      - .env
     expose:
       - 5003
     networks:
@@ -53,43 +54,17 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 50s
     depends_on:
-      redis-service:
+      redis:
         condition: service_healthy
     # allow docker commands inside container
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     logging: *default-logging
 
-  postgres-vali:
-    image: postgres:15.7
-    env_file:
-      - .env.validator
-    # looks strange, but double $ (i.e. $$) for variable substitution
-    command: >
-      bash -c "
-        export POSTGRES_USER=$${DB_USERNAME}
-        export POSTGRES_PASSWORD=$${DB_PASSWORD}
-        export POSTGRES_DB=$${DB_NAME}
-        docker-entrypoint.sh postgres
-      "
-    expose:
-      - 5432
-    volumes:
-      - postgres-validator-volume:/var/lib/postgresql/data
-    networks:
-      - dojo-validator
-    healthcheck:
-      test:
-        # looks strange, but double $ (i.e. $$) for variable substitution
-        ["CMD-SHELL", "pg_isready -h postgres-vali -U $${DB_USERNAME}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    logging: *default-logging
-
   prisma-setup-vali:
+    container_name: prisma-setup-vali
     platform: linux/amd64
     build:
       context: .
@@ -97,7 +72,7 @@ services:
     command: >
       sh -c "prisma migrate deploy && prisma generate"
     env_file:
-      - .env.validator
+      - .env
     working_dir: /app
     volumes:
       - prisma-pip-cache:/root/.cache/pip
@@ -106,19 +81,24 @@ services:
     networks:
       - dojo-validator
     depends_on:
-      - postgres-vali
+      - postgres
     logging: *default-logging
 
   validator:
+    container_name: validator
     image: ghcr.io/tensorplex-labs/dojo:main
-    working_dir: /app
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      com.centurylinklabs.watchtower.depends-on: "synthetic-api,postgres"
     env_file:
-      - .env.validator
+      - .env
+    working_dir: /app
     volumes:
       - ./:/app
-      - ./.env.validator:/app/.env
-      - $HOME/.bittensor:/root/.bittensor
+      - ./.env:/app/.env
+      - $BITTENSOR_DIR:/root/.bittensor
       - prisma-binary:/root/prisma-python
+      - prisma-pip-cache:/root/.cache/pip
     command: ["validator"]
     networks:
       - dojo-validator
@@ -126,31 +106,33 @@ services:
     depends_on:
       synthetic-api:
         condition: service_healthy
-      postgres-vali:
+      postgres:
         condition: service_healthy
       prisma-setup-vali:
         condition: service_completed_successfully
     logging: *default-logging
 
   dataset-service:
+    container_name: dataset-service
     image: ghcr.io/tensorplex-labs/dojo:dataset
     env_file:
-      - .env.validator
+      - .env
     ports:
       - "127.0.0.1:9999:9999"
     command: ["dataset-service"]
     logging: *default-logging
 
   extract-dataset:
+    container_name: extract-dataset
     image: ghcr.io/tensorplex-labs/dojo:dataset
     env_file:
-      - .env.validator
+      - .env
     command: ["extract-dataset"]
     networks:
       - dojo-validator
     volumes:
       - ./:/app
-      - ./.env.validator:/app/.env
+      - ./.env:/app/.env
       - prisma-binary:/root/prisma-python
-      - $HOME/.bittensor:/root/.bittensor
+      - $BITTENSOR_DIR:/root/.bittensor
     logging: *default-logging
