@@ -275,13 +275,11 @@ Please ensure that you run the command in the python environment, if you haven't
 conda activate dojo_py311
 
 # validator
-pm2 start auto_update.py --name auto-update-validator --interpreter $(which python3) -- --env_file .env.validator --service validator
+pm2 start auto_update.py --name auto-update-validator --interpreter $(which python3) -- ---service validator
 
-# miner-centralised
-pm2 start auto_update.py --name auto-update-miner-centralised --interpreter $(which python3) -- --env_file .env.miner --service miner-centralised
+# miner
+pm2 start auto_update.py --name auto-update-miner-centralised --interpreter $(which python3) -- --service miner
 
-# miner-decentralised
-pm2 start auto_update.py --name auto-update-miner-decentralised --interpreter $(which python3) -- --env_file .env.miner --service miner-decentralised
 ```
 
 # For Dojo developers

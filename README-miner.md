@@ -50,30 +50,31 @@ make miner
 
 Complete the .env file by changing / uncommenting the required variables
 
-| Variable                | Description                       | Default Value                                                        | Remarks                                 |
-|-------------------------|-----------------------------------|----------------------------------------------------------------------|-----------------------------------------|
-| SAS_SUBSTRATE_URL       | Substrate URL                     | Same as SUBTENSOR_ENDPOINT                                           | Must match network configuration        |
-| SAS_EXPRESS_PORT        | Sidecar Express server port       | 8081                                                                 | Internal service port                   |
-| SUBSTRATE_API_URL       | Substrate API URL                 | sidecar:8081                                                         | Internal service endpoint               |
-| NEXT_PUBLIC_BACKEND_URL | Backend URL for Dojo UI           | <http://localhost:3000>                                              | Must be accessible from UI              |
-| SERVER_PORT             | Worker API server port            | 8080                                                                 | Must not conflict with other services   |
-| RUNTIME_ENV             | Runtime environment               | local                                                                | Options: local, development, production |
-| CORS_ALLOWED_ORIGINS    | Allowed CORS origins              | <http://localhost*,http://worker-ui*,http://dojo-cli>*               | Comma-separated list                    |
-| TOKEN_EXPIRY            | JWT token expiration in hours     | 24                                                                   | Adjust if needed                        |
-| JWT_SECRET              | Secret key for JWT tokens         | -                                                                    | Use a strong random string              |
-| AWS_ACCESS_KEY_ID       | AWS access key ID                 | -                                                                    |                                         |
-| AWS_SECRET_ACCESS_KEY   | AWS secret access key             | -                                                                    |                                         |
-| AWS_S3_BUCKET_NAME      | S3 bucket name                    | -                                                                    |                                         |
-| S3_PUBLIC_URL           | Public URL for S3 bucket          | -                                                                    |                                         |
-| REDIS_HOST              | Redis host                        | redis                                                                | Container name or IP                    |
-| REDIS_PORT              | Redis port                        | 6379                                                                 | Default Redis port                      |
-| REDIS_USERNAME          | Redis username                    | -                                                                    | (Optional) For Redis ACL                |
-| REDIS_PASSWORD          | Redis password                    | -                                                                    | (Optional) For Redis authentication     |
-| DB_HOST                 | Database host address             | postgres:5432                                                        | Format: hostname:port                   |
-| DB_NAME                 | Database name                     | db                                                                   | Database Name                           |
-| DB_USERNAME             | Database username                 | -                                                                    | Database Username                       |
-| DB_PASSWORD             | Database password                 | -                                                                    | Database Password                       |
-
+| Variable                | Description                   | Default Value                                          | Remarks                                 |
+|-------------------------|-------------------------------|--------------------------------------------------------|-----------------------------------------|
+| SAS_SUBSTRATE_URL       | Substrate URL                 | Same as SUBTENSOR_ENDPOINT                             | Must match network configuration        |
+| SAS_EXPRESS_PORT        | Sidecar Express server port   | 8081                                                   | Internal service port                   |
+| SUBSTRATE_API_URL       | Substrate API URL             | sidecar:8081                                           | Internal service endpoint               |
+| NEXT_PUBLIC_BACKEND_URL | Backend URL for Dojo UI       | <http://localhost:3000>                                | Must be accessible from UI              |
+| SERVER_PORT             | Worker API server port        | 8080                                                   | Must not conflict with other services   |
+| RUNTIME_ENV             | Runtime environment           | local                                                  | Options: local, development, production |
+| CORS_ALLOWED_ORIGINS    | Allowed CORS origins          | <http://localhost*,http://worker-ui*,http://dojo-cli>* | Comma-separated list                    |
+| TOKEN_EXPIRY            | JWT token expiration in hours | 24                                                     | Adjust if needed                        |
+| JWT_SECRET              | Secret key for JWT tokens     | -                                                      | Use a strong random string              |
+| AWS_ACCESS_KEY_ID       | AWS access key ID             | -                                                      | Optional                                |
+| AWS_SECRET_ACCESS_KEY   | AWS secret access key         | -                                                      | Optional                                |
+| AWS_S3_BUCKET_NAME      | S3 bucket name                | -                                                      | Optional                                |
+| S3_PUBLIC_URL           | Public URL for S3 bucket      | -                                                      | Optional                                |
+| REDIS_HOST              | Redis host                    | redis                                                  | Container name or IP                    |
+| REDIS_PORT              | Redis port                    | 6379                                                   | Default Redis port                      |
+| REDIS_USERNAME          | Redis username                | -                                                      | (Optional) For Redis ACL                |
+| REDIS_PASSWORD          | Redis password                | -                                                      | (Optional) For Redis authentication     |
+| DB_HOST                 | Database host address         | postgres:5432                                          | Format: hostname:port                   |
+| DB_NAME                 | Database name                 | db                                                     | Database Name                           |
+| DB_USERNAME             | Database username             | -                                                      | Database Username                       |
+| DB_PASSWORD             | Database password             | -                                                      | Database Password                       |
+| VALIDATOR_MIN_STAKE     | Validator Minimum Stake       | 20000                                                  | Minimum stake required from validators  |
+| ETHEREUM_NODE           | Ethereum Node endpoint        | <https://ethereum.publicnode.com>                      | Ethereum endpoint                       |
 Start the dojo platform which Dojo CLI will interact with later.
 
 ```bash

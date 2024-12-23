@@ -33,13 +33,13 @@ CONFIG = {
         "docker_compose_down": "docker compose --env-file .env.miner -f docker-compose.miner.yaml down",
         "docker_compose_up": "docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-decentralised",
     },
-    "miner-centralised": {
+    "miner": {
         "services": [
             "miner-centralised",
         ],
         "images": ["dojo"],
-        "docker_compose_down": "docker compose --env-file .env.miner -f docker-compose.miner.yaml down",
-        "docker_compose_up": "docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-centralised",
+        "docker_compose_down": "docker compose -f docker-compose.miner.yaml down",
+        "docker_compose_up": "docker compose -f docker-compose.miner.yaml up --build -d miner",
     },
 }
 
