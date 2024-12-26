@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import torch
 
@@ -95,30 +96,6 @@ def create_mock_miner_response(
     )
 
 
-def mock_scoring_data_normal() -> tuple:
-    request = create_mock_miner_response()
-    miner_a = create_mock_miner_response(hotkey="hotkeyA", scores=[75, 100, 50, 69])
-    miner_b = create_mock_miner_response(hotkey="hotkeyB", scores=[51, 49, 52, 53])
-    return request, [miner_a, miner_b]
-
-
-def mock_scoring_data_all_same_scores() -> tuple:
-    request = create_mock_miner_response()
-    miner_a = create_mock_miner_response(hotkey="hotkeyA", scores=[50, 50, 50, 50])
-    miner_b = create_mock_miner_response(hotkey="hotkeyB", scores=[50, 50, 50, 50])
-    return request, [miner_a, miner_b]
-
-
-@pytest.mark.skip(reason="Placeholder test, not implemented yet")
-def test_ground_truth_state_missing():
-    pass
-
-
-"""
-TESTS FOR SPEARMAN CORRELATION
-"""
-
-
 def test_single_miner_responded(disable_terminal_plot):
     mock_miner_response = create_mock_miner_response(
         hotkey="hotkeyA", scores=[75, 100, 50, 69]
@@ -136,11 +113,11 @@ def test_single_miner_responded(disable_terminal_plot):
         miner_responses=[mock_miner_response],
     )
 
-    assert isinstance(scores, torch.Tensor), "Scores is not a torch.Tensor"
-    assert len(scores.shape) == 1, "Scores is not a 1D tensor"
+    assert isinstance(scores, torch.Tensor), "Scores should be a torch.Tensor"
+    assert len(scores.shape) == 1, "Scores should be a 1D tensor"
     assert scores.shape == torch.Size(
         [1]
-    ), "Scores tensor shape is not [1] for a single miner's response"
+    ), "Scores tensor shape should be [1] for a single miner's response"
     assert not torch.isnan(scores).any(), "Scores array contains NaN values"
 
 
@@ -161,15 +138,15 @@ def test_single_miner_responded_all_same_scores(disable_terminal_plot):
         miner_responses=[mock_miner_response],
     )
 
-    assert isinstance(scores, torch.Tensor), "Scores is not a torch.Tensor"
-    assert len(scores.shape) == 1, "Scores is not a 1D tensor"
+    assert isinstance(scores, torch.Tensor), "Scores should be a torch.Tensor"
+    assert len(scores.shape) == 1, "Scores should be a 1D tensor"
     assert scores.shape == torch.Size(
         [1]
-    ), "Scores tensor shape is not [1] for a single miner's response"
+    ), "Scores tensor shape should be [1] for a single miner's response"
     assert torch.isnan(scores).all(), "Scores array should contain only NaN values"
 
 
-def test_miners_provides_all_same_scores():
+def test_miners_provides_all_same_scores(disable_terminal_plot):
     mock_miner_responses = []
     for score in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
         mock_response = create_mock_miner_response(
@@ -191,18 +168,14 @@ def test_miners_provides_all_same_scores():
         miner_responses=mock_miner_responses,
     )
 
-    assert isinstance(scores, torch.Tensor), "Scores is not a torch.Tensor"
-    assert len(scores.shape) == 1, "Scores is not a 1D tensor"
+    assert isinstance(scores, torch.Tensor), "Scores should be a torch.Tensor"
+    assert len(scores.shape) == 1, "Scores should be a 1D tensor"
     assert scores.shape == torch.Size(
         [len(mock_miner_responses)]
     ), "Scores tensor shape should match number of miners that responded"
     assert (
         torch.isnan(scores).all()
     ), "Scores array should contain only NaN values as miner responses are not valid"
-
-
-def test_ground_truth_score_ordering():
-    pass
 
 
 def test_miners_different_scores():
@@ -214,4 +187,22 @@ def test_minmax_scale():
 
 
 def test_convert_ground_truth_ranks_to_scores():
-    pass
+    cids_with_ranks = [("cid-1", 0), ("cid-2", 1), ("cid-3", 2), ("cid-4", 3)]
+
+    ground_truth_scores = Scoring._convert_ground_truth_ranks_to_scores(cids_with_ranks)
+
+    expected = np.array([1.0, 2 / 3, 1 / 3, 0.0])
+    assert np.allclose(
+        ground_truth_scores, expected, rtol=1e-6, atol=1e-6
+    ), f"Ground truth scores should be in descending order, got {ground_truth_scores}"
+    assert np.all(ground_truth_scores >= 0) and np.all(
+        ground_truth_scores <= 1
+    ), "All values should be in the range [0, 1]"
+
+
+def test_convert_miner_outputs_to_scores_invalid():
+    cids_with_ranks = [("cid-1", 0), ("cid-2", 2), ("cid-3", 1), ("cid-4", 3)]
+    with pytest.raises(
+        ValueError, match="Provided ranks must be sorted and must be continuous"
+    ):
+        Scoring._convert_ground_truth_ranks_to_scores(cids_with_ranks)
