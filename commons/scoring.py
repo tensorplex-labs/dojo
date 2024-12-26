@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import pingouin as pg
 import torch
-from attr import define, field
 from bittensor.utils.btlogging import logging as logger
 from pydantic import BaseModel, Field
 from scipy.stats import spearmanr
@@ -22,20 +21,6 @@ from dojo.protocol import (
     Scores,
     TaskSynapseObject,
 )
-
-
-@define(kw_only=True, frozen=True, slots=True)
-class Result:
-    # Each request id has multiple completions, where each miner scores each of these completions.
-    request_id: str
-    cid_to_hotkey_to_score: Dict[str, Dict[str, float]] = field(factory=dict)
-
-
-class GroundTruthScore(BaseModel):
-    class Config:
-        arbitrary_types_allowed = True
-
-    score: torch.Tensor
 
 
 class ConsensusScore(BaseModel):
