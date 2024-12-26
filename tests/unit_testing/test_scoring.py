@@ -1,21 +1,17 @@
-import bittensor as bt
 import pytest
+import torch
 
+from commons.scoring import Scoring
 from commons.utils import set_expire_time
-from dojo.protocol import FeedbackRequest, RankingCriteria, TaskTypeEnum
-
-# # Remove the default loguru handler
-# logger.remove()
-
-# # Add a new handler to log to stdout
-# logger.add(sys.stdout, level="DEBUG")
-
-default_ground_truth = {
-    "cid_1": 0,  # 1st place
-    "cid_2": 1,  # 2nd place
-    "cid_3": 2,  # 3rd place
-    "cid_4": 3,  # 4th place
-}
+from dojo.protocol import (
+    CodeAnswer,
+    CompletionResponse,
+    FeedbackRequest,
+    MultiScoreCriteria,
+    ScoreCriteria,
+    TaskSynapseObject,
+    TaskTypeEnum,
+)
 
 
 @pytest.fixture
@@ -25,9 +21,6 @@ def scoring_module():
     from commons.scoring import Scoring
     from dojo.protocol import (
         CodeAnswer,
-        CompletionResponse,
-        FeedbackRequest,
-        MultiScoreCriteria,
         TaskTypeEnum,
     )
 
@@ -50,12 +43,14 @@ def mock_response(
     cid: str = "",
     rank_id: int = 0,
 ):
-    from dojo.protocol import CodeAnswer, CompletionResponse, FileObject
+    from dojo.protocol import CodeFileObject
 
     return CompletionResponse(
         model=model,
         completion=CodeAnswer(
-            files=[FileObject(filename=filename, content=content, language=language)]
+            files=[
+                CodeFileObject(filename=filename, content=content, language=language)
+            ]
         ),
         score=score,
         rank_id=rank_id,
@@ -63,17 +58,17 @@ def mock_response(
     )
 
 
-def mock_request(hotkey: str | None = None, scores: list[float] | None = None):
-    from dojo.protocol import MultiScoreCriteria
-
-    axon = bt.TerminalInfo(hotkey=hotkey)
+def create_mock_miner_response(
+    hotkey: str | None = None,
+    coldkey: str | None = None,
+    scores: list[float] | None = None,
+):
     prompt = "Write a hello world program in python"
-    task_type = TaskTypeEnum.CODE_GENERATION
-    models = [
-        "anthropic/claude-3-haiku-20240307",
-        "anthropic/claude-3-opus-20240229",
-        "anthropic/claude-3-sonnet-20240229",
-        "meta-llama/llama-3-8b-instruct",
+    model_names = [
+        "cid-1",
+        "cid-2",
+        "cid-3",
+        "cid-4",
     ]
 
     responses = [
@@ -85,34 +80,32 @@ def mock_request(hotkey: str | None = None, scores: list[float] | None = None):
             language="python",
         )
         for model, score in zip(
-            models, scores if scores is not None else [None] * len(models)
+            model_names, scores if scores is not None else [None] * len(model_names)
         )
     ]
 
     # Include the ground truth in the request object if provided
-    return FeedbackRequest(
-        axon=axon,
+    return TaskSynapseObject(
         prompt=prompt,
-        task_type=task_type,
-        criteria_types=[
-            MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
-        ],
+        task_type=TaskTypeEnum.CODE_GENERATION,
+        expire_at=set_expire_time(6 * 3600),  # 6 hours
         completion_responses=responses,
-        expire_at=set_expire_time(8 * 3600),
+        miner_hotkey=hotkey,
+        miner_coldkey=coldkey,
     )
 
 
 def mock_scoring_data_normal() -> tuple:
-    request = mock_request()
-    miner_a = mock_request(hotkey="hotkeyA", scores=[75, 100, 50, 69])
-    miner_b = mock_request(hotkey="hotkeyB", scores=[51, 49, 52, 53])
+    request = create_mock_miner_response()
+    miner_a = create_mock_miner_response(hotkey="hotkeyA", scores=[75, 100, 50, 69])
+    miner_b = create_mock_miner_response(hotkey="hotkeyB", scores=[51, 49, 52, 53])
     return request, [miner_a, miner_b]
 
 
 def mock_scoring_data_all_same_scores() -> tuple:
-    request = mock_request()
-    miner_a = mock_request(hotkey="hotkeyA", scores=[50, 50, 50, 50])
-    miner_b = mock_request(hotkey="hotkeyB", scores=[50, 50, 50, 50])
+    request = create_mock_miner_response()
+    miner_a = create_mock_miner_response(hotkey="hotkeyA", scores=[50, 50, 50, 50])
+    miner_b = create_mock_miner_response(hotkey="hotkeyB", scores=[50, 50, 50, 50])
     return request, [miner_a, miner_b]
 
 
@@ -126,115 +119,99 @@ TESTS FOR SPEARMAN CORRELATION
 """
 
 
-def mock_request_spm(
-    hotkey: str | None = None,
-    rank_ids: list[int] = [],
-    cids: list[str] = [],
-    ground_truth: dict[str, int] = default_ground_truth,
-):
-    """
-    Dynamically generates miner responses using separate rank_ids and cids.
-    """
-    from dojo.protocol import FeedbackRequest, TaskTypeEnum
+def test_single_miner_responded(disable_terminal_plot):
+    mock_miner_response = create_mock_miner_response(
+        hotkey="hotkeyA", scores=[75, 100, 50, 69]
+    )
+    mock_ground_truth = {
+        "cid-1": 0,
+        "cid-2": 1,
+        "cid-3": 2,
+        "cid-4": 3,
+    }
 
-    axon = bt.TerminalInfo(hotkey=hotkey)
-    prompt = "Write a hello world program in python"
-    task_type = TaskTypeEnum.CODE_GENERATION
+    scores = Scoring.ground_truth_scoring(
+        criteria=ScoreCriteria(min=0.0, max=100.0),
+        ground_truth=mock_ground_truth,
+        miner_responses=[mock_miner_response],
+    )
 
-    # List of models for testing purposes (you can adjust this as necessary)
-    models = [
-        "anthropic/claude-3-haiku-20240307",
-        "anthropic/claude-3-opus-20240229",
-        "anthropic/claude-3-sonnet-20240229",
-        "meta-llama/llama-3-8b-instruct",
-    ]
+    assert isinstance(scores, torch.Tensor), "Scores is not a torch.Tensor"
+    assert len(scores.shape) == 1, "Scores is not a 1D tensor"
+    assert scores.shape == torch.Size(
+        [1]
+    ), "Scores tensor shape is not [1] for a single miner's response"
+    assert not torch.isnan(scores).any(), "Scores array contains NaN values"
 
-    # Ensure both rank_ids and cids have the same length
-    assert len(rank_ids) == len(cids), "rank_ids and cids must have the same length."
 
-    # Create responses dynamically using rank_ids and cids
-    responses = [
-        mock_response(
-            model=models[i],
-            score=None,
-            cid=cid,
-            filename=f"{models[i]}_output.py",
-            content="print('hello')",
-            language="python",
-            rank_id=rank_id,
+def test_single_miner_responded_all_same_scores(disable_terminal_plot):
+    mock_miner_response = create_mock_miner_response(
+        hotkey="hotkeyA", scores=[50, 50, 50, 50]
+    )
+    mock_ground_truth = {
+        "cid-1": 0,
+        "cid-2": 1,
+        "cid-3": 2,
+        "cid-4": 3,
+    }
+
+    scores = Scoring.ground_truth_scoring(
+        criteria=ScoreCriteria(min=0.0, max=100.0),
+        ground_truth=mock_ground_truth,
+        miner_responses=[mock_miner_response],
+    )
+
+    assert isinstance(scores, torch.Tensor), "Scores is not a torch.Tensor"
+    assert len(scores.shape) == 1, "Scores is not a 1D tensor"
+    assert scores.shape == torch.Size(
+        [1]
+    ), "Scores tensor shape is not [1] for a single miner's response"
+    assert torch.isnan(scores).all(), "Scores array should contain only NaN values"
+
+
+def test_miners_provides_all_same_scores():
+    mock_miner_responses = []
+    for score in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
+        mock_response = create_mock_miner_response(
+            hotkey=f"hotkey{chr(65 + score//10 - 1)}",
+            scores=[score, score, score, score],
         )
-        for i, (cid, rank_id) in enumerate(zip(cids, rank_ids))
-    ]
+        mock_miner_responses.append(mock_response)
 
-    # Create and return FeedbackRequest with the dynamically generated responses
-    return FeedbackRequest(
-        axon=axon,
-        prompt=prompt,
-        task_type=task_type,
-        criteria_types=[RankingCriteria(type="rank", options=[])],
-        completion_responses=responses,
-        ground_truth=ground_truth,
-        expire_at=set_expire_time(8 * 3600),
-    )
-
-
-# TODO: repurpose these mock data functions for something else
-def mock_scoring_data_for_spm() -> tuple:
-    ground_truth = {
-        "cid_1": 0,  # 1st place
-        "cid_2": 1,  # 2nd place
-        "cid_3": 2,  # 3rd place
-        "cid_4": 3,  # 4th place
+    mock_ground_truth = {
+        "cid-1": 0,
+        "cid-2": 1,
+        "cid-3": 2,
+        "cid-4": 3,
     }
 
-    # Pass separate rank_ids and cids for miner A and miner B
-    request = mock_request_spm(
-        ground_truth=ground_truth,
-        rank_ids=[2, 1, 0, 3],
-        cids=["cid_1", "cid_2", "cid_3", "cid_4"],
-    )
-    miner_a = mock_request_spm(
-        hotkey="hotkeyA",
-        rank_ids=[2, 1, 0, 3],
-        cids=["cid_1", "cid_2", "cid_3", "cid_4"],
-    )
-    miner_b = mock_request_spm(
-        hotkey="hotkeyB",
-        rank_ids=[0, 1, 2, 3],
-        cids=["cid_1", "cid_2", "cid_3", "cid_4"],
+    scores = Scoring.ground_truth_scoring(
+        criteria=ScoreCriteria(min=0.0, max=100.0),
+        ground_truth=mock_ground_truth,
+        miner_responses=mock_miner_responses,
     )
 
-    return request, [miner_a, miner_b]
+    assert isinstance(scores, torch.Tensor), "Scores is not a torch.Tensor"
+    assert len(scores.shape) == 1, "Scores is not a 1D tensor"
+    assert scores.shape == torch.Size(
+        [len(mock_miner_responses)]
+    ), "Scores tensor shape should match number of miners that responded"
+    assert (
+        torch.isnan(scores).all()
+    ), "Scores array should contain only NaN values as miner responses are not valid"
 
 
-# TODO: repurpose these mock data functions for something else
-def mock_scoring_data_with_known_values() -> tuple:
-    """
-    This mock data has specific values where we can predict the Spearman correlation.
-    """
+def test_ground_truth_score_ordering():
+    pass
 
-    ground_truth = {
-        "cid1": 0,  # Best-ranked item
-        "cid2": 1,
-        "cid3": 2,
-        "cid4": 3,  # Worst-ranked item
-    }
 
-    # Miner A ranks the items perfectly in reverse order of ground truth
-    miner_a = mock_request_spm(
-        hotkey="hotkeyA",
-        rank_ids=[3, 2, 1, 0],  # Reverse of ground truth
-        cids=["cid1", "cid2", "cid3", "cid4"],
-        ground_truth=ground_truth,
-    )
+def test_miners_different_scores():
+    pass
 
-    # Miner B ranks the items in the exact order of the ground truth
-    miner_b = mock_request_spm(
-        hotkey="hotkeyB",
-        rank_ids=[0, 1, 2, 3],  # Perfect match with ground truth
-        cids=["cid1", "cid2", "cid3", "cid4"],
-        ground_truth=ground_truth,
-    )
 
-    request = mock_request_spm(ground_truth=ground_truth)
-    return request, [miner_a, miner_b]
+def test_minmax_scale():
+    pass
+
+
+def test_convert_ground_truth_ranks_to_scores():
+    pass
