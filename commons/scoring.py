@@ -109,6 +109,30 @@ def minmax_scale(tensor: torch.Tensor | np.ndarray) -> torch.Tensor:
 
 class Scoring:
     @staticmethod
+    def _convert_ground_truth_ranks_to_scores(
+        cids_with_ranks: list[tuple[str, int]],
+    ) -> np.ndarray:
+        # check if the cids with ranks are sorted in ascending order
+        ranks = [rank for _, rank in cids_with_ranks]
+        # check if the ranks are continuous e.g. [0, 1, 2, 3] and not [0, 1, 3, 2]
+        is_sorted_and_continuous = all(
+            ranks[i] == ranks[i - 1] + 1 for i in range(1, len(ranks))
+        )
+        if not is_sorted_and_continuous:
+            raise ValueError("Provided ranks must be sorted and must be continuous")
+
+        # use minmax scale to ensure ground truth is in the range [0, 1]
+        ground_truth_arr = minmax_scale(np.array(ranks)).numpy()
+
+        # reverse order here, because the lowest rank is the best
+        # e.g. ranks: ('cid1', 0), ('cid2', 1), ('cid3', 2), ('cid4', 3)
+        # after minmax scale: [0, 0.33, 0.667, 1]
+        # but we want the reverse, so: [1, 0.667, 0.33, 0], since cid1 is the best
+        ground_truth_arr = ground_truth_arr[::-1]
+
+        return ground_truth_arr
+
+    @staticmethod
     def ground_truth_scoring(
         criteria: CriteriaType,
         ground_truth: dict[str, int],
@@ -169,15 +193,9 @@ class Scoring:
         miner_outputs = miner_outputs_normalised
 
         # use minmax scale to ensure ground truth is in the range [0, 1]
-        ground_truth_arr = minmax_scale(
-            np.array([rank for _, rank in cid_with_rank_sorted])
-        ).numpy()
-
-        # reverse order here, because the lowest rank is the best
-        # e.g. ranks: ('cid1', 0), ('cid2', 1), ('cid3', 2), ('cid4', 3)
-        # after minmax scale: [0, 0.33, 0.667, 1]
-        # but we want the reverse, so: [1, 0.667, 0.33, 0], since cid1 is the best
-        ground_truth_arr = ground_truth_arr[::-1]
+        ground_truth_arr = Scoring._convert_ground_truth_ranks_to_scores(
+            cid_with_rank_sorted
+        )
 
         logger.info(f"scoring: Miner outputs\n{miner_outputs}")
         logger.info(f"scoring: Ground truth\n{ground_truth_arr}")
@@ -305,52 +323,6 @@ class Scoring:
             return score_dict
         else:
             raise NotImplementedError("Only score criteria is supported")
-
-
-def _map_ground_truth_rank_to_score(
-    criteria: CriteriaType, ground_truth: dict[str, int]
-) -> list[tuple[str, float]]:
-    if not isinstance(criteria, MultiScoreCriteria):
-        raise NotImplementedError("Only multi-score criteria is supported")
-
-    completion_ids = list(ground_truth.keys())
-    unique_ranks = set(ground_truth.values())
-    expected_ranks = set(range(0, len(completion_ids)))
-
-    assert (
-        unique_ranks == expected_ranks
-    ), f"Ground truth values must be discrete integers from 0 to {len(completion_ids) - 1}"
-
-    def convert_rank_to_score(
-        rank: int,
-        min_rank: int,
-        max_rank: int,
-        min_score: int | float,
-        max_score: int | float,
-    ):
-        # invert the rank because rank with lower number
-        # i.e. rank 1 is best, rank 3 is worst (0-indexed)
-        inverted_rank = max_rank - rank + min_rank
-        return (
-            inverted_rank / (max_rank - min_rank) * (max_score - min_score) + min_score
-        )
-
-    completion_id_score_tuples: list[tuple[str, float]] = []
-
-    min_rank = min(list(unique_ranks))
-    max_rank = max(list(unique_ranks))
-
-    for completion_id, rank in list(ground_truth.items()):
-        score = convert_rank_to_score(
-            rank,
-            min_rank,
-            max_rank,
-            criteria.min,
-            criteria.max,
-        )
-        completion_id_score_tuples.append((completion_id, float(score)))
-
-    return completion_id_score_tuples
 
 
 def _test_ground_truth_score_v1():
