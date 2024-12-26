@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 import bittensor as bt
 import numpy as np
 import pytest
@@ -120,110 +118,9 @@ def mock_scoring_data_all_same_scores() -> tuple:
     return request, [miner_a, miner_b]
 
 
-@patch("commons.scoring.get_leaderboard_scores")
-def test_ground_truth_leaderboard_data_normal(mock_get_leaderboard_scores):
-    from commons.scoring import Scoring
-
-    mock_scores = [
-        ("anthropic/claude-3-haiku-20240307", 68.9),
-        ("anthropic/claude-3-opus-20240229", 77.4),
-        ("anthropic/claude-3-sonnet-20240229", 64.0),
-        ("meta-llama/llama-3-8b-instruct", 56.7),
-    ]
-    mock_get_leaderboard_scores.return_value = mock_scores
-
-    test_data = mock_scoring_data_normal()
-    request, miner_responses = test_data
-
-    for criteria in request.criteria_types:
-        gt_score = Scoring.cmp_ground_truth(criteria, request, miner_responses)
-        assert gt_score is not None
-
-        mock_get_leaderboard_scores.assert_called_once_with(
-            [
-                "anthropic/claude-3-haiku-20240307",
-                "anthropic/claude-3-opus-20240229",
-                "anthropic/claude-3-sonnet-20240229",
-                "meta-llama/llama-3-8b-instruct",
-            ]
-        )
-
-        assert not np.isnan(gt_score).any(), "overall score does not contain NaN values"
-        assert not np.isinf(gt_score).any(), "overall score does not contain inf values"
-        assert not np.isnan(gt_score).any(), "overall score does not contain NaN values"
-        assert not np.isinf(gt_score).any(), "overall score does not contain inf values"
-
-
 @pytest.mark.skip(reason="Placeholder test, not implemented yet")
 def test_ground_truth_state_missing():
     pass
-
-
-@patch("commons.dataset.leaderboard.get_leaderboard_data")
-def test_cmp_ground_truth_missing_data(mock_get_leaderboard_data_func):
-    from commons.scoring import Scoring
-
-    # mock leaderboard data, purposely omit llama 8b which is inside `mock_request`
-    mock_leaderboard_data = {
-        "claude-2 (Mar 2024)": {
-            "link": "https://www.anthropic.com/news/claude-2",
-            "open-data": "NONE",
-            "pass@1": {
-                "humaneval": 69.5,
-                "humaneval+": 61.6,
-                "mbpp": None,
-                "mbpp+": None,
-            },
-            "prompted": True,
-            "size": None,
-        },
-        "claude-3-haiku (Mar 2024)": {
-            "link": "https://www.anthropic.com/news/claude-3-family",
-            "open-data": "NONE",
-            "pass@1": {
-                "humaneval": 76.8,
-                "humaneval+": 68.9,
-                "mbpp": 80.2,
-                "mbpp+": 68.8,
-            },
-            "prompted": True,
-            "size": None,
-        },
-        "claude-3-opus (Mar 2024)": {
-            "link": "https://www.anthropic.com/news/claude-3-family",
-            "open-data": "NONE",
-            "pass@1": {
-                "humaneval": 82.9,
-                "humaneval+": 77.4,
-                "mbpp": 89.4,
-                "mbpp+": 73.3,
-            },
-            "prompted": True,
-            "size": None,
-        },
-        "claude-3-sonnet (Mar 2024)": {
-            "link": "https://www.anthropic.com/news/claude-3-family",
-            "open-data": "NONE",
-            "pass@1": {
-                "humaneval": 70.7,
-                "humaneval+": 64,
-                "mbpp": 83.6,
-                "mbpp+": 69.3,
-            },
-            "prompted": True,
-            "size": None,
-        },
-    }
-    mock_get_leaderboard_data_func.return_value = mock_leaderboard_data
-
-    request, miner_responses = mock_scoring_data_normal()
-
-    for criteria in request.criteria_types:
-        # test that it raises a ValueError when data is missing
-        with pytest.raises(ValueError, match=".*cannot contain None values.*"):
-            Scoring.cmp_ground_truth(criteria, request, miner_responses)
-
-    mock_get_leaderboard_data_func.assert_called_once()
 
 
 """

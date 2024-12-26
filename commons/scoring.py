@@ -227,64 +227,6 @@ class Scoring:
         return torch.from_numpy(cubic_reward.copy())
 
     @staticmethod
-    def cmp_ground_truth(
-        criteria: CriteriaType,
-        request: TaskSynapseObject,
-        miner_responses: List[TaskSynapseObject],
-    ):
-        # determine the ground truth ordering based on request
-        # we can assume `model` is the same as the `completion_id`, see validator.obfuscate_model_names function
-        model_score_tuples = _map_ground_truth_rank_to_score(
-            criteria, request.ground_truth
-        )
-        model_with_score_sorted = sorted(
-            model_score_tuples, key=lambda x: (x[1] is not None, x[1]), reverse=True
-        )
-        model_ids_sorted = [model[0] for model in model_with_score_sorted]
-
-        # sort miner outputs according to ground truth order
-        # this may be scores or ranks
-        # log miner models to check
-        miner_models = []
-        for r in miner_responses:
-            for completion in r.completion_responses:
-                miner_models.append(completion.model)
-
-        miner_outputs = []
-        for response in miner_responses:
-            curr_miner_outputs = []
-            for completion in sorted(
-                response.completion_responses,
-                key=lambda r: model_ids_sorted.index(r.model),
-            ):
-                curr_miner_outputs.append(
-                    _get_miner_response_by_criteria(criteria, completion)
-                )
-            miner_outputs.append(curr_miner_outputs)
-        if miner_outputs == []:
-            raise ValueError("Miner outputs cannot be empty")
-
-        if None in miner_outputs:
-            raise ValueError("Miner outputs cannot contain None values")
-
-        miner_outputs = np.array(miner_outputs)
-
-        # this may be scores or ranks
-        ground_truth = _get_ground_truth_by_criteria(criteria, model_with_score_sorted)
-
-        logger.info(f"Miner outputs: {miner_outputs}")
-        logger.info(f"Ground truth: {ground_truth}")
-
-        diff_gt = torch.tensor(
-            -1 * np.linalg.norm(miner_outputs - ground_truth, ord=2, axis=1)
-        )
-        logger.debug(f"{diff_gt=}")
-        gt_reward = F.softmax(diff_gt, dim=0)
-        logger.debug(f"{gt_reward=}")
-
-        return torch.tensor(gt_reward)
-
-    @staticmethod
     def spm_ground_truth(
         criteria: CriteriaType,
         request: TaskSynapseObject,
