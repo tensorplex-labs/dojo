@@ -20,6 +20,8 @@ services:
     image: redis/redis-stack-server:7.4.0-v0
     env_file:
       - .env.validator
+    ports:
+      - 6379:6379
     expose:
       - 6379
     volumes:
@@ -34,7 +36,7 @@ services:
     logging: *default-logging
 
   synthetic-api:
-    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:dev
     env_file:
       - .env.validator
     environment:
@@ -44,6 +46,8 @@ services:
       - REDIS_HOST=redis-service
       - REDIS_PORT=6379
       - REDIS_DB=0
+    ports:
+      - 5003:5003
     expose:
       - 5003
     networks:
@@ -74,6 +78,8 @@ services:
         export POSTGRES_DB=$${DB_NAME}
         docker-entrypoint.sh postgres
       "
+    ports:
+      - 5432:5432
     expose:
       - 5432
     volumes:
@@ -110,7 +116,7 @@ services:
     logging: *default-logging
 
   validator:
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: ghcr.io/tensorplex-labs/dojo:dev
     working_dir: /app
     env_file:
       - .env.validator
