@@ -3,7 +3,6 @@ from typing import Dict, List
 import numpy as np
 import torch
 from bittensor.utils.btlogging import logging as logger
-from scipy.stats import spearmanr
 from torch.nn import functional as F
 
 from commons.utils import _terminal_plot
@@ -12,7 +11,6 @@ from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
     MultiScoreCriteria,
-    RankingCriteria,
     ScoreCriteria,
     Scores,
     TaskSynapseObject,
@@ -96,22 +94,9 @@ def _reward_cubic(
     return points
 
 
-def _reward_l1_norm(miner_outputs: np.ndarray, ground_truth: np.ndarray):
-    return np.linalg.norm(miner_outputs - ground_truth, axis=1)
-
-
 def _get_miner_response_by_criteria(criteria, response: CompletionResponse):
     if isinstance(criteria, ScoreCriteria):
         return response.score
-
-
-def _get_ground_truth_by_criteria(criteria, model_with_score_sorted):
-    gt = []
-    if isinstance(criteria, RankingCriteria):
-        gt = [i + 1 for i in range(len(model_with_score_sorted))]
-    elif isinstance(criteria, MultiScoreCriteria):
-        gt = [score for _, score in model_with_score_sorted]
-    return np.array(gt)
 
 
 def minmax_scale(tensor: torch.Tensor | np.ndarray) -> torch.Tensor:
@@ -225,49 +210,6 @@ class Scoring:
             pass
 
         return torch.from_numpy(cubic_reward.copy())
-
-    @staticmethod
-    def spm_ground_truth(
-        criteria: CriteriaType,
-        request: TaskSynapseObject,
-        miner_responses: List[TaskSynapseObject],
-    ):
-        """
-        Calculate Spearman Correlation between miner outputs and ground truth using 'cid'.
-        """
-
-        gt_keys = list(request.ground_truth.keys())
-        gt_values = list(request.ground_truth.values())
-
-        # Gather miner outputs based on their responses
-        miner_outputs = []
-        for response in miner_responses:
-            curr_miner_outputs = []
-            for completion in sorted(
-                response.completion_responses,
-                key=lambda response: gt_keys.index(response.completion_id),
-            ):
-                curr_miner_outputs.append(
-                    _get_miner_response_by_criteria(criteria, completion)
-                )
-            miner_outputs.append(curr_miner_outputs)
-
-        # Convert miner outputs to numpy array for easier processing
-        miner_outputs = np.array(miner_outputs)
-
-        # Calculate Spearman correlation for each miner's output against the ground truth
-        spearman_scores = [
-            spearmanr(miner_output, gt_values).correlation
-            for miner_output in miner_outputs
-        ]
-
-        # Convert the Spearman correlation scores into rewards
-        spearman_scores = torch.tensor(
-            np.nan_to_num(spearman_scores), dtype=torch.float32
-        )  # Handle NaN values
-        gt_reward = F.softmax(torch.tensor(spearman_scores, dtype=torch.float32), dim=0)
-
-        return gt_reward
 
     # ---------------------------------------------------------------------------- #
     #                           SCORING CORE FUNCTIONS                             #

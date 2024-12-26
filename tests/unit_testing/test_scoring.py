@@ -1,10 +1,8 @@
 import bittensor as bt
-import numpy as np
 import pytest
-import torch
 
 from commons.utils import set_expire_time
-from dojo.protocol import FeedbackRequest, RankingCriteria, TaskType
+from dojo.protocol import FeedbackRequest, RankingCriteria, TaskTypeEnum
 
 # # Remove the default loguru handler
 # logger.remove()
@@ -27,10 +25,10 @@ def scoring_module():
     from commons.scoring import Scoring
     from dojo.protocol import (
         CodeAnswer,
-        CompletionResponses,
+        CompletionResponse,
         FeedbackRequest,
         MultiScoreCriteria,
-        TaskType,
+        TaskTypeEnum,
     )
 
     return (
@@ -38,8 +36,8 @@ def scoring_module():
         FeedbackRequest,
         CodeAnswer,
         MultiScoreCriteria,
-        CompletionResponses,
-        TaskType,
+        CompletionResponse,
+        TaskTypeEnum,
     )
 
 
@@ -52,9 +50,9 @@ def mock_response(
     cid: str = "",
     rank_id: int = 0,
 ):
-    from dojo.protocol import CodeAnswer, CompletionResponses, FileObject
+    from dojo.protocol import CodeAnswer, CompletionResponse, FileObject
 
-    return CompletionResponses(
+    return CompletionResponse(
         model=model,
         completion=CodeAnswer(
             files=[FileObject(filename=filename, content=content, language=language)]
@@ -70,7 +68,7 @@ def mock_request(hotkey: str | None = None, scores: list[float] | None = None):
 
     axon = bt.TerminalInfo(hotkey=hotkey)
     prompt = "Write a hello world program in python"
-    task_type = TaskType.CODE_GENERATION
+    task_type = TaskTypeEnum.CODE_GENERATION
     models = [
         "anthropic/claude-3-haiku-20240307",
         "anthropic/claude-3-opus-20240229",
@@ -137,11 +135,11 @@ def mock_request_spm(
     """
     Dynamically generates miner responses using separate rank_ids and cids.
     """
-    from dojo.protocol import FeedbackRequest, TaskType
+    from dojo.protocol import FeedbackRequest, TaskTypeEnum
 
     axon = bt.TerminalInfo(hotkey=hotkey)
     prompt = "Write a hello world program in python"
-    task_type = TaskType.CODE_GENERATION
+    task_type = TaskTypeEnum.CODE_GENERATION
 
     # List of models for testing purposes (you can adjust this as necessary)
     models = [
@@ -180,6 +178,7 @@ def mock_request_spm(
     )
 
 
+# TODO: repurpose these mock data functions for something else
 def mock_scoring_data_for_spm() -> tuple:
     ground_truth = {
         "cid_1": 0,  # 1st place
@@ -208,6 +207,7 @@ def mock_scoring_data_for_spm() -> tuple:
     return request, [miner_a, miner_b]
 
 
+# TODO: repurpose these mock data functions for something else
 def mock_scoring_data_with_known_values() -> tuple:
     """
     This mock data has specific values where we can predict the Spearman correlation.
@@ -238,57 +238,3 @@ def mock_scoring_data_with_known_values() -> tuple:
 
     request = mock_request_spm(ground_truth=ground_truth)
     return request, [miner_a, miner_b]
-
-
-def test_spearman_correlation(scoring_module):
-    from commons.scoring import Scoring
-
-    request, miner_responses = mock_scoring_data_for_spm()
-
-    for criteria in request.criteria_types:
-        spearman_score = Scoring.spm_ground_truth(criteria, request, miner_responses)
-
-        # Ensure no NaN values
-        assert not np.isnan(
-            spearman_score
-        ).any(), "Spearman score should not contain NaN values"
-
-        # Ensure no inf values
-        assert not np.isinf(
-            spearman_score
-        ).any(), "Spearman score should not contain inf values"
-
-        # Check if Spearman scores are valid between -1 and 1
-        assert torch.all((spearman_score >= -1) & (spearman_score <= 1))
-
-
-def test_spearman_correlation_known_values(scoring_module):
-    from scipy.stats import spearmanr
-
-    from commons.scoring import Scoring
-
-    request, miner_responses = mock_scoring_data_with_known_values()
-
-    for criteria in request.criteria_types:
-        spearman_score = Scoring.spm_ground_truth(criteria, request, miner_responses)
-
-        # Expected values:
-        # Miner A has the worst possible Spearman correlation (-1.0)
-        # Miner B has the best possible Spearman correlation (1.0)
-
-        # Test Miner A and Miner B's raw Spearman scores
-        miner_a_spearman = spearmanr([3, 2, 1, 0], [0, 1, 2, 3]).correlation  # -1.0
-        miner_b_spearman = spearmanr([0, 1, 2, 3], [0, 1, 2, 3]).correlation  # 1.0
-
-        # Ensure that the raw scores are cast to float32 before comparison
-        assert torch.allclose(
-            spearman_score[0],
-            torch.tensor(miner_a_spearman, dtype=torch.float32),
-            atol=1e-6,
-        ), f"Expected Spearman score for Miner A: {miner_a_spearman}, got: {spearman_score[0]}"
-
-        assert torch.allclose(
-            spearman_score[1],
-            torch.tensor(miner_b_spearman, dtype=torch.float32),
-            atol=1e-6,
-        ), f"Expected Spearman score for Miner B: {miner_b_spearman}, got: {spearman_score[1]}"
