@@ -120,53 +120,6 @@ def mock_scoring_data_all_same_scores() -> tuple:
     return request, [miner_a, miner_b]
 
 
-def test_consensus_normal_data():
-    from commons.scoring import ConsensusScore, Scoring
-
-    test_data = mock_scoring_data_normal()
-    request, miner_responses = test_data
-    for criteria in request.criteria_types:
-        score: ConsensusScore = Scoring.consensus_score(
-            criteria, request, miner_responses
-        )
-
-        assert score is not None, "score should not be None"
-        assert not np.isnan(
-            score.score
-        ).any(), "overall score does not contain NaN values"
-        assert not np.isinf(
-            score.score
-        ).any(), "overall score does not contain inf values"
-        assert np.count_nonzero(score.mse_by_miner) != 0, "MSE is not all zeros"
-        assert not np.isnan(
-            score.icc_by_miner
-        ).any(), "ICC does not contain any NaN values"
-        assert not np.isinf(
-            score.icc_by_miner
-        ).any(), "ICC does not contain any inf values"
-
-
-def test_consensus_same_scores():
-    """Used to test that both miners have provided the same scores"""
-    from commons.scoring import ConsensusScore, Scoring
-
-    test_data = mock_scoring_data_all_same_scores()
-    request, miner_responses = test_data
-    score: ConsensusScore = Scoring.consensus_score(
-        request.criteria_types[0], request, miner_responses
-    )
-
-    assert score is not None, "score should not be None"
-    assert not np.isnan(score.score).any(), "overall score does not contain NaN values"
-    assert not np.isinf(score.score).any(), "overall score does not contain inf values"
-    assert (
-        np.count_nonzero(score.mse_by_miner) == 0
-    ), "MSE is all zeros since miners provide the same score"
-    assert np.isnan(
-        score.icc_by_miner
-    ).any(), "ICC should contain NaN values for when there is zero variance between miners ratings"
-
-
 @patch("commons.scoring.get_leaderboard_scores")
 def test_ground_truth_leaderboard_data_normal(mock_get_leaderboard_scores):
     from commons.scoring import Scoring
