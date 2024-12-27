@@ -33,6 +33,7 @@ class ValidatorSim(Validator):
             )
             self.synthetic_data = self._load_synthetic_dataset()
             self.current_synthetic_index = 0
+            logger.info("Validator is using synthetic dataset")
 
         self.forward_ground_truth = (
             get_config().simuation_validator_forward_ground_truth
