@@ -31,6 +31,7 @@ class ValidatorSim(Validator):
             self.synthetic_dataset_path = Path(
                 get_config().simulation_validator_synthetic_dataset
             )
+            self.last_modified_time = os.path.getmtime(self.synthetic_dataset_path)
             self.synthetic_data = self._load_synthetic_dataset()
             self.current_synthetic_index = 0
             logger.info("Validator is using synthetic dataset")
