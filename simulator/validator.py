@@ -29,7 +29,7 @@ class ValidatorSim(Validator):
     def __init__(self):
         if get_config().simulation_validator_synthetic_dataset:
             self.synthetic_dataset_path = Path(
-                get_config().simuation_validator_synthetic_dataset
+                get_config().simulation_validator_synthetic_dataset
             )
             self.synthetic_data = self._load_synthetic_dataset()
             self.current_synthetic_index = 0
