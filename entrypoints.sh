@@ -62,6 +62,12 @@ if [ "$1" = 'validator' ]; then
     if [ "${FAST_MODE}" = "true" ]; then
         EXTRA_ARGS="${EXTRA_ARGS} --fast_mode"
     fi
+    if [ "${SIMULATION_VALIDATOR_FORWARD_GROUND_TRUTH}" = "true" ]; then
+        EXTRA_ARGS="${EXTRA_ARGS} --simulation_validator_forward_ground_truth"
+    fi
+    if [ -n "${SIMULATION_VALIDATOR_SYNTHETIC_DATASET}" ]; then
+        EXTRA_ARGS="${EXTRA_ARGS} --simulation_validator_synthetic_dataset ${SIMULATION_VALIDATOR_SYNTHETIC_DATASET}"
+    fi
 
     python main_validator.py \
     --netuid ${NETUID} \
