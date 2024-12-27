@@ -21,7 +21,7 @@ Complete the .env file by changing / uncommenting the required variables
 | DOJO_API_BASE_URL   | Base URL for Dojo API                     | <https://dojo-api.tensorplex.ai>            | Dojo Worker API URL                                                                                                                                         |
 | DOJO_API_KEY        | Authentication key for Dojo API           | -                                           | Dojo API key (Generate it in the next step)                                                                                                                 |
 | AXON_PORT           | Port for Axon server                      | 8091                                        |                                                                                                                                                             |
-| VALIDATOR_MIN_STAKE | Optional minimum stake requirement        | 20000                                       | Optional                                                                                                                                                    |
+| VALIDATOR_MIN_STAKE | Optional minimum stake requirement        | 20000                                       | It is recommended to set value to 0 for testnet                                                                                                             |
 
 Run Dojo CLI to retrieve API Key and Subscription Key. See [Dojo CLI](#dojo-cli) for usage. Note down the API key, subscription key and append the API key to your .env file.
 
