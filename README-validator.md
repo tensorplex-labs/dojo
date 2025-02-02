@@ -50,3 +50,21 @@ To export all data that has been collected from the validator, ensure that you h
 make validator-pull
 make extract-dataset
 ```
+
+# Recommended
+
+## Auto-updates with Watchtower
+
+It is recommended to run watchtower alongside your miner to automatically keep your containers up-to-date. Watchtower monitors running containers and automatically pulls and recreates them when it detects that the image has changed.
+
+To start watchtower:
+
+```bash
+make watchtower
+```
+
+To stop watchtower:
+
+```bash
+make watchtower-down
+```

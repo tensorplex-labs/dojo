@@ -148,3 +148,21 @@ subscription_key list
 api_key delete
 subscription_key delete
 ```
+
+# Recommended
+
+## Auto-updates with Watchtower
+
+It is recommended to run watchtower alongside your miner to automatically keep your containers up-to-date. Watchtower monitors running containers and automatically pulls and recreates them when it detects that the image has changed.
+
+To start watchtower:
+
+```bash
+make watchtower
+```
+
+To stop watchtower:
+
+```bash
+make watchtower-down
+```

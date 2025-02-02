@@ -60,7 +60,7 @@ miner:
 	docker compose -f docker-compose.miner.yaml up -d miner
 
 validator:
-	docker compose -f docker-compose.validator.yaml up --build -d validator
+	docker compose -f docker-compose.validator.yaml up -d validator
 
 validator-up-deps:
 	docker compose -f docker-compose.validator.yaml up -d --build synthetic-api postgres-vali prisma-setup-vali
@@ -113,3 +113,6 @@ worker-platform:
 
 watchtower:
 	docker compose -f docker-compose.shared.yaml up -d watchtower
+
+watchtower-down:
+	docker compose -f docker-compose.shared.yaml down watchtower
