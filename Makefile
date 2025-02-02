@@ -57,10 +57,10 @@ miner-down:
 # ---------------------------------------------------------------------------- #
 
 miner:
-	docker compose -f docker-compose.miner.yaml up -d miner watchtower
+	docker compose -f docker-compose.miner.yaml up -d miner
 
 validator:
-	docker compose -f docker-compose.validator.yaml up --build -d validator watchtower
+	docker compose -f docker-compose.validator.yaml up --build -d validator
 
 validator-up-deps:
 	docker compose -f docker-compose.validator.yaml up -d --build synthetic-api postgres-vali prisma-setup-vali
@@ -106,3 +106,10 @@ subtensor-testnet:
 
 worker-platform:
 	docker compose -f docker-compose.platform.yaml up -d
+
+# ---------------------------------------------------------------------------- #
+#                                  OTHERS                                      #
+# ---------------------------------------------------------------------------- #
+
+watchtower:
+	docker compose -f docker-compose.shared.yaml up -d watchtower

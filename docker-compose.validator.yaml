@@ -16,10 +16,10 @@ networks:
     name: subtensor
 
 services:
-  watchtower:
-    extends:
-      file: docker-compose.shared.yaml
-      service: watchtower
+#  watchtower:
+#    extends:
+#      file: docker-compose.shared.yaml
+#      service: watchtower
 
   redis:
     extends:
