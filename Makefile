@@ -57,7 +57,7 @@ miner-down:
 # ---------------------------------------------------------------------------- #
 
 miner:
-	docker compose -f docker-compose.miner.yaml up -d miner
+	docker compose -f docker-compose.miner.yaml up -d miner watchtower
 
 validator:
 	docker compose -f docker-compose.validator.yaml up --build -d validator watchtower
