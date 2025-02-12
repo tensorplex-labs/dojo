@@ -62,6 +62,7 @@ from dojo.protocol import (
 )
 from dojo.utils.config import get_config
 from dojo.utils.uids import extract_miner_uids, is_miner
+from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
 
@@ -277,7 +278,7 @@ class Validator:
         while attempt < max_attempts and not result:
             try:
                 logger.debug(
-                    f"Set weights attempt {attempt+1}/{max_attempts} at block: {self.block},time: {time.time()}"
+                    f"Set weights attempt {attempt + 1}/{max_attempts} at block: {self.block},time: {time.time()}"
                 )
 
                 # Disable this for now to check validator hanging issue
@@ -306,7 +307,7 @@ class Validator:
 
             except Exception:
                 logger.warning(
-                    f"Failed to set weights with attempt {attempt+1}/{max_attempts} due to: {message}"
+                    f"Failed to set weights with attempt {attempt + 1}/{max_attempts} due to: {message}"
                 )
 
                 if attempt == max_attempts:
@@ -396,9 +397,9 @@ class Validator:
             _terminal_plot(
                 f"scores before update, block: {self.block}", self.scores.numpy()
             )
-            assert (
-                existing_scores.shape == rewards.shape
-            ), "Scores and rewards must be the same length when calculating moving average"
+            assert existing_scores.shape == rewards.shape, (
+                "Scores and rewards must be the same length when calculating moving average"
+            )
 
             self.scores = alpha * rewards + (1 - alpha) * existing_scores
             self.scores = torch.clamp(self.scores, min=0.0)
@@ -762,7 +763,9 @@ class Validator:
                     f"📝 Got hotkey to score across all tasks between expire_at from:{expire_from} and expire_at to:{expire_to}: {final_hotkey_to_score}"
                 )
                 await self.update_scores(hotkey_to_scores=final_hotkey_to_score)
-
+                
+                # upload scores to analytics API after updating.
+                await run_analytics_upload(self._scores_alock, expire_from, expire_to)
             except Exception:
                 traceback.print_exc()
                 pass
@@ -1054,7 +1057,7 @@ class Validator:
             all_responses.extend(flat_batch_responses)
 
             logger.info(
-                f"Processed batch {i//batch_size + 1} of {(len(axons)-1)//batch_size + 1}"
+                f"Processed batch {i // batch_size + 1} of {(len(axons) - 1) // batch_size + 1}"
             )
 
         return all_responses
@@ -1116,7 +1119,7 @@ class Validator:
         for i in range(0, len(task.miner_responses), batch_size):
             batch = task.miner_responses[i : i + batch_size]
 
-            logger.debug(f"Processing batch {i//batch_size + 1} of {num_batches}")
+            logger.debug(f"Processing batch {i // batch_size + 1} of {num_batches}")
 
             tasks = [
                 self._update_miner_response(miner_response, obfuscated_to_real_model_id)
@@ -1313,7 +1316,7 @@ class Validator:
                         )
                     else:
                         logger.warning(
-                            f"Retrying {len(failed_indices)} failed updates, attempt {attempt+2}/{max_retries}"
+                            f"Retrying {len(failed_indices)} failed updates, attempt {attempt + 2}/{max_retries}"
                         )
                         remaining_responses = [
                             remaining_responses[i] for i in failed_indices
@@ -1326,7 +1329,7 @@ class Validator:
                         f"Error updating miner completions batch after {max_retries} attempts: {e}"
                     )
                 else:
-                    logger.warning(f"Error during attempt {attempt+1}, retrying: {e}")
+                    logger.warning(f"Error during attempt {attempt + 1}, retrying: {e}")
                     await asyncio.sleep(2**attempt)
 
     async def _score_task(

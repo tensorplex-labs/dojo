@@ -10,6 +10,7 @@ from commons.exceptions import (
     ExpiredFromMoreThanExpireTo,
     InvalidMinerResponse,
     NoNewExpiredTasksYet,
+    NoProcessedTasksYet,
 )
 from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
@@ -61,7 +62,6 @@ class ORM:
             - Boolean indicating if there are more batches to process
         """
 
-        # find all validator requests first
         include_query = ValidatorTaskInclude(
             {
                 "completions": {
@@ -273,7 +273,7 @@ class ORM:
                             )
                         else:
                             logger.warning(
-                                f"Retrying update, attempt {attempt+2}/{max_retries}"
+                                f"Retrying update, attempt {attempt + 2}/{max_retries}"
                             )
                             await asyncio.sleep(2**attempt)
 
@@ -282,7 +282,7 @@ class ORM:
                         logger.error(f"Error updating task results: {e}")
                     else:
                         logger.warning(
-                            f"Error during attempt {attempt+1}, retrying: {e}"
+                            f"Error during attempt {attempt + 1}, retrying: {e}"
                         )
                         await asyncio.sleep(2**attempt)
 
@@ -403,18 +403,18 @@ class ORM:
                                 )
 
                     logger.debug(
-                        f"Updating completion responses: updated batch {batch_id+1}/{num_batches}"
+                        f"Updating completion responses: updated batch {batch_id + 1}/{num_batches}"
                     )
                     break
                 except Exception as e:
                     if attempt == max_retries - 1:
                         logger.error(
-                            f"Failed to update batch {batch_id+1}/{num_batches} after {max_retries} attempts: {e}"
+                            f"Failed to update batch {batch_id + 1}/{num_batches} after {max_retries} attempts: {e}"
                         )
                         failed_batch_indices.extend(range(start_idx, end_idx))
                     else:
                         logger.warning(
-                            f"Retrying batch {batch_id+1}/{num_batches}, attempt {attempt+2}/{max_retries}"
+                            f"Retrying batch {batch_id + 1}/{num_batches}, attempt {attempt + 2}/{max_retries}"
                         )
                         await asyncio.sleep(2**attempt)
 
@@ -731,6 +731,102 @@ class ORM:
                 f"Error fetching completion scores and ground truths for dojo_task_id {dojo_task_id}: {e}"
             )
             return {}
+
+    @staticmethod
+    async def get_processed_tasks(
+        batch_size: int = 10,
+        expire_from: datetime | None = None,
+        expire_to: datetime | None = None,
+    ) -> AsyncGenerator[tuple[List[ValidatorTask], bool], None]:
+        """Returns batches of processed ValidatorTask records and a boolean indicating if there are more batches. Used to collect analytics data.
+
+        Args:
+            batch_size (int, optional): Number of tasks to return in a batch. Defaults to 10.
+            expire_from: (datetime | None) If provided, only tasks with expire_at after expire_from will be returned.
+            expire_to: (datetime | None) If provided, only tasks with expire_at before expire_to will be returned.
+            You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
+
+        Raises:
+            ExpiredFromMoreThanExpireTo: If expire_from is greater than expire_to
+            NoProcessedTasksYet: If no processed tasks are found for uploading.
+
+        Yields:
+            tuple[validator_task, bool]: Each yield returns:
+            - List of ValidatorTask records with their related completions, miner_responses, and GroundTruth
+            - Boolean indicating if there are more batches to process
+
+        @to-do: replace TASK_DEADLINE in the NoProcessedTasksYet error check with a dedicated config var for processing.
+        @to-do: write unit test for this function.
+        """
+        # find all validator requests first
+        include_query = ValidatorTaskInclude(
+            {
+                "completions": {"include": {"Criterion": True}},
+                "miner_responses": {"include": {"scores": True}},
+                "ground_truth": True,
+            }
+        )
+
+        # Set default expiry timeframe of 6 hours before the latest expired tasks
+        if not expire_from:
+            expire_from = (
+                datetime_as_utc(datetime.now(timezone.utc))
+                - timedelta(seconds=TASK_DEADLINE)
+                - timedelta(hours=6)
+            )
+        if not expire_to:
+            expire_to = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
+                seconds=TASK_DEADLINE
+            )
+
+        # Check that expire_from is lesser than expire_to
+        if expire_from > expire_to:
+            raise ExpiredFromMoreThanExpireTo(
+                "expire_from should be less than expire_to."
+            )
+
+        vali_where_query_processed = ValidatorTaskWhereInput(
+            {
+                # only check for expire at since miner may lie
+                "expire_at": {
+                    "gt": expire_from,
+                    "lt": expire_to,
+                },
+                "is_processed": True,
+            }
+        )
+
+        # Get total count and first batch of validator tasks in parallel
+        task_count_processed, first_batch = await asyncio.gather(
+            ValidatorTask.prisma().count(where=vali_where_query_processed),
+            ValidatorTask.prisma().find_many(
+                include=include_query,
+                where=vali_where_query_processed,
+                order={"created_at": "desc"},
+                take=batch_size,
+            ),
+        )
+
+        logger.debug(f"Count of processed validator tasks: {task_count_processed}")
+
+        if not task_count_processed:
+            raise NoProcessedTasksYet(
+                f"No processed validator tasks found for uploading, please wait for tasks to pass the processing deadline of {TASK_DEADLINE} seconds."
+            )
+
+        yield first_batch, task_count_processed > batch_size
+
+        # Process remaining batches
+        for skip in range(batch_size, task_count_processed, batch_size):
+            validator_tasks = await ValidatorTask.prisma().find_many(
+                include=include_query,
+                where=vali_where_query_processed,
+                order={"created_at": "desc"},
+                skip=skip,
+                take=batch_size,
+            )
+            has_more = (skip + batch_size) < task_count_processed
+            yield validator_tasks, has_more
 
 
 # ---------------------------------------------------------------------------- #
