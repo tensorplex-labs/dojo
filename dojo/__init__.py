@@ -28,14 +28,16 @@ def get_commit_hash():
         raise RuntimeError("Failed to get latest Git commit hash")
 
 
-# Define the version of the template module.
-__version__ = get_latest_git_tag()
-version_split = __version__.split(".")
-__spec_version__ = (
-    (1000 * int(version_split[0]))
-    + (10 * int(version_split[1]))
-    + (1 * int(version_split[2]))
-)
+def get_spec_version():
+    latest_tag = get_latest_git_tag()
+    if latest_tag is None:
+        raise ValueError("No Git tag found")
+    version_split = latest_tag.split(".")
+    return (
+        (1000 * int(version_split[0]))
+        + (10 * int(version_split[1]))
+        + (1 * int(version_split[2]))
+    )
 
 
 VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "20000"))

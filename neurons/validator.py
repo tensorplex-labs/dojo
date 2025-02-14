@@ -41,7 +41,7 @@ from commons.utils import (
     initialise,
     set_expire_time,
 )
-from dojo import __spec_version__
+from dojo import get_spec_version
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -73,7 +73,7 @@ class Validator:
     subtensor: bt.subtensor
     wallet: bt.wallet  # type: ignore
     metagraph: bt.metagraph
-    spec_version: int = __spec_version__
+    spec_version: int = get_spec_version()
 
     def __init__(self):
         self.MAX_BLOCK_CHECK_ATTEMPTS = 3
