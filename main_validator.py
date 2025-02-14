@@ -7,11 +7,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from commons.api.middleware import LimitContentLengthMiddleware
+from commons.block_subscriber import start_block_subscriber
 from commons.dataset.synthetic import SyntheticAPI
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
 from dojo.utils.config import source_dotenv
-from scripts.subscribe_block_headers import start_block_subscriber
 
 source_dotenv()
 
