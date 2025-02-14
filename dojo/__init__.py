@@ -1,23 +1,17 @@
 import os
 import subprocess
 
+from git import Repo
+
 from dojo.utils.config import get_config, source_dotenv
 
 source_dotenv()
 
 
-def get_latest_git_tag():
-    try:
-        # Get the latest git tag
-        latest_tag = (
-            subprocess.check_output(["git", "describe", "--tags", "--abbrev=0"])
-            .strip()
-            .decode("utf-8")
-        )
-        return latest_tag.lstrip("v")
-    except subprocess.CalledProcessError as e:
-        print(f"Error getting the latest Git tag: {e}")
-        raise RuntimeError("Failed to get latest Git tag")
+def get_latest_git_tag(repo_path="."):
+    repo = Repo(repo_path)
+    tags = sorted(repo.tags, key=lambda t: t.commit.committed_date)
+    return str(tags[-1]).lstrip("v") if tags else None
 
 
 def get_commit_hash():
