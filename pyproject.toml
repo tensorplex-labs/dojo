@@ -173,3 +173,6 @@ py-modules = ["dojo_cli"]
 version_scheme = "only-version"
 local_scheme = "no-local-version"
 tag_regex = "^v(?P<scm_version>\\d+\\.\\d+\\.\\d+)"
+
+[tool.uv]
+prerelease = "allow"
