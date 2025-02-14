@@ -1418,6 +1418,6 @@ class Validator:
         return hotkey_to_dojo_task_scores_and_gt
 
     async def block_headers_callback(self, block: dict):
-        logger.info(f"Received block headers{block}")
+        logger.debug(f"Received block headers{block}")
         block_number = int(block.get("header", {}).get("number"))
         self._last_block = block_number

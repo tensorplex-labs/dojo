@@ -7,20 +7,16 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache, update_wrapper
 from math import floor
 from pathlib import Path
-from typing import Any, Awaitable, Tuple
+from typing import Any, Tuple
 
 import bittensor as bt
 import numpy as np
 import plotext
 import requests
 import torch
-from bittensor.core.async_subtensor import AsyncSubstrateInterface
-from bittensor.core.subtensor import SubstrateRequestException
 from bittensor.utils.btlogging import logging as logger
 from Crypto.Hash import keccak
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
-
-from commons.objects import ObjectManager
 
 
 def _terminal_plot(
@@ -367,22 +363,3 @@ def is_valid_expiry(expire_at: str) -> bool:
     else:
         logger.warning(f"Expiry time {expire_at} is out of the reasonable range.")
         return False
-
-
-async def start_block_subscriber(
-    callback: Callable[..., Awaitable[Any]],
-    url: str = ObjectManager.get_config().subtensor.chain_endpoint,  # type: ignore
-):
-    try:
-        # Connect to the substrate node
-        async with AsyncSubstrateInterface(url=url) as substrate:
-            # Subscribe to new blocks - simplified subscription
-            await substrate.subscribe_block_headers(
-                subscription_handler=callback, finalized_only=True
-            )
-    except SubstrateRequestException as e:
-        logger.error(f"Substrate error: {e}")
-    except KeyboardInterrupt:
-        logger.info("\nSubscription ended by user")
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
