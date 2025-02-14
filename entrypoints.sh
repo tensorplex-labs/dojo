@@ -77,7 +77,7 @@ if [ "$1" = 'extract-dataset' ]; then
     echo "Environment variables:"
     echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"
     echo "DATABASE_URL: ${DATABASE_URL}"
-    echo "DATASET_SERVICE_BASE_URL: ${DATASET_SERVICE_BASE_URL}"
+    echo "VALIDATOR_API_BASE_URL: ${VALIDATOR_API_BASE_URL}"
     echo "WALLET_COLDKEY: ${WALLET_COLDKEY}"
     echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"
     python scripts/extract_dataset.py \
