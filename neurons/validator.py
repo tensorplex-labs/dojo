@@ -40,7 +40,6 @@ from commons.utils import (
     get_new_uuid,
     initialise,
     set_expire_time,
-    ttl_get_block,
 )
 from dojo import __spec_version__
 from dojo.protocol import (
@@ -506,19 +505,7 @@ class Validator:
 
     @property
     def block(self):
-        try:
-            if not self.loop.run_until_complete(self._ensure_subtensor_connection()):
-                logger.warning(
-                    "Subtensor connection failed - returning last known block"
-                )
-                return self._last_block if self._last_block is not None else 0
-
-            self._last_block = ttl_get_block(self.subtensor)
-            self._block_check_attempts = 0
-            return self._last_block
-        except Exception as e:
-            logger.error(f"Error getting block number: {e}")
-            return self._last_block if self._last_block is not None else 0
+        return self._last_block
 
     async def _try_reconnect_subtensor(self):
         self._block_check_attempts += 1
@@ -1420,3 +1407,8 @@ class Validator:
                     }
                 )
         return hotkey_to_dojo_task_scores_and_gt
+
+    async def block_headers_callback(self, block: dict):
+        logger.info(f"Received block headers{block}")
+        block_number = int(block.get("header", {}).get("number"))
+        self._last_block = block_number
