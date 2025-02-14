@@ -85,13 +85,13 @@ if [ "$1" = 'extract-dataset' ]; then
     --wallet.hotkey ${WALLET_HOTKEY}
 fi
 
-if [ "$1" = 'dataset-service' ]; then
+if [ "$1" = 'validator-api-service' ]; then
     echo "Environment variables:"
     echo "PORT: ${PORT}"
     echo "S3_BUCKET_NAME: ${S3_BUCKET_NAME}"
     echo "AWS_REGION: ${AWS_REGION}"
     echo "MAX_CHUNK_SIZE_MB: ${MAX_CHUNK_SIZE_MB}"
-    python entrypoints/dataset_service.py \
+    python entrypoints/validator_api_service.py \
     --netuid 52 \
     --subtensor.network finney
 fi
