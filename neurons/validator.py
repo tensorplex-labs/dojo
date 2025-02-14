@@ -41,7 +41,7 @@ from commons.utils import (
     initialise,
     set_expire_time,
 )
-from dojo import get_spec_version
+from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -60,6 +60,15 @@ from dojo.utils.config import get_config
 from dojo.utils.uids import extract_miner_uids, is_miner
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
+
+
+latest_local = get_latest_git_tag()
+latest_remote = get_latest_remote_tag()
+if latest_local != latest_remote:
+    logger.warn("Your repository is not up to date, and may fail to set weights.")
+    logger.warn(
+        f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
+    )
 
 
 class Validator:

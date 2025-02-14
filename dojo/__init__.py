@@ -14,6 +14,16 @@ def get_latest_git_tag(repo_path="."):
     return str(tags[-1]).lstrip("v") if tags else None
 
 
+def get_latest_remote_tag(repo_path="."):
+    repo = Repo(repo_path)
+    remote_tags = repo.git.ls_remote("--tags", "--sort=-v:refname", "origin").split(
+        "\n"
+    )
+    if remote_tags and remote_tags[0]:
+        return remote_tags[0].split("refs/tags/")[-1]
+    return None
+
+
 def get_commit_hash():
     try:
         # Get the latest git commit hash
