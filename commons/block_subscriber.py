@@ -1,5 +1,4 @@
 import asyncio
-import time
 from datetime import datetime
 from typing import Any, Awaitable, Callable
 
@@ -9,10 +8,6 @@ from loguru import logger
 
 from commons.objects import ObjectManager
 
-last_block_time = time.time()
-
-
-subtensor_url = "wss://entrypoint-finney.opentensor.ai:443"
 BLOCK_TIME = 12
 
 
