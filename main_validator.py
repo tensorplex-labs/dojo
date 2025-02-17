@@ -2,12 +2,12 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import uvicorn
-import wandb
 from bittensor.utils.btlogging import logging as logger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from commons.api.middleware import LimitContentLengthMiddleware
+from commons.block_subscriber import start_block_subscriber
 from commons.dataset.synthetic import SyntheticAPI
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
@@ -27,7 +27,6 @@ async def lifespan(app: FastAPI):
     validator._should_exit = True
     validator.executor.shutdown(wait=True)
     validator.subtensor.substrate.close()
-    wandb.finish()
     await validator.save_state()
     await SyntheticAPI.close_session()
     await disconnect_db()
@@ -55,6 +54,9 @@ async def main():
         asyncio.create_task(validator.run()),
         asyncio.create_task(validator.update_score_and_send_feedback()),
         asyncio.create_task(validator.send_heartbeats()),
+        asyncio.create_task(
+            start_block_subscriber(callbacks=[validator.block_headers_callback])
+        ),
     ]
 
     await server.serve()
