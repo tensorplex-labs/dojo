@@ -10,7 +10,7 @@ import bittensor as bt
 from bittensor.utils.btlogging import logging as logger
 
 from commons.human_feedback.dojo import DojoAPI
-from commons.utils import get_epoch_time
+from commons.utils import get_effective_stake, get_epoch_time
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.base.miner import BaseMinerNeuron
 from dojo.protocol import (
@@ -53,6 +53,7 @@ class Miner(BaseMinerNeuron):
         )
 
         # Instantiate runners
+        self.root_metagraph = self.subtensor.metagraph(0)
         self.should_exit: bool = False
         self.is_running: bool = False
         self.thread: threading.Thread | None = None
@@ -277,7 +278,10 @@ class Miner(BaseMinerNeuron):
         if is_miner(self.metagraph, caller_uid):
             return True, "Not a validator"
 
-        if validator_neuron.total_stake.tao < float(VALIDATOR_MIN_STAKE):
+        effective_stake = get_effective_stake(
+            caller_hotkey, self.root_metagraph, self.metagraph
+        )
+        if effective_stake < float(VALIDATOR_MIN_STAKE):
             logger.warning(
                 f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum stake required: {VALIDATOR_MIN_STAKE}, current stake: {validator_neuron.stake.tao}"
             )

@@ -5,7 +5,7 @@ from typing import List
 
 import bittensor as bt
 
-from commons.utils import keccak256_hash
+from commons.utils import get_effective_stake, keccak256_hash
 
 
 def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
@@ -18,16 +18,21 @@ def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
 
 def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
     """Check if uid is a validator."""
-    stakes = metagraph.S.tolist()
     from dojo import VALIDATOR_MIN_STAKE
 
-    return stakes[uid] < VALIDATOR_MIN_STAKE
+    hotkey = metagraph.hotkeys[uid]
+    effective_stake = get_effective_stake(hotkey, metagraph.subtensor)
+    return effective_stake < VALIDATOR_MIN_STAKE
 
 
 def extract_miner_uids(metagraph: bt.metagraph):
     """Extracts active miner uids from the metagraph."""
-    stakes = metagraph.S.tolist()
+    stakes = []
+    hotkeys = metagraph.hotkeys
     from dojo import VALIDATOR_MIN_STAKE
+
+    for hotkey in hotkeys:
+        stakes.append(get_effective_stake(hotkey, metagraph.subtensor))
 
     return [
         uid
