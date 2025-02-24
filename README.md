@@ -282,7 +282,7 @@ DOJO_API_KEY= # blank for now
 WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
 AXON_PORT=8888 # port to serve requests over the public network for validators to call
-VALIDATOR_MIN_STAKE=20000 # minimum stake required for validators default is 20000 TAO (use this to bypass the blacklist function in testnet)
+VALIDATOR_MIN_STAKE=5000 # minimum effective stake required for validators default is 5000 (set this 0 to bypass the blacklist function in testnet)
 # Task related config
 TASK_MAX_RESULT=4 # this means that each miner can have up to 4 workers fill in responses
 ```
