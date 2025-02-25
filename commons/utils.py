@@ -48,7 +48,6 @@ def get_effective_stake(hotkey: str, subtensor: bt.subtensor) -> float:
         )
 
     effective_stake = (root_stake * ROOT_WEIGHT) + alpha_stake
-    logger.debug(f"Effective stake for {hotkey}: {effective_stake}")
 
     return effective_stake
 
