@@ -107,9 +107,9 @@ class ValidatorSim(Validator):
         sel_miner_uids = sorted(list(self._active_miner_uids))
 
         axons = [
-            self.metagraph.axons[uid]
+            self.subnet_metagraph.axons[uid]
             for uid in sel_miner_uids
-            if self.metagraph.axons[uid].hotkey.casefold()
+            if self.subnet_metagraph.axons[uid].hotkey.casefold()
             != self.wallet.hotkey.ss58_address.casefold()
         ]
         if not len(axons):

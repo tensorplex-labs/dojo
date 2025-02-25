@@ -35,7 +35,7 @@ def mock_validator(mock_initialise, tmp_path):
         # Inject the mocked components
         validator.wallet = mock_wallet
         validator.subtensor = mock_subtensor
-        validator.metagraph = mock_metagraph
+        validator.subnet_metagraph = mock_metagraph
         validator.dendrite = mock_dendrite
         validator.config = mock_wallet.config
         validator.scores = torch.zeros(mock_metagraph.n.item(), dtype=torch.float32)
