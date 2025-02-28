@@ -450,4 +450,18 @@ class Miner(aobject):
         """
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
+        # sync every 5 blocks
         return self.block % 5 == 0
+
+    @property
+    def block(self):
+        return self._block
+
+    @block.setter
+    def block(self, value: int):
+        self._block = value
+
+    async def block_headers_callback(self, block: dict):
+        logger.trace(f"Received block headers{block}")
+        block_number = int(block.get("header", {}).get("number"))
+        self.block = block_number
