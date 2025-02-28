@@ -4,7 +4,7 @@ from typing import Any, Awaitable, Callable
 
 from bittensor.core.async_subtensor import AsyncSubstrateInterface
 from bittensor.core.subtensor import SubstrateRequestException
-from loguru import logger
+from bittensor.utils.btlogging import logging as logger
 
 from commons.objects import ObjectManager
 
