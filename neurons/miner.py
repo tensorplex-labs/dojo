@@ -23,14 +23,12 @@ from dojo.protocol import (
 from dojo.utils.config import get_config
 
 
-# TODO: remove everything in baseminerneuron
 class Miner(aobject):
     _should_exit: bool = False
     root_metagraph: AsyncMetagraph
     subnet_metagraph: AsyncMetagraph
 
     async def __init__(self):
-        # NOTE: from baseneuron
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
@@ -41,7 +39,7 @@ class Miner(aobject):
         self.axon = bittensor.axon(wallet=self.wallet, port=self.config.axon.port)
         logger.info(f"Axon: {self.axon}")
 
-        await self.ainit()
+        await self.init_metagraphs()
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.subnet_metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
@@ -74,7 +72,7 @@ class Miner(aobject):
         # log all incoming requests
         self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
 
-    async def ainit(self):
+    async def init_metagraphs(self):
         logger.info("Performing async init for miner")
         config = ObjectManager.get_config()
         async with bittensor.AsyncSubtensor(config=config) as subtensor:
