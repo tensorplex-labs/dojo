@@ -164,13 +164,13 @@ class Miner(aobject):
         caller_hotkey = (
             synapse.dendrite.hotkey if synapse.dendrite else "unknown hotkey"
         )
-        logger.debug(f"⬇️ Received heartbeat synapse from {caller_hotkey}")
+        logger.info(f"⬇️ Received heartbeat synapse from {caller_hotkey}")
         if not synapse:
             logger.error("Invalid synapse object")
             return synapse
 
         synapse.ack = True
-        logger.debug(f"⬆️ Respondng to heartbeat synapse: {synapse}")
+        logger.info(f"⬆️ Respondng to heartbeat synapse: {synapse}")
         return synapse
 
     async def forward_score_result(self, synapse: ScoringResult) -> ScoringResult:
@@ -314,7 +314,8 @@ class Miner(aobject):
         # Log the IP address of the incoming request.
         if not synapse.dojo_task_id:
             logger.error("TaskResultRequest missing dojo_task_id")
-            return True, "Missing dojo_task_id"
+            context = self.extract_synapse_info(synapse)
+            return True, f"Missing dojo_task_id. Context: {context}"
 
         return await self._blacklist_function(
             synapse, "task result", "Valid task result request from validator"
@@ -331,6 +332,11 @@ class Miner(aobject):
         return await self._blacklist_function(
             synapse, "scoring result", "Valid scoring result request from validator"
         )
+
+    def extract_synapse_info(self, synapse: bittensor.Synapse) -> str:
+        caller_hotkey = synapse.dendrite.hotkey
+        ip_addr = synapse.dendrite.ip or "Unknown IP"
+        return f"Hotkey: {caller_hotkey}, IP: {ip_addr}"
 
     async def _blacklist_function(
         self, synapse, request_tag: str, valid_msg: str
@@ -446,4 +452,4 @@ class Miner(aobject):
         """
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
-        return self.block % self.config.neuron.epoch_length == 0
+        return self.block % 5 == 0
