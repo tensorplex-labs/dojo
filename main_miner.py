@@ -9,7 +9,7 @@ source_dotenv()
 
 
 async def main():
-    miner = ObjectManager.get_miner()
+    miner = await ObjectManager.get_miner()
     log_task = asyncio.create_task(miner.log_miner_status())
     run_task = asyncio.create_task(miner.run())
 

@@ -1,5 +1,4 @@
 import asyncio
-import threading
 import traceback
 
 from bittensor.utils.btlogging import logging as logger
@@ -79,53 +78,6 @@ class BaseMinerNeuron(BaseNeuron):
         # In case of unforeseen errors, the miner will log the error and continue operations.
         except Exception:
             logger.error(traceback.format_exc())
-
-    def run_in_background_thread(self):
-        """
-        Starts the miner's operations in a separate background thread.
-        This is useful for non-blocking operations.
-        """
-        if not self.is_running:
-            logger.debug("Starting miner in background thread.")
-            self.should_exit = False
-            self.thread = threading.Thread(target=self.run, daemon=True)
-            self.thread.start()
-            self.is_running = True
-            logger.debug("Started")
-
-    def stop_run_thread(self):
-        """
-        Stops the miner's operations that are running in the background thread.
-        """
-        if self.is_running:
-            logger.debug("Stopping miner in background thread.")
-            self.should_exit = True
-            self.thread.join()
-            self.is_running = False
-            logger.debug("Stopped")
-
-    def __enter__(self):
-        """
-        Starts the miner's operations in a background thread upon entering the context.
-        This method facilitates the use of the miner in a 'with' statement.
-        """
-        self.run_in_background_thread()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """
-        Stops the miner's background operations upon exiting the context.
-        This method facilitates the use of the miner in a 'with' statement.
-
-        Args:
-            exc_type: The type of the exception that caused the context to be exited.
-                      None if the context was exited without an exception.
-            exc_value: The instance of the exception that caused the context to be exited.
-                       None if the context was exited without an exception.
-            traceback: A traceback object encoding the stack trace.
-                       None if the context was exited without an exception.
-        """
-        self.stop_run_thread()
 
     def set_weights(self):
         pass
