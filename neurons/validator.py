@@ -24,6 +24,7 @@ import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import (
     EmptyScores,
+    FatalSyntheticGenerationError,
     InvalidMinerResponse,
     NoNewExpiredTasksYet,
     SetWeightsFailed,
@@ -684,7 +685,7 @@ class Validator:
                 await self.sync()
                 await asyncio.sleep(dojo.VALIDATOR_RUN)
 
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, FatalSyntheticGenerationError):
                 # Handle shutdown gracefully
                 await self._cleanup()
                 return
@@ -841,6 +842,11 @@ class Validator:
         """
         task_id = get_new_uuid()
         try:
+            if not await SyntheticAPI.get_health_status():
+                raise FatalSyntheticGenerationError(
+                    "synthetic API health check failed even after retry attempts. "
+                )
+
             data: SyntheticQA | None = await SyntheticAPI.get_qa()
             if not data or not data.responses:
                 logger.error("Invalid or empty data returned from synthetic data API")
@@ -868,7 +874,9 @@ class Validator:
             )
 
             return synapse, data.ground_truth, obfuscated_model_to_model
-
+        except FatalSyntheticGenerationError as e:
+            logger.error(f"Fatal synthetic generation error: {e}")
+            raise
         except (
             RetryError,
             ValueError,

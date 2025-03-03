@@ -9,9 +9,13 @@ from tenacity import (
     before_sleep_log,
     stop_after_attempt,
     wait_exponential,
+    wait_fixed,
 )
 
-from commons.exceptions import SyntheticGenerationError
+from commons.exceptions import (
+    FatalSyntheticGenerationError,
+    SyntheticGenerationError,
+)
 from dojo.protocol import SyntheticQA
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
@@ -98,7 +102,41 @@ class SyntheticAPI:
                 f"Failed to generate synthetic QA after {MAX_RETRIES} retries."
             )
             traceback.print_exc()
-            raise
+            raise FatalSyntheticGenerationError(
+                f"synthetic QA generation failed after {MAX_RETRIES} retries"
+            )
 
         except Exception:
             raise
+
+    @classmethod
+    async def get_health_status(cls):
+        """
+        queries health route of the synthetic API.
+        returns True if the API is healthy, False otherwise.
+        """
+        await cls.init_session()
+        path = f"{SYNTHETIC_API_BASE_URL}/api/health"
+        logger.debug(f"Getting health status from {path}.")
+
+        MAX_RETRIES = 6
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(MAX_RETRIES),
+                wait=wait_fixed(60),
+                before_sleep=before_sleep_log(
+                    logger._logger, log_level=10, exc_info=True
+                ),
+            ):
+                with attempt:
+                    async with cls._session.get(path) as response:
+                        if response.status == 200:
+                            return True
+                        else:
+                            return False
+        except RetryError:
+            logger.error(f"Failed to get health status after {MAX_RETRIES} retries.")
+            traceback.print_exc()
+            return False
+        except Exception:
+            return False
