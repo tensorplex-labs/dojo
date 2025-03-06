@@ -5,7 +5,11 @@ import torch
 from bittensor.utils.btlogging import logging as logger
 from torch.nn import functional as F
 
+from commons.orm import ORM
+from commons.stats.icc import _calculate_icc
 from commons.utils import _terminal_plot
+from database.prisma.enums import HFLStatusEnum
+from database.prisma.models import ValidatorTask
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -386,3 +390,71 @@ class Scoring:
                         criteria.scores = scores
 
         return valid_responses
+
+
+async def score_hfl_tasks():
+    sf_tasks = await ORM.get_sf_tasks_by_status(status=HFLStatusEnum.SF_COMPLETED)
+
+    for task in sf_tasks:
+        await _score_hfl_task(task)
+
+
+async def _score_hfl_task(task: ValidatorTask):
+    miner_scores = await ORM.get_miner_scores_by_sf_task(task)
+    # TODO: prepare hotkey_to_miner_raw_scores from DB
+    hotkey_to_raw_scores: dict[str, list[float]] = {}
+    hotkey_to_icc = _calculate_icc(hotkey_to_scores=hotkey_to_raw_scores)
+
+
+async def get_original_or_parent_sf_task(sf_task_id: str):
+    """
+    ┌─────────────┐       ┌──────┐       ┌──────┐      ┌──────┐     ┌──────┐
+    │             │       │      │       │      │      │      │     │      │
+    │Original Task│──────▶│ TF_1 │──────▶│ SF_1 │─────▶│ TF_2 │────▶│ SF_2 │
+    │             │       │      │       │      │      │      │     │      │
+    └─────────────┘       └──────┘       └──────┘      └──────┘     └──────┘
+    """
+    # TODO fetch tf task properly
+    validator_task: ValidatorTask = get_original_or_parent_sf_task()  # type: ignore
+    return validator_task
+
+
+async def _calculate_prev_iter_scores(sf_task_id: str):
+    tf_task = await get_original_or_parent_sf_task(sf_task_id=sf_task_id)
+    if not tf_task or not tf_task.completions:
+        raise ValueError("TF task must have completions for scoring")
+    if not tf_task.miner_responses:
+        raise ValueError("TF task must have miner responses for scoring")
+
+    # Create a mapping of completion IDs to their order in tf_task.completions
+    completion_order = {comp_id: idx for idx, comp_id in enumerate(tf_task.completions)}
+
+    # For each miner response, sort completions in-place based on tf_task.completions order
+    for miner_response in tf_task.miner_responses:
+        # Sort completions based on the completion_order mapping
+        miner_response.completion_responses.sort(
+            key=lambda x: completion_order[x.completion_id]
+        )
+
+    # calculate the average score per completion
+    # Create a dictionary to store the sum of scores and the count of scores for each completion
+    completion_scores = {}
+
+    for miner_response in tf_task.miner_responses:
+        for completion in miner_response.completion_responses:
+            completion_id = completion.completion_id
+            score = completion.score
+            if completion_id not in completion_scores:
+                completion_scores[completion_id] = {"sum": 0, "count": 0}
+
+            completion_scores[completion_id]["sum"] += score
+            completion_scores[completion_id]["count"] += 1
+
+    # Calculate the average score for each completion
+    prev_task_cid_to_avg_score: dict[str, float] = {}
+    for completion_id, scores in completion_scores.items():
+        average_score = scores["sum"] / scores["count"]
+        prev_task_cid_to_avg_score[completion_id] = average_score
+        print(f"Completion {completion_id}: Average score = {average_score}")
+
+    return prev_task_cid_to_avg_score
