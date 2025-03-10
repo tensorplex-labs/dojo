@@ -1,9 +1,11 @@
 import asyncio
 import json
 import multiprocessing
-from typing import AsyncGenerator
+import os
+import time
 
 from loguru import logger
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from commons.orm import ORM
 from commons.scoring import Scoring
@@ -24,10 +26,120 @@ from dojo.utils.config import source_dotenv
 
 source_dotenv()
 
+BATCH_SIZE = int(os.getenv("FILL_SCORE_BATCH_SIZE", 10))
+MAX_CONCURRENT_TASKS = int(os.getenv("FILL_SCORE_MAX_CONCURRENT_TASKS", 5))
+TX_TIMEOUT = int(os.getenv("FILL_SCORE_TX_TIMEOUT", 10000))
+
 # Get number of CPU cores
 nproc = multiprocessing.cpu_count()
+sem = asyncio.Semaphore(min(MAX_CONCURRENT_TASKS, nproc))  # Limit concurrent operations
 
-sem = asyncio.Semaphore(nproc * 2 + 1)  # Limit concurrent operations
+
+class FillScoreStats:
+    def __init__(self):
+        self.start_time = time.time()
+        self.last_count = 0
+        self.last_time = self.start_time
+        self.tasks_per_minute = 0
+
+        # Processing stats
+        self.total_tasks = 0
+        self.processed_tasks = 0
+        self.failed_tasks = 0
+        self.updated_scores = 0
+
+    def update_rate(self):
+        """Calculate tasks per minute rate"""
+        current_time = time.time()
+        current_count = self.processed_tasks
+
+        # Calculate tasks per minute
+        time_diff = current_time - self.last_time
+        if time_diff >= 1.0:  # Update rate every second
+            count_diff = current_count - self.last_count
+            self.tasks_per_minute = (count_diff * 60) / time_diff
+            self.last_count = current_count
+            self.last_time = current_time
+
+    def _get_progress_bar(self, width=50):
+        """Generate a progress bar string."""
+        if self.total_tasks == 0:
+            return "[" + " " * width + "] 0%"
+
+        progress = self.processed_tasks / self.total_tasks
+        filled = int(width * progress)
+        bar = (
+            "["
+            + "=" * filled
+            + (">" if filled < width else "")
+            + " " * (width - filled - 1)
+            + "]"
+        )
+        return f"{bar} {progress * 100:.1f}%"
+
+    def log_progress(self):
+        """Show progress bar and stats"""
+        current_time = time.time()
+        elapsed = current_time - self.start_time
+        progress_bar = self._get_progress_bar(width=30)
+        self.update_rate()
+
+        # Calculate ETA
+        if self.processed_tasks > 0:
+            rate = self.processed_tasks / elapsed
+            remaining = self.total_tasks - self.processed_tasks
+            eta_seconds = remaining / rate if rate > 0 else 0
+            hours = int(eta_seconds // 3600)
+            minutes = int((eta_seconds % 3600) // 60)
+            seconds = int(eta_seconds % 60)
+            eta_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        else:
+            eta_str = "--:--:--"
+
+        # Format elapsed time
+        elapsed_hours = int(elapsed // 3600)
+        elapsed_minutes = int((elapsed % 3600) // 60)
+        elapsed_seconds = int(elapsed % 60)
+        elapsed_str = f"{elapsed_hours:02d}:{elapsed_minutes:02d}:{elapsed_seconds:02d}"
+
+        # Print progress with fixed width format and progress bar
+        print(
+            f"\r{progress_bar} | {self.processed_tasks}/{self.total_tasks} | Updated: {self.updated_scores} | {self.tasks_per_minute:.0f} t/min | Time: {elapsed_str} | ETA: {eta_str}",
+            end="",
+            flush=True,
+        )
+
+    def print_final_stats(self):
+        """Print detailed statistics at the end of processing."""
+        elapsed = time.time() - self.start_time
+        success_rate = (
+            (self.processed_tasks - self.failed_tasks) / max(self.processed_tasks, 1)
+        ) * 100
+
+        print("\n\nFill Score Results:")
+        print("=" * 50)
+        print(f"\nTime Taken: {elapsed:.2f} seconds")
+        print("\nProcessed Tasks:")
+        print("-" * 20)
+        print(f"Total: {self.processed_tasks}/{self.total_tasks}")
+        print(f"Failed: {self.failed_tasks}")
+        print(f"Success Rate: {success_rate:.1f}%")
+        print(f"Updated Scores: {self.updated_scores}")
+        print("\n" + "=" * 50)
+
+
+# Initialize stats
+stats = FillScoreStats()
+
+
+@retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=3, min=5, max=120))
+async def execute_transaction(miner_response_id, tx_function):
+    try:
+        async with prisma.tx(timeout=TX_TIMEOUT) as tx:
+            await tx_function(tx)
+    except Exception as e:
+        logger.error(f"Transaction failed for miner response {miner_response_id}: {e}")
+        raise  # Re-raise to trigger retry
 
 
 # 1. for each record from `miner_response` find the corresponding record from `Completion_Response_Model`
@@ -36,8 +148,17 @@ sem = asyncio.Semaphore(nproc * 2 + 1)  # Limit concurrent operations
 
 
 def _is_empty_scores(record: MinerScore) -> bool:
-    scores = json.loads(record.scores)
-    return not scores
+    # Avoid parsing JSON if possible
+    if not record.scores:
+        return True
+
+    # Only parse if needed
+    try:
+        scores = json.loads(record.scores)
+        return not scores
+    except (json.JSONDecodeError, TypeError):
+        logger.warning(f"Invalid JSON in scores for record {record.id}")
+        return True
 
 
 def _is_all_empty_scores(records: list[MinerScore]) -> bool:
@@ -48,13 +169,11 @@ async def _process_miner_response(miner_response: MinerResponse, task: Validator
     scores = miner_response.scores
 
     if scores is not None and not _is_all_empty_scores(scores):
-        return
+        return False  # No update needed
     else:
         logger.trace("No scores for miner response, attempting to fill from old tables")
 
     # find the scores from old tables
-    # logger.debug(f"where query: task_id:{task.id}, hotkey: {miner_response.hotkey}")
-
     feedback_request = await prisma.feedback_request_model.find_first(
         where={
             "parent_id": task.id,
@@ -63,15 +182,23 @@ async def _process_miner_response(miner_response: MinerResponse, task: Validator
     )
     if feedback_request is None:
         logger.warning("Feedback request not found, skipping")
-        return
-    # assert feedback_request is not None, (
-    #     "Feedback request id should not be None"
-    # )
+        return False
+
     completions = await prisma.completion_response_model.find_many(
         where={"feedback_request_id": feedback_request.id}
     )
 
-    async with prisma.tx() as tx:
+    if not completions:
+        logger.warning(
+            f"No completions found for feedback request {feedback_request.id}"
+        )
+        return False
+
+    # Define the transaction function
+    async def tx_function(tx):
+        updated_count = 0
+        updates = []
+
         for completion in completions:
             # Find or create the criterion record
             criterion = await tx.criterion.find_first(
@@ -93,13 +220,8 @@ async def _process_miner_response(miner_response: MinerResponse, task: Validator
 
             # the basics, just create raw scores
             if completion.score is None:
-                logger.warning(
-                    f"Score is None for completion {completion.completion_id}"
-                )
                 continue
 
-            # TODO: figure out why the completion.score is None
-            # TODO: figure out completion.rank_id is None, need to reconstruct from ground truth
             scores = Scores(
                 raw_score=completion.score,
                 rank_id=completion.rank_id,
@@ -118,135 +240,238 @@ async def _process_miner_response(miner_response: MinerResponse, task: Validator
                 )
                 continue
 
-            logger.debug(
-                f"Attempting to update with initial scores data: {scores.model_dump()}"
+            # Prepare update (don't execute yet)
+            updates.append(
+                {
+                    "where": {
+                        "criterion_id_miner_response_id": {
+                            "criterion_id": criterion.id,
+                            "miner_response_id": miner_response.id,
+                        }
+                    },
+                    "data": MinerScoreUpdateInput(
+                        scores=Json(json.dumps(scores.model_dump()))
+                    ),
+                }
             )
 
-            await tx.minerscore.update(
-                where={
-                    "criterion_id_miner_response_id": {
-                        "criterion_id": criterion.id,
-                        "miner_response_id": miner_response.id,
-                    }
-                },
-                data=MinerScoreUpdateInput(
-                    scores=Json(json.dumps(scores.model_dump()))
-                ),
-            )
-    return
+        # Execute updates in batches
+        batch_size = 20
+        for i in range(0, len(updates), batch_size):
+            batch = updates[i : i + batch_size]
+            successful_updates = 0
+            for update in batch:
+                try:
+                    await tx.minerscore.update(**update)
+                    successful_updates += 1
+                except Exception as e:
+                    logger.warning(f"Failed to update score: {e}")
+
+            updated_count += successful_updates
+
+        return updated_count
+
+    try:
+        # Use the retry-enabled transaction executor
+        updated_count = await execute_transaction(miner_response.id, tx_function)
+        if updated_count:
+            stats.updated_scores += updated_count
+            return True
+        return False
+    except Exception as e:
+        logger.error(
+            f"All transaction attempts failed for miner response {miner_response.id}: {e}"
+        )
+        return False
 
 
 async def _process_task(task: ValidatorTask):
-    if not task.miner_responses:
-        logger.warning("No miner responses for task, skipping")
-        return
+    async with sem:  # Use semaphore to limit concurrent tasks
+        try:
+            if not task.miner_responses:
+                logger.warning("No miner responses for task, skipping")
+                return False
 
-    # Create semaphore to limit concurrent DB operations
+            # Process responses in smaller chunks to avoid too many connections
+            chunk_size = 3  # Process only 3 responses at a time
+            for i in range(0, len(task.miner_responses), chunk_size):
+                responses_chunk = task.miner_responses[i : i + chunk_size]
+                tasks = []
+                for miner_response in responses_chunk:
+                    tasks.append(_process_miner_response(miner_response, task))
 
-    async def _process_with_semaphore(miner_response):
-        async with sem:
-            return await _process_miner_response(miner_response, task)
+                # Wait for this chunk to complete
+                await asyncio.gather(*tasks, return_exceptions=True)
 
-    for miner_response in task.miner_responses:
-        asyncio.create_task(_process_with_semaphore(miner_response))
+                # Brief pause between chunks to let connections close
+                await asyncio.sleep(0.1)
 
-    # ensure completions are all json strings
-    assert task.completions is not None, "Completions should not be None"
-    # Ensure completions are in string format for the mapper
-    for completion in task.completions:
-        # logger.info(f"{type(completion.completion)}")
-        if isinstance(completion.completion, dict):
-            # NOTE: hack because otherwise the mapper.py functgion fails
-            completion.completion = json.dumps(completion.completion)  # type: ignore
-        elif isinstance(completion.completion, str):
-            # Already in the right format
-            pass
-        else:
-            logger.warning(f"Unexpected completion type: {type(completion.completion)}")
+            logger.info(f"Proceeding with score calculation for task {task.id}")
 
-    updated_miner_responses = Scoring.calculate_score(
-        validator_task=map_validator_task_to_task_synapse_object(task),
-        miner_responses=[
-            map_miner_response_to_task_synapse_object(
-                miner_response,
-                validator_task=task,
+            # Reload miner responses with updated scores
+            updated_task = await prisma.validatortask.find_unique(
+                where={"id": task.id},
+                include={
+                    "completions": {
+                        "include": {"criterion": {"include": {"scores": True}}}
+                    },
+                    "ground_truth": True,
+                    "miner_responses": {
+                        "include": {
+                            "scores": True,
+                        }
+                    },
+                },
             )
-            for miner_response in task.miner_responses
-        ],
-    )
-    logger.info(f"Updated miner responses for task {task.id}")
 
-    max_retries = 3
-    retry_delay = 0.5  # seconds
-    attempt = 0
+            if not updated_task:
+                logger.error(f"Failed to reload task {task.id} with updated scores")
+                return False
 
-    while attempt < max_retries:
-        success, failed_hotkeys = await ORM.update_miner_scores(
-            task_id=task.id,
-            miner_responses=updated_miner_responses,
-        )
+            task = updated_task
 
-        if success and not failed_hotkeys:
-            break
+            # ensure completions are all json strings
+            assert task.completions is not None, "Completions should not be None"
+            # Ensure completions are in string format for the mapper
+            for completion in task.completions:
+                if isinstance(completion.completion, dict):
+                    # NOTE: hack because otherwise the mapper.py function fails
+                    completion.completion = json.dumps(completion.completion)  # type: ignore
+                elif isinstance(completion.completion, str):
+                    # Already in the right format
+                    pass
+                else:
+                    logger.warning(
+                        f"Unexpected completion type: {type(completion.completion)}"
+                    )
 
-        attempt += 1
-        if attempt < max_retries:
-            logger.warning(
-                f"Failed to update scores for task: {task.id} on attempt {attempt}. "
-                f"Failed hotkeys: {failed_hotkeys}. Retrying in {retry_delay} seconds..."
+            mapped_miner_responses = [
+                map_miner_response_to_task_synapse_object(
+                    miner_response,
+                    validator_task=task,
+                )
+                for miner_response in (task.miner_responses or [])
+            ]
+
+            updated_miner_responses = Scoring.calculate_score(
+                validator_task=map_validator_task_to_task_synapse_object(task),
+                miner_responses=mapped_miner_responses,
             )
-            await asyncio.sleep(retry_delay)
-        else:
-            logger.error(
-                f"Failed to update scores for task: {task.id} after {max_retries} attempts. "
-                f"Failed hotkeys: {failed_hotkeys}"
-            )
+
+            max_retries = 3
+            retry_delay = 0.5  # seconds
+            attempt = 0
+
+            while attempt < max_retries:
+                success, failed_hotkeys = await ORM.update_miner_scores(
+                    task_id=task.id,
+                    miner_responses=updated_miner_responses,
+                )
+
+                if success and not failed_hotkeys:
+                    return True
+
+                attempt += 1
+                if attempt < max_retries:
+                    logger.warning(
+                        f"Failed to update scores for task: {task.id} on attempt {attempt}. "
+                        f"Failed hotkeys: {failed_hotkeys}. Retrying in {retry_delay} seconds..."
+                    )
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(
+                        f"Failed to update scores for task: {task.id} after {max_retries} attempts. "
+                        f"Failed hotkeys: {failed_hotkeys}"
+                    )
+
+            return False
+        except Exception as e:
+            logger.error(f"Error processing task {task.id}: {e}")
+            stats.failed_tasks += 1
+            return False
+
+
+@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=30))
+async def connect_with_retry():
+    try:
+        await connect_db()
+        # Test the connection
+        await prisma.validatortask.count()
+        logger.info("Database connection established successfully")
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {e}")
+        raise
 
 
 async def main():
-    await connect_db()
+    try:
+        await connect_with_retry()
 
-    async for validator_tasks, has_more_batches in get_processed_tasks(batch_size=20):
-        bg_tasks = []
-        for task in validator_tasks:
-            bg_task = asyncio.create_task(_process_task(task))
-            bg_tasks.append(bg_task)
+        # Count total tasks to process for progress tracking
+        vali_where_query = ValidatorTaskWhereInput({"is_processed": True})
+        stats.total_tasks = await prisma.validatortask.count(where=vali_where_query)
 
-        if not has_more_batches:
-            logger.info("No more task batches to process")
-            break
-    await disconnect_db()
+        logger.info(f"Starting to process {stats.total_tasks} validator tasks")
 
-
-async def get_processed_tasks(
-    batch_size: int = 10,
-) -> AsyncGenerator[tuple[list[ValidatorTask], bool], None]:
-    vali_where_query = ValidatorTaskWhereInput(
-        {
-            "is_processed": True,
-        }
-    )
-    num_processed_tasks = await prisma.validatortask.count(where=vali_where_query)
-
-    for skip in range(0, num_processed_tasks, batch_size):
-        validator_tasks = await prisma.validatortask.find_many(
-            skip=skip,
-            take=batch_size,
-            where=vali_where_query,
-            include={
-                "completions": {"include": {"criterion": True}},
-                "ground_truth": True,
-                "miner_responses": {
-                    "include": {
-                        "scores": True,
-                    }
+        skip = 0
+        while True:
+            # Get batch of tasks
+            validator_tasks = await prisma.validatortask.find_many(
+                skip=skip,
+                take=BATCH_SIZE,
+                where=vali_where_query,
+                include={
+                    "completions": {"include": {"criterion": True}},
+                    "ground_truth": True,
+                    "miner_responses": {
+                        "include": {
+                            "scores": True,
+                        }
+                    },
                 },
-            },
-        )
-        yield validator_tasks, skip + batch_size < num_processed_tasks
+            )
 
-    yield [], False
+            if not validator_tasks:
+                break
+
+            # Create tasks for batch processing
+            batch_tasks = []
+            for task in validator_tasks:
+                batch_tasks.append(asyncio.create_task(_process_task(task)))
+
+            # Wait for all tasks in batch to complete
+            if batch_tasks:
+                await asyncio.gather(*batch_tasks)
+                stats.processed_tasks += len(batch_tasks)
+                stats.log_progress()
+
+            skip += BATCH_SIZE
+
+            # Check if we've processed all tasks
+            if skip >= stats.total_tasks:
+                break
+
+        await disconnect_db()
+        stats.print_final_stats()
+    except Exception as e:
+        logger.error(f"Error in main function: {e}")
+        try:
+            await disconnect_db()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("\nProcess interrupted by user")
+        stats.print_final_stats()
+    except Exception as e:
+        logger.error(f"Unhandled exception in main: {e}")
+        try:
+            # Attempt to disconnect DB on any error
+            asyncio.run(disconnect_db())
+        except Exception:
+            pass
+        raise
