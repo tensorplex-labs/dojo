@@ -74,6 +74,7 @@ if latest_local != latest_remote:
 
 class Validator:
     _should_exit: bool = False
+    # NOTE: this is a shared lock between both self.score and self.hfl_score
     _scores_alock = asyncio.Lock()
     _uids_alock = asyncio.Lock()
     _request_alock = asyncio.Lock()
@@ -119,6 +120,10 @@ class Validator:
         # Set up initial scoring weights for validation
         self.scores: torch.Tensor = torch.zeros(
             len(self.metagraph.hotkeys), dtype=torch.float32
+        )
+        # TODO: update based on outputs of scoring func
+        self.hfl_score = torch.Tensor = torch.zeros(
+            len(self.metagraph.hotkey), dtype=torch.float32
         )
         self.check_registered()
 
@@ -1360,6 +1365,7 @@ class Validator:
             return task.validator_task.task_id, {}
 
         hotkey_to_scores = {}
+        # NOTE: @scoring, see here for unpacking
         try:
             updated_miner_responses = Scoring.calculate_score(
                 validator_task=task.validator_task,
@@ -1452,3 +1458,22 @@ class Validator:
         logger.trace(f"Received block headers{block}")
         block_number = int(block.get("header", {}).get("number"))
         self._last_block = block_number
+
+    async def update_hfl_score(self, hotkey_to_tf_score):
+        async with self._scores_alock:
+            previous_hfl_scores = self.hfl_score
+            for hotkey, score in hotkey_to_tf_score:
+                try:
+                    uid = self.metagraph.hotkeys[hotkey]
+                    hfl_alpha = self.config.weights.hfl_ema_alpha  # type: ignore
+                    self.hfl_score[uid] = (
+                        hfl_alpha * hotkey_to_tf_score[hotkey]
+                        + (1 - hfl_alpha) * self.hfl_score[uid]
+                    )
+                except IndexError:
+                    logger.debug(
+                        f"Error getting uid from hotkey: {hotkey} from metagraph, must've deregistered"
+                    )
+
+            logger.info(f"Previous HFL Scores: {previous_hfl_scores}")
+            logger.info(f"Update HFL scores: {self.hfl_score}")
