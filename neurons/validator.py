@@ -1036,7 +1036,7 @@ class Validator:
                             axons=[axon],
                             synapse=shuffled_synapse,
                             deserialize=False,
-                            timeout=12,
+                            timeout=30,
                         )
                     )
 
