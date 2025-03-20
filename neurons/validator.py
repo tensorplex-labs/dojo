@@ -1045,7 +1045,11 @@ class Validator:
                 response for sublist in batch_responses for response in sublist
             ]
             all_responses.extend(flat_batch_responses)
-
+            
+            # Log dojo_task_id from each axon
+            for axon, response in zip(batch_axons, batch_responses):
+                logger.info(f"Response from Axon {axon}: {response.dojo_task_id}")
+                
             logger.info(
                 f"Processed batch {i // batch_size + 1} of {(len(axons) - 1) // batch_size + 1}"
             )
