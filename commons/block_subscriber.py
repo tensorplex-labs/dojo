@@ -1,14 +1,18 @@
 import asyncio
+import json
+import time
 from datetime import datetime
 from typing import Any, Awaitable, Callable
 
-from bittensor.core.async_subtensor import AsyncSubstrateInterface
-from bittensor.core.subtensor import SubstrateRequestException
+import websockets
 from bittensor.utils.btlogging import logging as logger
 
 from commons.objects import ObjectManager
 
 BLOCK_TIME = 12
+WS_OPEN_TIMEOUT = 30
+WS_CLOSE_TIMEOUT = 30
+WS_RECV_TIMEOUT = 30
 
 
 class SubscriptionWatchdog:
@@ -70,7 +74,7 @@ async def start_block_subscriber(
     """Starts a block subscriber that monitors the health of the block subscription.
 
     Args:
-        callback (Callable[..., Awaitable[Any]]): The callback function to call when a block is received.
+        callbacks (list[Callable[..., Awaitable[Any]]]): The callback functions to call when a block is received.
         url (str, optional): The URL of the substrate node. Defaults to ObjectManager.get_config().subtensor.chain_endpoint.
         retry_delay (float, optional): The delay between retries. Defaults to 5.0.
         max_retries (int | None, optional): The maximum number of retries. Defaults to None.
@@ -81,96 +85,158 @@ async def start_block_subscriber(
                            indicating the subscription has likely failed.
     """
     watchdog = SubscriptionWatchdog(max_block_interval)
-
     retry_count = 0
 
-    async def wrapped_callback(*args, **kwargs):
-        """Wraps the original callback function to provide additional functionality.
-
-        Updates the watchdog timer and resets retry count on successful block processing.
-        Forwards all arguments to the original callback function.
-
-        Args:
-            *args: Variable positional arguments to pass to the callback
-            **kwargs: Variable keyword arguments to pass to the callback
-        """
+    async def process_block(block_header):
+        """Process a block and execute all callbacks."""
         nonlocal retry_count
         retry_count = 0
         watchdog.update()
 
+        block_number = int(block_header["number"], 16)
+        logger.info(f"Processing block #{block_number} at time {time.time()}")
+
         # execute all callbacks
         for callback in callbacks:
-            await callback(*args, **kwargs)
+            try:
+                await callback(block_header)
+            except Exception as e:
+                logger.error(f"Error in callback: {e}")
+
+    async def subscribe_to_blocks():
+        logger.info(f"Connecting to WebSocket at {url}")
+        try:
+            async with websockets.connect(
+                url, close_timeout=WS_CLOSE_TIMEOUT, open_timeout=WS_OPEN_TIMEOUT
+            ) as websocket:
+                # Subscribe to finalized blocks
+                subscription_request = {
+                    "id": 1,
+                    "jsonrpc": "2.0",
+                    "method": "chain_subscribeFinalizedHeads",
+                    "params": [],
+                }
+                await websocket.send(json.dumps(subscription_request))
+
+                # Get subscription ID from response (with timeout)
+                try:
+                    response = await asyncio.wait_for(
+                        websocket.recv(), timeout=WS_RECV_TIMEOUT
+                    )
+                    response_data = json.loads(response)
+
+                    if "error" in response_data:
+                        raise Exception(f"Subscription error: {response_data['error']}")
+
+                    subscription_id = response_data.get("result")
+                    if subscription_id is None:
+                        raise Exception(f"No subscription ID returned: {response_data}")
+
+                    logger.info(
+                        f"Subscribed to finalized heads with ID: {subscription_id}"
+                    )
+                except asyncio.TimeoutError:
+                    raise TimeoutError(
+                        "Timed out waiting for subscription confirmation"
+                    )
+
+                # Process incoming blocks - run indefinitely
+                while True:
+                    try:
+                        # Add a timeout to recv() to prevent hanging indefinitely
+                        response = await asyncio.wait_for(
+                            websocket.recv(), timeout=max_block_interval
+                        )
+                        data = json.loads(response)
+
+                        if (
+                            "params" in data
+                            and "subscription" in data["params"]
+                            and data["params"]["subscription"] == subscription_id
+                            and "result" in data["params"]
+                        ):
+                            block_header = data["params"]["result"]
+                            await process_block(block_header)
+
+                        elif "error" in data:
+                            logger.warning(f"Received error from node: {data['error']}")
+
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            f"No message received for {max_block_interval} seconds, checking connection..."
+                        )
+                        # Send a ping to verify the connection is still alive
+                        pong_waiter = await websocket.ping()
+                        try:
+                            await asyncio.wait_for(pong_waiter, timeout=WS_RECV_TIMEOUT)
+                            logger.info("Connection is still alive")
+                        except asyncio.TimeoutError:
+                            logger.error("WebSocket ping timed out")
+                            raise ConnectionError("WebSocket ping timed out")
+
+        except asyncio.CancelledError:
+            logger.error("Task cancelled...")
+            raise
+        except TimeoutError as e:
+            logger.error(f"WebSocket timeout: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"WebSocket encountered fatal error: {e}")
+            raise
 
     while True:
         try:
-            # Connect to the substrate node
-            async with AsyncSubstrateInterface(url=url) as substrate:
-                monitor_task = asyncio.create_task(
-                    monitor_subscription(watchdog, max_block_interval)
-                )
+            # Create the subscription task
+            logger.info("Starting new WebSocket subscription...")
+            monitor_task = asyncio.create_task(
+                monitor_subscription(watchdog, max_block_interval)
+            )
+            subscription_task = asyncio.create_task(subscribe_to_blocks())
+
+            # Wait for either task to complete (or fail)
+            done, pending = await asyncio.wait(
+                [monitor_task, subscription_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            # Cancel the remaining task
+            for task in pending:
+                task.cancel()
+
+            # Check which task completed and handle its result
+            for task in done:
                 try:
-                    logger.info("Subscribing to block headers...")
-                    # Create the subscription task
-                    subscription_task = asyncio.create_task(
-                        substrate.subscribe_block_headers(
-                            subscription_handler=wrapped_callback, finalized_only=True
-                        )
-                    )
-
-                    # Wait for either task to complete (or fail)
-                    done, pending = await asyncio.wait(
-                        [monitor_task, subscription_task],
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-
-                    # Cancel the remaining task
-                    for task in pending:
-                        task.cancel()
-
-                    # Check if monitor_task raised an exception
-                    if monitor_task in done:
-                        monitor_task.result()  # This will raise the exception if there was one
-
-                except ConnectionError:
-                    logger.error("Watchdog detected subscription failure")
-                    raise
-                except Exception as subscription_error:
-                    logger.error(f"Subscription failed: {subscription_error}")
-                    raise
-                finally:
-                    # Clean up tasks
-                    for task in [monitor_task]:
-                        if not task.done():
-                            task.cancel()
-                            try:
-                                await task
-                            except asyncio.CancelledError:
-                                pass
+                    task.result()  # This will raise the exception if there was one
+                except asyncio.CancelledError:
+                    logger.info("Task was cancelled")
+                except Exception as e:
+                    # Re-raise the exception to be caught by the outer try/except
+                    raise e
 
         except KeyboardInterrupt:
             logger.info("\nSubscription ended by user")
             raise
 
-        except (SubstrateRequestException, Exception) as e:
-            logger.error(f"Error occurred: {e}")
-
+        except ConnectionError:
+            logger.error("Watchdog detected subscription failure")
             retry_count += 1
-            if max_retries is not None and retry_count >= max_retries:
-                logger.error(
-                    f"Max retries ({max_retries}) reached. Stopping subscription."
-                )
-                raise
 
-            # Calculate exponential delay with base delay and retry count
-            current_delay = retry_delay * (2 ** (retry_count - 1))
-
+        except Exception as e:
             logger.error(f"Error occurred: {e}")
-            logger.info(
-                f"Attempting to resubscribe in {current_delay} seconds... (attempt {retry_count})"
-            )
-            await asyncio.sleep(current_delay)
-            continue
+            retry_count += 1
+
+        # Handle retries
+        if max_retries is not None and retry_count >= max_retries:
+            logger.error(f"Max retries ({max_retries}) reached. Stopping subscription.")
+            raise
+
+        # Calculate exponential delay with base delay and retry count
+        current_delay = retry_delay * (2 ** (retry_count - 1))
+
+        logger.info(
+            f"Attempting to resubscribe in {current_delay} seconds... (attempt {retry_count})"
+        )
+        await asyncio.sleep(current_delay)
 
 
 async def your_callback(block: dict):
