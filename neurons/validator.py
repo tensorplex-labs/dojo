@@ -17,7 +17,6 @@ import torch
 from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from torch.nn import functional as F
-from websocket import create_connection
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
@@ -533,7 +532,10 @@ class Validator:
             if hasattr(self.subtensor.substrate, "websocket"):
                 self.subtensor.substrate.websocket.close()
 
-            self.subtensor = bt.subtensor(self.subtensor.config)
+            if hasattr(self.subtensor.substrate, "ws"):
+                self.subtensor.substrate.ws.close()
+
+            self.subtensor = bt.subtensor(config=self.subtensor.config)
             await asyncio.sleep(1)
             return True
         except Exception as e:
@@ -552,42 +554,6 @@ class Validator:
             except Exception as e:
                 logger.error(f"Unexpected error checking connection: {e}")
                 return False
-
-    async def _ensure_subtensor_ws_connected(
-        self, max_attempts: int = 5, sleep: int = 3
-    ):
-        if not self.subtensor.substrate.websocket:
-            logger.warning("Substrate websocket not initialized, skipping connection")
-            return False
-
-        attempts = 0
-        while (
-            not self.subtensor.substrate.websocket.connected and attempts < max_attempts
-        ):
-            try:
-                self.subtensor.substrate.websocket = create_connection(
-                    url=self.subtensor.substrate.url,  # type: ignore
-                    timeout=10,
-                    **self.subtensor.substrate.ws_options,
-                )
-                if self.subtensor.substrate.websocket.connected:
-                    logger.debug(
-                        f"Successfully connected to substrate websocket on attempt {attempts}"
-                    )
-                    return True
-                else:
-                    await asyncio.sleep(sleep)
-            finally:
-                attempts += 1
-
-        if not self.subtensor.substrate.websocket.connected:
-            logger.error(
-                "Failed to connect to substrate websocket after maximum attempts"
-            )
-            return False
-
-        logger.debug("Substrate websocket is already connected")
-        return True
 
     # ---------------------------------------------------------------------------- #
     #                         VALIDATOR CORE FUNCTIONS                             #
