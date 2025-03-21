@@ -1,6 +1,5 @@
 import asyncio
 import json
-import time
 from datetime import datetime
 from typing import Any, Awaitable, Callable
 
@@ -66,7 +65,7 @@ async def monitor_subscription(
 
 
 async def start_block_subscriber(
-    callbacks: list[Callable[..., Awaitable[Any]]],
+    callbacks: list[Callable[..., Awaitable[Any] | Any]],
     url: str = ObjectManager.get_config().subtensor.chain_endpoint,  # type: ignore
     retry_delay: float = 5.0,
     max_block_interval: float = 2 * BLOCK_TIME,
@@ -75,7 +74,7 @@ async def start_block_subscriber(
     """Starts a block subscriber that monitors the health of the block subscription.
 
     Args:
-        callbacks (list[Callable[..., Awaitable[Any]]]): The callback functions to call when a block is received.
+        callbacks (list[Callable[..., Awaitable[Any] | Any]]): The callback functions to call when a block is received, callback functions may be asynchronous or synchronous.
         url (str, optional): The URL of the substrate node. Defaults to ObjectManager.get_config().subtensor.chain_endpoint.
         retry_delay (float, optional): The delay between retries. Defaults to 5.0.
         max_retries (int | None, optional): The maximum number of retries. Defaults to None.
@@ -94,13 +93,13 @@ async def start_block_subscriber(
         retry_count = 0
         watchdog.update()
 
-        block_number = int(block_header["number"], 16)
-        logger.info(f"Processing block #{block_number} at time {time.time()}")
-
         # execute all callbacks
         for callback in callbacks:
             try:
-                await callback(block_header)
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(block_header)
+                else:
+                    callback(block_header)
             except Exception as e:
                 logger.error(f"Error in callback: {e}")
 
@@ -244,15 +243,18 @@ async def start_block_subscriber(
 async def your_callback(block: dict):
     logger.trace(f"Received block headers {block}")
     block_header = parse_block_headers(block)
-    block_number = int(block_header.number, 16)
-    logger.info(f"Parsed block number: {block_number}")
+    logger.info(f"Parsed block number: {block_header.number.to_int()}")
+
+
+def sync_callback(block: dict):
+    logger.info("Calling synchronous callback function")
 
 
 async def main():
     try:
         # Will raise an exception if no blocks received for 60 seconds
         await start_block_subscriber(
-            [your_callback],
+            [your_callback, sync_callback],
             max_block_interval=12,
             retry_delay=5.0,
         )

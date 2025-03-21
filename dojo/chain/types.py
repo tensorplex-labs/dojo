@@ -6,7 +6,7 @@ Configure as needed in __init__.py for module level access.
 
 from typing import List
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class HexString(str):
@@ -25,7 +25,7 @@ class BlockHeader(BaseModel):
     extrinsicsRoot: str
     digest: Digest
 
-    @validator("number", pre=True, always=True)
+    @field_validator("number", mode="before")
     def validate_number(cls, v):
         if isinstance(v, str):
             return HexString(v)
