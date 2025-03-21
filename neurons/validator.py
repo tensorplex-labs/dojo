@@ -921,7 +921,7 @@ class Validator:
         logger.info(
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{sel_miner_uids} with expire_at: {synapse.expire_at}"
         )
-
+        
         miner_responses: List[TaskSynapseObject] = await self._send_shuffled_requests(
             self.dendrite, axons, synapse
         )
@@ -1013,48 +1013,57 @@ class Validator:
             return all_responses
 
         for i in range(0, len(axons), batch_size):
-            batch_axons = axons[i : i + batch_size]
-            tasks = []
+            try:
+                batch_axons = axons[i : i + batch_size]
+                tasks = []
 
-            for axon in batch_axons:
-                # shuffle synapse Responses
-                shuffled_completions = random.sample(
-                    synapse.completion_responses,
-                    k=len(synapse.completion_responses),
-                )
-
-                # Apply obfuscation to each completion's files
-                # TODO re-nable obfuscation
-                # await Validator._obfuscate_completion_files(shuffled_completions)
-
-                shuffled_synapse = TaskSynapseObject(
-                    epoch_timestamp=synapse.epoch_timestamp,
-                    task_id=synapse.task_id,
-                    prompt=synapse.prompt,
-                    task_type=synapse.task_type,
-                    expire_at=synapse.expire_at,
-                    completion_responses=shuffled_completions,
-                )
-
-                tasks.append(
-                    dendrite.forward(
-                        axons=[axon],
-                        synapse=shuffled_synapse,
-                        deserialize=False,
-                        timeout=12,
+                for axon in batch_axons:
+                    # shuffle synapse Responses
+                    shuffled_completions = random.sample(
+                        synapse.completion_responses,
+                        k=len(synapse.completion_responses),
                     )
+
+                    # Apply obfuscation to each completion's files
+                    # TODO re-nable obfuscation
+                    # await Validator._obfuscate_completion_files(shuffled_completions)
+
+                    shuffled_synapse = TaskSynapseObject(
+                        epoch_timestamp=synapse.epoch_timestamp,
+                        task_id=synapse.task_id,
+                        prompt=synapse.prompt,
+                        task_type=synapse.task_type,
+                        expire_at=synapse.expire_at,
+                        completion_responses=shuffled_completions,
+                    )
+
+                    tasks.append(
+                        dendrite.forward(
+                            axons=[axon],
+                            synapse=shuffled_synapse,
+                            deserialize=False,
+                            timeout=30,
+                        )
+                    )
+
+                # Gather results for this batch and flatten the list
+                batch_responses = await asyncio.gather(*tasks)
+                flat_batch_responses = [
+                    response for sublist in batch_responses for response in sublist
+                ]
+                all_responses.extend(flat_batch_responses)
+                
+                # Log dojo_task_id from each axon
+                for axon, response in zip(batch_axons, batch_responses):
+                    logger.info(f"Response from Axon {axon}: {response.dojo_task_id}")
+                    
+                logger.info(
+                    f"Processed batch {i // batch_size + 1} of {(len(axons) - 1) // batch_size + 1}"
                 )
-
-            # Gather results for this batch and flatten the list
-            batch_responses = await asyncio.gather(*tasks)
-            flat_batch_responses = [
-                response for sublist in batch_responses for response in sublist
-            ]
-            all_responses.extend(flat_batch_responses)
-
-            logger.info(
-                f"Processed batch {i // batch_size + 1} of {(len(axons) - 1) // batch_size + 1}"
-            )
+            except Exception as e:
+                logger.error(f"Error processing batch: {e}")
+                logger.debug(f"Error from: {traceback.format_exc()}")
+                continue
 
         return all_responses
 
