@@ -12,6 +12,7 @@ from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import FatalSyntheticGenerationError
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
+from dojo.chain import get_async_subtensor
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
@@ -44,6 +45,13 @@ async def _shutdown_validator():
     await validator.save_state()
     await SyntheticAPI.close_session()
     await disconnect_db()
+    try:
+        subtensor = await get_async_subtensor()
+        if subtensor:
+            await subtensor.close()
+    except Exception as e:
+        logger.trace(f"Attempted to close subtensor connection but failed due to {e}")
+        pass
 
     logger.info("Cancelling remaining tasks ...")
     tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]

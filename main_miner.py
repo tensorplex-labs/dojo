@@ -4,9 +4,20 @@ from bittensor.utils.btlogging import logging as logger
 
 from commons.block_subscriber import start_block_subscriber
 from commons.objects import ObjectManager
+from dojo.chain import get_async_subtensor
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
+
+
+async def shutdown_miner():
+    try:
+        subtensor = await get_async_subtensor()
+        if subtensor:
+            await subtensor.close()
+    except Exception as e:
+        logger.trace(f"Attempted to close subtensor connection but failed due to {e}")
+        pass
 
 
 async def main():
@@ -20,7 +31,10 @@ async def main():
     ]
 
     await asyncio.gather(*tasks)
-    logger.info("Exiting main function.")
+
+    logger.info("Performing shutdown tasks...")
+    await shutdown_miner()
+    logger.info("Done, exiting main function.")
 
 
 if __name__ == "__main__":
