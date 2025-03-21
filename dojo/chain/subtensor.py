@@ -1,6 +1,5 @@
-from functools import lru_cache
-
 import bittensor
+from async_lru import alru_cache
 from bittensor.utils.btlogging import logging as logger
 from tenacity import (
     AsyncRetrying,
@@ -12,7 +11,7 @@ from tenacity import (
 from commons.objects import ObjectManager
 
 
-@lru_cache(maxsize=1)
+@alru_cache(maxsize=1)
 async def get_async_subtensor(max_retries: int = 5) -> bittensor.AsyncSubtensor | None:
     """Connect to the async subtensor instance, including retries to handle possible ConnectionError that may occur."""
     try:
@@ -23,7 +22,7 @@ async def get_async_subtensor(max_retries: int = 5) -> bittensor.AsyncSubtensor 
                 config = ObjectManager.get_config()
                 async_subtensor = bittensor.AsyncSubtensor(config=config)
                 await async_subtensor.initialize()
-                logger.info("Successfully connected to subtensor.")
+                logger.success("Successfully connected to subtensor.")
                 return async_subtensor
     except RetryError:
         logger.error(f"Failed to connect to subtensor after {max_retries} attempts.")
