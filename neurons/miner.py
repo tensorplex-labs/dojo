@@ -13,6 +13,7 @@ from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject, get_epoch_time, serve_axon
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
+from dojo.chain import parse_block_headers
 from dojo.protocol import (
     Heartbeat,
     ScoringResult,
@@ -463,5 +464,6 @@ class Miner(aobject):
 
     async def block_headers_callback(self, block: dict):
         logger.trace(f"Received block headers{block}")
-        block_number = int(block.get("header", {}).get("number"))
+        block_header = parse_block_headers(block)
+        block_number = block_header.number.to_int()
         self.block = block_number

@@ -43,6 +43,7 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
+from dojo.chain import parse_block_headers
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -1420,6 +1421,7 @@ class Validator:
         return hotkey_to_dojo_task_scores_and_gt
 
     async def block_headers_callback(self, block: dict):
-        logger.trace(f"Received block headers{block}")
-        block_number = int(block.get("header", {}).get("number"))
+        logger.trace(f"Received block headers {block}")
+        block_header = parse_block_headers(block)
+        block_number = block_header.number.to_int()
         self._last_block = block_number

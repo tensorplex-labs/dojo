@@ -8,6 +8,7 @@ import websockets
 from bittensor.utils.btlogging import logging as logger
 
 from commons.objects import ObjectManager
+from dojo.chain import parse_block_headers
 
 BLOCK_TIME = 12
 WS_OPEN_TIMEOUT = 30
@@ -156,6 +157,7 @@ async def start_block_subscriber(
                             and "result" in data["params"]
                         ):
                             block_header = data["params"]["result"]
+                            logger.debug(f"Got data: {data}")
                             await process_block(block_header)
 
                         elif "error" in data:
@@ -240,7 +242,10 @@ async def start_block_subscriber(
 
 
 async def your_callback(block: dict):
-    logger.success(f"Received block: {block}")
+    logger.trace(f"Received block headers {block}")
+    block_header = parse_block_headers(block)
+    block_number = int(block_header.number, 16)
+    logger.info(f"Parsed block number: {block_number}")
 
 
 async def main():
