@@ -17,7 +17,6 @@ import torch
 from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from torch.nn import functional as F
-from websocket import create_connection
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
@@ -43,6 +42,7 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
+from dojo.chain import parse_block_headers
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -533,7 +533,10 @@ class Validator:
             if hasattr(self.subtensor.substrate, "websocket"):
                 self.subtensor.substrate.websocket.close()
 
-            self.subtensor = bt.subtensor(self.subtensor.config)
+            if hasattr(self.subtensor.substrate, "ws"):
+                self.subtensor.substrate.ws.close()
+
+            self.subtensor = bt.subtensor(config=self.subtensor.config)
             await asyncio.sleep(1)
             return True
         except Exception as e:
@@ -552,42 +555,6 @@ class Validator:
             except Exception as e:
                 logger.error(f"Unexpected error checking connection: {e}")
                 return False
-
-    async def _ensure_subtensor_ws_connected(
-        self, max_attempts: int = 5, sleep: int = 3
-    ):
-        if not self.subtensor.substrate.websocket:
-            logger.warning("Substrate websocket not initialized, skipping connection")
-            return False
-
-        attempts = 0
-        while (
-            not self.subtensor.substrate.websocket.connected and attempts < max_attempts
-        ):
-            try:
-                self.subtensor.substrate.websocket = create_connection(
-                    url=self.subtensor.substrate.url,  # type: ignore
-                    timeout=10,
-                    **self.subtensor.substrate.ws_options,
-                )
-                if self.subtensor.substrate.websocket.connected:
-                    logger.debug(
-                        f"Successfully connected to substrate websocket on attempt {attempts}"
-                    )
-                    return True
-                else:
-                    await asyncio.sleep(sleep)
-            finally:
-                attempts += 1
-
-        if not self.subtensor.substrate.websocket.connected:
-            logger.error(
-                "Failed to connect to substrate websocket after maximum attempts"
-            )
-            return False
-
-        logger.debug("Substrate websocket is already connected")
-        return True
 
     # ---------------------------------------------------------------------------- #
     #                         VALIDATOR CORE FUNCTIONS                             #
@@ -1426,6 +1393,7 @@ class Validator:
         return hotkey_to_dojo_task_scores_and_gt
 
     async def block_headers_callback(self, block: dict):
-        logger.trace(f"Received block headers{block}")
-        block_number = int(block.get("header", {}).get("number"))
+        logger.trace(f"Received block headers {block}")
+        block_header = parse_block_headers(block)
+        block_number = block_header.number.to_int()
         self._last_block = block_number
