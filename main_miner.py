@@ -26,7 +26,9 @@ async def main():
         asyncio.create_task(miner.log_miner_status()),
         asyncio.create_task(miner.run()),
         asyncio.create_task(
-            start_block_subscriber(callbacks=[miner.block_headers_callback])
+            start_block_subscriber(
+                callbacks=[miner.block_headers_callback], max_interval_sec=60
+            )
         ),
     ]
 

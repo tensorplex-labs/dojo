@@ -16,9 +16,9 @@ WS_RECV_TIMEOUT = 30
 
 
 class SubscriptionWatchdog:
-    def __init__(self, max_block_interval: float):
+    def __init__(self, max_interval_sec: float):
         self.last_block_time = datetime.now()
-        self.max_block_interval = max_block_interval
+        self.max_interval_sec = max_interval_sec
         self.is_healthy = True
 
     def update(self):
@@ -29,13 +29,11 @@ class SubscriptionWatchdog:
     def check_health(self) -> bool:
         """Checks if the subscription is healthy by comparing the time since the last block to the max block interval."""
         time_since_last_block = (datetime.now() - self.last_block_time).total_seconds()
-        self.is_healthy = time_since_last_block <= self.max_block_interval
+        self.is_healthy = time_since_last_block <= self.max_interval_sec
         return self.is_healthy
 
 
-async def monitor_subscription(
-    watchdog: SubscriptionWatchdog, max_block_interval: float
-):
+async def monitor_subscription(watchdog: SubscriptionWatchdog, max_interval_sec: float):
     """Monitors the health of the block subscription by checking the time since the last block.
 
     Runs continuously in the background, checking every 10 seconds if a new block has been
@@ -43,7 +41,7 @@ async def monitor_subscription(
     the max interval, raises a ConnectionError.
 
     Raises:
-        ConnectionError: When no new blocks have been received for longer than max_block_interval seconds,
+        ConnectionError: When no new blocks have been received for longer than max_interval_sec seconds,
                        indicating the subscription has likely failed.
     """
     while True:
@@ -52,7 +50,7 @@ async def monitor_subscription(
 
         if not watchdog.check_health():
             logger.warning(
-                f"No blocks received for {time_since_last:.1f} seconds! (max allowed: {max_block_interval})"
+                f"No blocks received for {time_since_last:.1f} seconds! (max allowed: {max_interval_sec})"
             )
             # Create a specific exception type for this case
             raise ConnectionError(
@@ -66,25 +64,25 @@ async def monitor_subscription(
 
 async def start_block_subscriber(
     callbacks: list[Callable[..., Awaitable[Any] | Any]],
+    max_interval_sec: float,
     url: str = ObjectManager.get_config().subtensor.chain_endpoint,  # type: ignore
     retry_delay: float = 5.0,
-    max_block_interval: float = 2 * BLOCK_TIME,
     max_retries: int | None = None,
 ):
     """Starts a block subscriber that monitors the health of the block subscription.
 
     Args:
         callbacks (list[Callable[..., Awaitable[Any] | Any]]): The callback functions to call when a block is received, callback functions may be asynchronous or synchronous.
+        max_interval_sec (float): The maximum expected interval between websocket messages.
         url (str, optional): The URL of the substrate node. Defaults to ObjectManager.get_config().subtensor.chain_endpoint.
         retry_delay (float, optional): The delay between retries. Defaults to 5.0.
         max_retries (int | None, optional): The maximum number of retries. Defaults to None.
-        max_block_interval (float, optional): The maximum interval between blocks. Defaults to 2*BLOCK_TIME.
 
     Raises:
-        ConnectionError: When no new blocks have been received for longer than max_block_interval seconds,
+        ConnectionError: When no new blocks have been received for longer than max_interval_sec seconds,
                            indicating the subscription has likely failed.
     """
-    watchdog = SubscriptionWatchdog(max_block_interval)
+    watchdog = SubscriptionWatchdog(max_interval_sec)
     retry_count = 0
 
     async def process_block(block_header):
@@ -145,7 +143,7 @@ async def start_block_subscriber(
                     try:
                         # Add a timeout to recv() to prevent hanging indefinitely
                         response = await asyncio.wait_for(
-                            websocket.recv(), timeout=max_block_interval
+                            websocket.recv(), timeout=max_interval_sec
                         )
                         data = json.loads(response)
 
@@ -164,7 +162,7 @@ async def start_block_subscriber(
 
                     except asyncio.TimeoutError:
                         logger.warning(
-                            f"No message received for {max_block_interval} seconds, checking connection..."
+                            f"No message received for {max_interval_sec} seconds, checking connection..."
                         )
                         # Send a ping to verify the connection is still alive
                         pong_waiter = await websocket.ping()
@@ -190,7 +188,7 @@ async def start_block_subscriber(
             # Create the subscription task
             logger.info("Starting new WebSocket subscription...")
             monitor_task = asyncio.create_task(
-                monitor_subscription(watchdog, max_block_interval)
+                monitor_subscription(watchdog, max_interval_sec)
             )
             subscription_task = asyncio.create_task(subscribe_to_blocks())
 
@@ -255,7 +253,7 @@ async def main():
         # Will raise an exception if no blocks received for 60 seconds
         await start_block_subscriber(
             [your_callback, sync_callback],
-            max_block_interval=12,
+            max_interval_sec=60,
             retry_delay=5.0,
         )
     except KeyboardInterrupt:
