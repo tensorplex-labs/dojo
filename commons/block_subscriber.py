@@ -36,7 +36,7 @@ class SubscriptionWatchdog:
 async def monitor_subscription(watchdog: SubscriptionWatchdog, max_interval_sec: float):
     """Monitors the health of the block subscription by checking the time since the last block.
 
-    Runs continuously in the background, checking every 10 seconds if a new block has been
+    Runs continuously in the background, checking every N seconds if a new block has been
     received within the maximum allowed interval. If no blocks are received for longer than
     the max interval, raises a ConnectionError.
 
@@ -93,6 +93,7 @@ async def start_block_subscriber(
 
         # execute all callbacks
         for callback in callbacks:
+            logger.debug(f"Executing callback: {callback.__name__}")
             try:
                 if asyncio.iscoroutinefunction(callback):
                     await callback(block_header)
@@ -154,16 +155,19 @@ async def start_block_subscriber(
                             and "result" in data["params"]
                         ):
                             block_header = data["params"]["result"]
-                            logger.debug(f"Got data: {data}")
+                            logger.trace(f"Got data: {data}")
                             await process_block(block_header)
 
                         elif "error" in data:
-                            logger.warning(f"Received error from node: {data['error']}")
+                            logger.warning(
+                                f"Received error from subscription: {data['error']}"
+                            )
 
                     except asyncio.TimeoutError:
                         logger.warning(
                             f"No message received for {max_interval_sec} seconds, checking connection..."
                         )
+
                         # Send a ping to verify the connection is still alive
                         pong_waiter = await websocket.ping()
                         try:
@@ -174,7 +178,7 @@ async def start_block_subscriber(
                             raise ConnectionError("WebSocket ping timed out")
 
         except asyncio.CancelledError:
-            logger.error("Task cancelled...")
+            logger.error("Subscription task cancelled...")
             raise
         except TimeoutError as e:
             logger.error(f"WebSocket timeout: {e}")
@@ -257,7 +261,7 @@ async def main():
             retry_delay=5.0,
         )
     except KeyboardInterrupt:
-        logger.info("Shutting down...")
+        logger.info("\nShutting down...")
     except Exception as e:
         logger.error(f"Subscription failed: {e}")
 
