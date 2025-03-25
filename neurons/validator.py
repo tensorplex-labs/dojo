@@ -1086,10 +1086,7 @@ class Validator:
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for result in results:
-                if result is None:
-                    logger.info("Result is None, skipping")
-                    pass
-                elif isinstance(result, TaskSynapseObject):
+                if isinstance(result, TaskSynapseObject):
                     updated_miner_responses.append(result)
                 elif isinstance(result, InvalidMinerResponse):
                     logger.error(f"Invalid miner response: {result}")
@@ -1131,7 +1128,9 @@ class Validator:
         )
 
         if not task_results:
-            logger.debug("No task results from miner, skipping")
+            logger.info(
+                f"No task results from miner: {miner_response.axon.hotkey} for validator task id: {miner_response.task_id}, platform task id: {miner_response.dojo_task_id}, skipping"
+            )
             return None
 
         # Update the task results in the database
