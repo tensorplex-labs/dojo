@@ -139,9 +139,7 @@ class Validator:
         if not axons:
             logger.warning("No axons to send consensus to... skipping")
         else:
-            logger.debug(
-                f"Sending back scores to miners for task id: {synapse.task_id}"
-            )
+            logger.info(f"Sending back scores to miners for task id: {synapse.task_id}")
 
         await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=30
@@ -231,16 +229,16 @@ class Validator:
         if isinstance(final_uids, np.ndarray):
             final_uids = torch.from_numpy(final_uids).to("cpu")
 
-        logger.debug(f"weights:\n{safe_normalized_weights}")
-        logger.debug(f"uids:\n{uids}")
+        logger.info(f"weights:\n{safe_normalized_weights}")
+        logger.info(f"uids:\n{uids}")
 
         _terminal_plot(
             f"pre-processed weights, block: {self.block}",
             safe_normalized_weights.numpy(),
         )
 
-        logger.debug(f"final weights:\n{final_weights}")
-        logger.debug(f"final uids:\n{final_uids}")
+        logger.info(f"final weights:\n{final_weights}")
+        logger.info(f"final uids:\n{final_uids}")
 
         _terminal_plot(
             f"final weights, block: {self.block}",
@@ -281,7 +279,7 @@ class Validator:
         while attempt < max_attempts and not result:
             message: str = ""
             try:
-                logger.debug(
+                logger.info(
                     f"Set weights attempt {attempt + 1}/{max_attempts} at block: {self.block},time: {time.time()}"
                 )
 
@@ -382,7 +380,7 @@ class Validator:
                 logger.warning("Old hotkey found from previous metagraph")
                 continue
 
-            logger.debug(f"Score for hotkey {key} is {value}")
+            logger.info(f"Score for hotkey {key} is {value}")
             rewards[uid] = value
 
             # self.scores is a tensor already based on uids
@@ -392,7 +390,7 @@ class Validator:
             if uid < len(self.scores):
                 existing_scores[uid] = self.scores[uid]
 
-        logger.debug(f"Rewards: {rewards}")
+        logger.info(f"Rewards: {rewards}")
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
@@ -410,7 +408,7 @@ class Validator:
             _terminal_plot(
                 f"scores after update, block: {self.block}", self.scores.numpy()
             )
-        logger.debug(f"Updated scores: {self.scores}")
+        logger.info(f"Updated scores: {self.scores}")
 
     async def save_state(
         self,
@@ -426,7 +424,7 @@ class Validator:
             await ScoreStorage.save(self.scores)
             logger.success(f"📦 Saved validator state with scores: {self.scores}")
         except EmptyScores as e:
-            logger.debug(f"No need to to save validator state: {e}")
+            logger.info(f"No need to to save validator state: {e}")
         except Exception as e:
             logger.error(f"Failed to save validator state: {e}")
 
@@ -576,7 +574,7 @@ class Validator:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
             try:
                 all_miner_uids = await extract_miner_uids()
-                logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
+                logger.info(f"Sending heartbeats to {len(all_miner_uids)} miners")
 
                 axons: list[bt.AxonInfo] = [
                     self.metagraph.axons[uid] for uid in all_miner_uids
@@ -638,7 +636,7 @@ class Validator:
                         )
 
                 if self._should_exit:
-                    logger.debug("Validator should stop...")
+                    logger.info("Validator should stop...")
                     break
 
                 # Clear history after successful operations and to avoid memory leak
@@ -676,7 +674,7 @@ class Validator:
                     hours=2
                 )
                 expire_to = datetime_as_utc(datetime.now(timezone.utc))
-                logger.debug(
+                logger.info(
                     f"Updating with expire_from: {expire_from} and expire_to: {expire_to}"
                 )
 
@@ -717,7 +715,7 @@ class Validator:
                     for hotkey, scores in hotkey_to_all_scores.items()
                     if scores
                 }
-                logger.debug(
+                logger.info(
                     f"📝 Got hotkey to score across all tasks between expire_at from:{expire_from} and expire_at to:{expire_to}: {final_hotkey_to_score}"
                 )
                 await self.update_scores(hotkey_to_scores=final_hotkey_to_score)
@@ -937,7 +935,7 @@ class Validator:
         synapse.ground_truth = ground_truth
         synapse.dendrite.hotkey = self.vali_hotkey
 
-        logger.debug("Attempting to saving dendrite response")
+        logger.info("Attempting to saving dendrite response")
         if not await ORM.save_task(
             validator_task=synapse,
             miner_responses=valid_miner_responses,
@@ -1077,7 +1075,7 @@ class Validator:
         for i in range(0, len(task.miner_responses), batch_size):
             batch = task.miner_responses[i : i + batch_size]
 
-            logger.debug(f"Processing batch {i // batch_size + 1} of {num_batches}")
+            logger.info(f"Processing batch {i // batch_size + 1} of {num_batches}")
 
             tasks = [
                 self._update_miner_response(miner_response, obfuscated_to_real_model_id)
@@ -1152,7 +1150,7 @@ class Validator:
 
         # Check for completion responses
         if not miner_response.completion_responses:
-            logger.debug("No completion responses, skipping")
+            logger.info("No completion responses, skipping")
             return None
 
         for completion in miner_response.completion_responses:
@@ -1195,7 +1193,7 @@ class Validator:
             )
 
             if not responses or not responses[0]:
-                logger.debug(
+                logger.info(
                     f"No results from miner {miner_hotkey} for task {dojo_task_id}"
                 )
                 return []
@@ -1348,7 +1346,7 @@ class Validator:
             )
             return task.validator_task.task_id, {}
 
-        logger.debug(
+        logger.info(
             f"📝 Received {len(task.miner_responses)} responses from miners. "
             f"Processed {len(hotkey_to_completion_responses.keys())} responses for scoring."
         )
