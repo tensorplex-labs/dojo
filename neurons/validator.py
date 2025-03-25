@@ -279,6 +279,7 @@ class Validator:
         attempt = 0
         result = False
         while attempt < max_attempts and not result:
+            message: str = ""
             try:
                 logger.debug(
                     f"Set weights attempt {attempt + 1}/{max_attempts} at block: {self.block},time: {time.time()}"
@@ -604,7 +605,7 @@ class Validator:
                 async with self._uids_alock:
                     self._active_miner_uids = active_uids
 
-                logger.debug(
+                logger.info(
                     f"⬇️ Heartbeats acknowledged by active miners: {sorted(active_uids)}"
                 )
             except Exception as e:

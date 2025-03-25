@@ -1,7 +1,8 @@
 import asyncio
 import json
+from collections.abc import Awaitable
 from datetime import datetime
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 import websockets
 from bittensor.utils.btlogging import logging as logger
@@ -17,9 +18,9 @@ WS_RECV_TIMEOUT = 30
 
 class SubscriptionWatchdog:
     def __init__(self, max_interval_sec: float):
-        self.last_block_time = datetime.now()
-        self.max_interval_sec = max_interval_sec
-        self.is_healthy = True
+        self.last_block_time: datetime = datetime.now()
+        self.max_interval_sec: float = float(max_interval_sec)
+        self.is_healthy: bool = True
 
     def update(self):
         """Updates the last block time and marks the subscription as healthy."""
@@ -63,9 +64,9 @@ async def monitor_subscription(watchdog: SubscriptionWatchdog, max_interval_sec:
 
 
 async def start_block_subscriber(
-    callbacks: list[Callable[..., Awaitable[Any] | Any]],
+    callbacks: list[Callable[..., Awaitable[Any] | Any]],  # pyright: ignore[reportExplicitAny]
     max_interval_sec: float,
-    url: str = ObjectManager.get_config().subtensor.chain_endpoint,  # type: ignore
+    url: str = ObjectManager.get_config().subtensor.chain_endpoint,
     retry_delay: float = 5.0,
     max_retries: int | None = None,
 ):
@@ -243,13 +244,15 @@ async def start_block_subscriber(
 
 
 async def your_callback(block: dict):
-    logger.trace(f"Received block headers {block}")
+    logger.info("Calling asynchronous callback function")
+    logger.info(f"Received block headers {block}")
     block_header = parse_block_headers(block)
     logger.info(f"Parsed block number: {block_header.number.to_int()}")
 
 
 def sync_callback(block: dict):
     logger.info("Calling synchronous callback function")
+    logger.info(f"Received block headers {block}")
 
 
 async def main():
