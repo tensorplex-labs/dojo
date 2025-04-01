@@ -400,9 +400,9 @@ class Validator:
             _terminal_plot(
                 f"scores before update, block: {self.block}", self.scores.numpy()
             )
-            assert existing_scores.shape == rewards.shape, (
-                "Scores and rewards must be the same length when calculating moving average"
-            )
+            assert (
+                existing_scores.shape == rewards.shape
+            ), "Scores and rewards must be the same length when calculating moving average"
 
             self.scores = alpha * rewards + (1 - alpha) * existing_scores
             self.scores = torch.clamp(self.scores, min=0.0)
