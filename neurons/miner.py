@@ -22,7 +22,6 @@ from dojo.protocol import (
     TaskResultRequest,
     TaskSynapseObject,
 )
-from dojo.utils.config import get_config
 
 
 class Miner(aobject):
@@ -32,13 +31,19 @@ class Miner(aobject):
 
     async def __init__(self):
         self.config = ObjectManager.get_config()
-        logger.info(self.config)
+        logger.info(self.config.model_dump_json())
 
         logger.info("Setting up bittensor objects....")
-        self.wallet = bittensor.wallet(config=self.config)
+        self.wallet = bittensor.wallet(
+            name=self.config.wallet.coldkey,
+            hotkey=self.config.wallet.hotkey,
+            path=self.config.wallet.path,
+        )
         logger.info(f"Wallet: {self.wallet}")
         # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bittensor.axon(wallet=self.wallet, port=self.config.axon.port)
+        self.axon: bittensor.axon = bittensor.axon(
+            wallet=self.wallet, port=self.config.axon.port
+        )
         logger.info(f"Axon: {self.axon}")
 
         await self.init_metagraphs()
@@ -46,7 +51,7 @@ class Miner(aobject):
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.subnet_metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
         logger.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
+            f"Running neuron on subnet: {self.config.chain.netuid} with uid {self.uid}"
         )
 
         # Attach determiners which functions are called when servicing a request.
@@ -131,7 +136,9 @@ class Miner(aobject):
 
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
-        logger.info(f"Serving miner axon {self.axon} with netuid: {self.config.netuid}")
+        logger.info(
+            f"Serving miner axon {self.axon} with netuid: {self.config.chain.netuid}"
+        )
         serve_success = await serve_axon(self.subtensor, self.axon, self.config)
         if serve_success:
             logger.success("Successfully served axon for miner!")
@@ -337,11 +344,6 @@ class Miner(aobject):
             synapse, "scoring result", "Valid scoring result request from validator"
         )
 
-    def extract_synapse_info(self, synapse: bittensor.Synapse) -> str:
-        caller_hotkey = synapse.dendrite.hotkey
-        ip_addr = synapse.dendrite.ip or "Unknown IP"
-        return f"Hotkey: {caller_hotkey}, IP: {ip_addr}"
-
     async def _blacklist_function(
         self, synapse, request_tag: str, valid_msg: str
     ) -> Tuple[bool, str]:
@@ -371,7 +373,7 @@ class Miner(aobject):
 
         logger.debug(f"Got {request_tag} request from {caller_hotkey}")
 
-        if get_config().ignore_min_stake:
+        if self.config.test.ignore_min_stake:
             message = (
                 f"Ignoring min stake required: {VALIDATOR_MIN_STAKE} for {caller_hotkey}, "
                 "YOU SHOULD NOT SEE THIS when you are running a miner on mainnet"
@@ -403,7 +405,11 @@ class Miner(aobject):
         current_timestamp = datetime.fromtimestamp(get_epoch_time())
         dt = current_timestamp - datetime.fromtimestamp(synapse.epoch_timestamp)
         priority = float(dt.total_seconds())
-        logger.debug(f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}")
+        if synapse.dendrite:
+            logger.debug(
+                f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}"
+            )
+
         return priority
 
     async def resync_metagraph(self):
@@ -442,12 +448,12 @@ class Miner(aobject):
             subtensor = self.subtensor
 
         if not await subtensor.is_hotkey_registered(
-            netuid=self.config.netuid,
+            netuid=self.config.chain.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
             block=self.block,
         ):
             logger.error(
-                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
+                f"Wallet: {self.wallet} is not registered on netuid {self.config.chain.netuid}."
                 f" Please register the hotkey using `btcli s register` before trying again"
             )
             self._cleanup()

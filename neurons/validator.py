@@ -6,9 +6,9 @@ import random
 import time
 import traceback
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
-from typing import AsyncGenerator, Dict, List, TypeAlias
+from typing import TypeAlias
 
 import aiohttp
 import bittensor as bt
@@ -16,6 +16,7 @@ import numpy as np
 import torch
 from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.weight_utils import process_weights_for_netuid
+from bittensor_wallet.bittensor_wallet import wallet
 from torch.nn import functional as F
 
 import dojo
@@ -38,7 +39,6 @@ from commons.utils import (
     datetime_as_utc,
     get_epoch_time,
     get_new_uuid,
-    initialise,
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
@@ -57,18 +57,22 @@ from dojo.protocol import (
     TaskSynapseObject,
     TaskTypeEnum,
 )
-from dojo.utils.config import get_config
+from dojo.settings import Settings
 from dojo.utils.uids import extract_miner_uids, is_miner
 from entrypoints.analytics_upload import run_analytics_upload
 
-ObfuscatedModelMap: TypeAlias = Dict[str, str]
+ObfuscatedModelMap: TypeAlias = dict[str, str]
 
 
 latest_local = get_latest_git_tag()
 latest_remote = get_latest_remote_tag()
-if latest_local != latest_remote:
-    logger.warn("Your repository is not up to date, and may fail to set weights.")
-    logger.warn(
+if (
+    latest_local
+    and latest_remote
+    and latest_local.strip("v") != latest_remote.strip("v")
+):
+    logger.warning("Your repository is not up to date, and may fail to set weights.")
+    logger.warning(
         f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
     )
 
@@ -81,9 +85,7 @@ class Validator:
     _threshold = 0.1
     _active_miner_uids: set[int] = set()
 
-    subtensor: bt.subtensor
-    wallet: bt.wallet  # type: ignore
-    metagraph: bt.metagraph
+    metagraph: bt.Metagraph
     spec_version: int = get_spec_version()
 
     def __init__(self):
@@ -94,15 +96,31 @@ class Validator:
 
         self.loop = asyncio.get_event_loop()
         # TODO @dev WIP from BaseNeuron
-        self.config = ObjectManager.get_config()
-
-        # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
-        self.device = self.config.neuron.device
+        self.config: Settings = ObjectManager.get_config()
 
         # Log the configuration for reference.
-        logger.info(self.config)
+        logger.info(self.config.model_dump_json())
 
-        self.wallet, self.subtensor, self.metagraph, self.axon = initialise(self.config)
+        # Build Bittensor objects
+        # These are core Bittensor classes to interact with the network.
+        logger.info("Setting up bittensor objects....")
+        # The wallet holds the cryptographic key pairs for the miner.
+        self.wallet: wallet.Wallet = wallet.Wallet(
+            name=self.config.wallet.coldkey,
+            hotkey=self.config.wallet.hotkey,
+            path=self.config.wallet.path,
+        )
+        logger.info(f"Wallet: {wallet}")
+        # The subtensor is our connection to the Bittensor blockchain.
+        self.subtensor: bt.Subtensor = bt.Subtensor(
+            network=self.config.chain.subtensor_network
+        )
+        logger.info(f"Subtensor: {self.subtensor}")
+        # The metagraph holds the state of the network, letting us know about other validators and miners.
+        self.metagraph: bt.Metagraph = self.subtensor.metagraph(
+            netuid=self.config.chain.netuid
+        )
+        logger.info(f"Metagraph: {self.metagraph}")
 
         # Save validator hotkey
         self.vali_hotkey = self.wallet.hotkey.ss58_address
@@ -110,9 +128,9 @@ class Validator:
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.metagraph.hotkeys.index(self.vali_hotkey)
         logger.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
+            f"Running neuron on subnet: {self.config.chain.netuid} with uid {self.uid}"
         )
-        self.step = 0
+        self.step: int = 0
         self.last_anal_upload_time: datetime | None = None
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
@@ -124,17 +142,18 @@ class Validator:
         self.check_registered()
 
         # Run score migration before loading state
-        migration_success = self.loop.run_until_complete(ScoreStorage.migrate_from_db())
+        migration_success: bool = self.loop.run_until_complete(
+            ScoreStorage.migrate_from_db()
+        )
         if not migration_success:
             logger.error(
                 "Score migration failed - cannot continue without valid scores"
             )
             raise RuntimeError("Score migration failed - validator cannot start")
 
-        self.executor = ThreadPoolExecutor(max_workers=2)
         self.load_state()
 
-    async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
+    async def send_scores(self, synapse: ScoringResult, hotkeys: list[str]):
         """Send consensus score back to miners who participated in the request."""
         axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
         if not axons:
@@ -161,7 +180,7 @@ class Validator:
 
     @staticmethod
     async def _obfuscate_completion_files(
-        completion_responses: List[CompletionResponse],
+        completion_responses: list[CompletionResponse],
     ):
         """Obfuscate HTML files in each completion response."""
         for completion in completion_responses:
@@ -220,7 +239,7 @@ class Validator:
         ) = process_weights_for_netuid(  # type: ignore
             uids=uids.numpy(),
             weights=safe_normalized_weights.numpy(),
-            netuid=self.config.netuid,  # type: ignore
+            netuid=self.config.chain.netuid,
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
@@ -277,6 +296,7 @@ class Validator:
         max_attempts = 5
         attempt = 0
         result = False
+        message = ""
         while attempt < max_attempts and not result:
             message: str = ""
             try:
@@ -294,7 +314,7 @@ class Validator:
 
                 result, message = self.subtensor.set_weights(
                     wallet=self.wallet,
-                    netuid=self.config.netuid,  # type: ignore
+                    netuid=self.config.chain.netuid,  # type: ignore
                     uids=uids.tolist(),
                     weights=weights.tolist(),
                     wait_for_finalization=False,
@@ -394,7 +414,7 @@ class Validator:
         logger.info(f"Rewards: {rewards}")
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
-        alpha: float = self.config.neuron.moving_average_alpha
+        alpha = self.config.score.synthetic_ema_alpha
         # don't acquire lock here because we're already acquiring it in the CALLER
         async with self._scores_alock:
             _terminal_plot(
@@ -486,7 +506,7 @@ class Validator:
         """
         return (
             self.block - self.metagraph.last_update[self.uid]
-        ) > self.config.neuron.epoch_length
+        ) > self.config.chain.epoch_length
 
     def should_set_weights(self) -> bool:
         # Don't set weights on initialization.
@@ -496,7 +516,7 @@ class Validator:
         # Define appropriate logic for when set weights.
         return (
             self.block - self.metagraph.last_update[self.uid]
-        ) > self.config.neuron.epoch_length
+        ) > self.config.chain.epoch_length
 
     async def sync(self):
         has_connection = await self._ensure_subtensor_connection()
@@ -529,13 +549,11 @@ class Validator:
             logger.info(
                 f"Attempting to reconnect to subtensor (attempt {self._block_check_attempts}/{self.MAX_BLOCK_CHECK_ATTEMPTS})..."
             )
-            if hasattr(self.subtensor.substrate, "websocket"):
-                self.subtensor.substrate.websocket.close()
-
             if hasattr(self.subtensor.substrate, "ws"):
                 self.subtensor.substrate.ws.close()
 
-            self.subtensor = bt.subtensor(config=self.subtensor.config)
+            self.subtensor = bt.subtensor(self.config.chain.subtensor_network)
+
             await asyncio.sleep(1)
             return True
         except Exception as e:
@@ -587,7 +605,7 @@ class Validator:
 
                 for i in range(0, len(axons), batch_size):
                     batch = axons[i : i + batch_size]
-                    responses: List[Heartbeat] = await self.dendrite.forward(
+                    responses: list[Heartbeat] = await self.dendrite.forward(
                         axons=batch, synapse=Heartbeat(), deserialize=False, timeout=12
                     )
                     # Process batch responses
@@ -807,12 +825,12 @@ class Validator:
         """
         try:
             is_registered = self.subtensor.is_hotkey_registered(
-                netuid=self.config.netuid,
+                netuid=self.config.chain.netuid,
                 hotkey_ss58=self.vali_hotkey,
             )
             if not is_registered:
                 raise ValueError(
-                    f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}. "
+                    f"Wallet: {self.wallet} is not registered on netuid {self.config.chain.netuid}. "
                     f"Please register the hotkey using `btcli s register` before trying again"
                 )
             return True
@@ -824,8 +842,7 @@ class Validator:
     # Validator Run helper functions
     async def _cleanup(self):
         """Handle cleanup operations when shutting down"""
-        self.axon.stop()
-        logger.success("Validator axon stopped")
+        logger.success("Validator cleanup completed")
 
     async def _generate_synthetic_request(
         self,
@@ -845,7 +862,7 @@ class Validator:
                 return None, None, {}
 
             # Create criteria for each completion response
-            criteria: List[CriteriaType] = [
+            criteria: list[CriteriaType] = [
                 ScoreCriteria(
                     min=1.0,
                     max=100.0,
@@ -915,11 +932,11 @@ class Validator:
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{sel_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
-        miner_responses: List[TaskSynapseObject] = await self._send_shuffled_requests(
+        miner_responses: list[TaskSynapseObject] = await self._send_shuffled_requests(
             self.dendrite, axons, synapse
         )
 
-        valid_miner_responses: List[TaskSynapseObject] = []
+        valid_miner_responses: list[TaskSynapseObject] = []
         for response in miner_responses:
             try:
                 if not response.dojo_task_id:
@@ -985,7 +1002,7 @@ class Validator:
 
     @staticmethod
     async def _send_shuffled_requests(
-        dendrite: bt.dendrite, axons: List[bt.AxonInfo], synapse: TaskSynapseObject
+        dendrite: bt.dendrite, axons: list[bt.AxonInfo], synapse: TaskSynapseObject
     ) -> list[TaskSynapseObject]:
         """
         Send shuffled requests to miners in batches for parallel processing.
@@ -1052,17 +1069,17 @@ class Validator:
         return all_responses
 
     # Validator update_score_and_send_feedback helper functions
-    def _get_validator_hotkeys(self) -> List[str]:
+    def _get_validator_hotkeys(self) -> list[str]:
         """Get the hotkeys of the validators in the metagraph.
 
         Returns a list of validator hotkeys.
         """
-        validator_hotkeys: List[str] = [
+        validator_hotkeys: list[str] = [
             hotkey
             for uid, hotkey in enumerate(self.metagraph.hotkeys)
             if not is_miner(self.metagraph, uid)
         ]
-        if get_config().ignore_min_stake:
+        if self.config.test.ignore_min_stake:
             validator_hotkeys.append(self.vali_hotkey)
         return validator_hotkeys
 
@@ -1071,7 +1088,7 @@ class Validator:
         batch_size: int,
         expire_from: datetime,
         expire_to: datetime,
-    ) -> AsyncGenerator[List[DendriteQueryResponse], None]:
+    ) -> AsyncGenerator[list[DendriteQueryResponse], None]:
         """Get task in batches from the database"""
         async for task_batch, has_more_batches in ORM.get_expired_tasks(
             batch_size=batch_size,
@@ -1090,16 +1107,16 @@ class Validator:
 
     async def _update_task_results(
         self, task: DendriteQueryResponse
-    ) -> List[TaskSynapseObject]:
+    ) -> list[TaskSynapseObject]:
         """
         Returns a list of updated miner responses
         """
         task_id: str = task.validator_task.task_id
-        obfuscated_to_real_model_id: Dict[str, str] = await ORM.get_real_model_ids(
+        obfuscated_to_real_model_id: dict[str, str] = await ORM.get_real_model_ids(
             task_id
         )
 
-        updated_miner_responses: List[TaskSynapseObject] = []
+        updated_miner_responses: list[TaskSynapseObject] = []
 
         batch_size = 30
         # Returns ceiling of the division to get number of batches to process
@@ -1132,7 +1149,7 @@ class Validator:
     async def _update_miner_response(
         self,
         miner_response: TaskSynapseObject,
-        obfuscated_to_real_model_id: Dict[str, str],
+        obfuscated_to_real_model_id: dict[str, str],
     ) -> TaskSynapseObject | None:
         """
         Gets task results from a miner. Calculates the average across all task results.
@@ -1154,7 +1171,7 @@ class Validator:
             )
 
         # Fetch task results
-        task_results: List[TaskResult] = await self._get_task_results_from_miner(
+        task_results: list[TaskResult] = await self._get_task_results_from_miner(
             miner_response.axon.hotkey, miner_response.dojo_task_id
         )
 
@@ -1276,7 +1293,7 @@ class Validator:
     async def _update_miner_raw_scores_batch(
         self,
         task_id: str,
-        miner_responses: List[TaskSynapseObject],
+        miner_responses: list[TaskSynapseObject],
         max_retries: int = 20,
     ) -> None:
         """
@@ -1322,7 +1339,7 @@ class Validator:
 
     async def _score_task(
         self, task: DendriteQueryResponse
-    ) -> tuple[str, Dict[str, float]]:
+    ) -> tuple[str, dict[str, float]]:
         """Process a task and calculate the scores for the miner responses"""
         if not task.miner_responses:
             logger.warning("📝 No miner responses, skipping task")
@@ -1395,7 +1412,7 @@ class Validator:
         return task.validator_task.task_id, hotkey_to_scores
 
     async def _get_dojo_task_scores_and_gt(
-        self, miner_responses: List[TaskSynapseObject]
+        self, miner_responses: list[TaskSynapseObject]
     ):
         """Get the scores and ground truth for each miner response"""
         hotkey_to_dojo_task_scores_and_gt = []

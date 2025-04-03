@@ -13,7 +13,7 @@ from commons.exceptions import FatalSyntheticGenerationError
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
 from dojo.chain import get_async_subtensor
-from dojo.utils.config import source_dotenv
+from dojo.utils import source_dotenv
 
 source_dotenv()
 
@@ -40,7 +40,6 @@ def _check_fatal_errors(task: asyncio.Task):
 async def _shutdown_validator():
     logger.info("Performing shutdown tasks...")
     validator._should_exit = True
-    validator.executor.shutdown(wait=True)
     validator.subtensor.substrate.close()
     await validator.save_state()
     await SyntheticAPI.close_session()
