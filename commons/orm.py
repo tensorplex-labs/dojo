@@ -24,7 +24,11 @@ from database.mappers import (
 from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.errors import PrismaError
-from database.prisma.models import GroundTruth, ValidatorTask
+from database.prisma.models import (
+    GroundTruth,
+    HFLState,
+    ValidatorTask,
+)
 from database.prisma.types import (
     CriterionWhereInput,
     MinerResponseCreateWithoutRelationsInput,
@@ -661,87 +665,6 @@ class ORM:
             logger.error(f"Error updating miner scores: {e}")
             return False, [mr.miner_hotkey for mr in miner_responses if mr.miner_hotkey]
 
-    # TODO: Remove this as this was only used for wandb logging
-    @staticmethod
-    async def get_scores_and_ground_truth_by_dojo_task_id(
-        dojo_task_id: str,
-    ) -> dict[str, dict[str, float | int | dict | None]]:
-        """
-        Fetch the scores, model IDs from Completion_Response_Model for a given Dojo task ID.
-        Also fetches rank IDs from Ground_Truth_Model for the given Dojo task ID.
-
-        Args:
-            dojo_task_id (str): The Dojo task ID to search for.
-
-        Returns:
-            dict[str, dict[str, float | int | dict | None]]: A dictionary mapping model ID to a dict containing:
-                - score_data: Complete score data including raw_score, normalised_score, etc.
-                - ground_truth_rank_id: The ground truth rank ID for the model
-        """
-        try:
-            # Find the MinerResponse with the given dojo_task_id to get validator_task_id
-            miner_response = await prisma.minerresponse.find_first(
-                where={"dojo_task_id": dojo_task_id},
-                include={
-                    "validator_task_relation": {
-                        "include": {
-                            "completions": True,
-                            "ground_truth": True,
-                        }
-                    }
-                },
-            )
-
-            if not miner_response or not miner_response.validator_task_relation:
-                logger.warning(
-                    f"No validator task found for dojo_task_id: {dojo_task_id}"
-                )
-                return {}
-
-            validator_task = miner_response.validator_task_relation
-
-            # Create mapping of model to ground truth rank_id
-            rank_id_map = {
-                gt.obfuscated_model_id: gt.rank_id
-                for gt in validator_task.ground_truth or []
-            }
-
-            # Extract scores from the completions
-            scores_and_gts = {
-                completion.model: {
-                    "score": None,  # Score will come from MinerScore table
-                    "ground_truth_rank_id": rank_id_map.get(completion.model),
-                }
-                for completion in validator_task.completions or []
-            }
-
-            # Get scores from MinerScore table
-            miner_scores = await prisma.minerscore.find_many(
-                where={"miner_response_id": miner_response.id},
-                include={
-                    "criterion_relation": {"include": {"completion_relation": True}}
-                },
-            )
-
-            # Update scores in the result
-            for score in miner_scores:
-                if (
-                    score.criterion_relation
-                    and score.criterion_relation.completion_relation
-                ):
-                    model = score.criterion_relation.completion_relation.model
-                    if model in scores_and_gts:
-                        score_data = json.loads(score.scores)
-                        scores_and_gts[model]["score_data"] = score_data
-
-            return scores_and_gts
-
-        except Exception as e:
-            logger.error(
-                f"Error fetching completion scores and ground truths for dojo_task_id {dojo_task_id}: {e}"
-            )
-            return {}
-
     @staticmethod
     async def get_processed_tasks(
         batch_size: int = 10,
@@ -894,6 +817,83 @@ class ORM:
         except Exception as e:
             logger.error(f"Error getting SF tasks by status {status}: {e}")
             return []
+
+    @staticmethod
+    async def get_hfl_state_by_current_task_id(task_id: str) -> HFLState | None:
+        try:
+            hfl_state = await prisma.hflstate.find_first(
+                where={"current_task_id": task_id}, include={"ValidatorTask": True}
+            )
+            return hfl_state
+        except:  # noqa: E722
+            logger.error(f"Failed to get HFL State with current task id: {task_id}")
+        return None
+
+    @staticmethod
+    async def get_original_or_parent_sf_task(sf_task_id: str):
+        """
+        Get the original or parent task for scoring purposes.
+
+        ┌─────────────┐       ┌──────┐       ┌──────┐      ┌──────┐     ┌──────┐
+        │Original Task│──────▶│ TF_1 │──────▶│ SF_1 │─────▶│ TF_2 │────▶│ SF_2 │
+        └─────────────┘       └──────┘       └──────┘      └──────┘     └──────┘
+        """
+        hfl_state = await HFLState.prisma().find_first(
+            where={"status": HFLStatusEnum.SF_COMPLETED, "current_task_id": sf_task_id},
+            include={"ValidatorTask": True},
+        )
+        if not hfl_state:
+            return None
+        if hfl_state.current_iteration == 1:
+            original_task = await ValidatorTask.prisma().find_first(
+                where={"id": hfl_state.original_task_id}
+            )
+            if not original_task:
+                logger.error(f"Original task not found for SF task {sf_task_id}")
+            return original_task
+
+        # iterate through states to get original task
+        events = hfl_state.events[::-1]
+        for idx, event in enumerate(events):
+            iteration_num = event["iteration_num"]
+            if iteration_num != hfl_state.current_iteration:
+                continue
+            if event["event_type"] == HFLStatusEnum.SF_COMPLETED:
+                # find the previous task by index
+                # TODO: possible indecerror? add error handling
+                prev_event = events[idx - 2]
+                prev_event_dict = json.loads(prev_event)
+                assert prev_event_dict.get("status") == HFLStatusEnum.TF_COMPLETED
+
+                prev_task = await ValidatorTask.prisma().find_first(
+                    where={"id": prev_event_dict.get("task_id")}
+                )
+                if not prev_task:
+                    logger.error(f"Original task not found for SF task {sf_task_id}")
+
+                return prev_task
+
+        return None
+
+    @staticmethod
+    async def get_validator_task_by_id(task_id: str) -> ValidatorTask | None:
+        try:
+            task = await ValidatorTask.prisma().find_unique(where={"id": task_id})
+            return task
+        except Exception as e:
+            logger.error(f"Failed to get validator task with ID {task_id}: {e}")
+        return None
+
+    @staticmethod
+    async def get_task_by_id(task_id: str) -> ValidatorTask | None:
+        """Given a current task id, fetch the previous task"""
+        try:
+            task = await prisma.validatortask.find_unique(where={"id": task_id})
+            if task is None:
+                raise
+        except Exception as e:
+            logger.error(f"Failed to get validator task with ID {task_id}: {e}")
+        return None
 
 
 # ---------------------------------------------------------------------------- #

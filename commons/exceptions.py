@@ -112,3 +112,11 @@ class FatalSubtensorConnectionError(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
+
+
+class HFLStateNotContinuous(Exception):
+    """Raised when the HFL States don't follow the sequence of: TF_PENDING, TF_COMPLETED, SF_PENDING, SF_COMPLETED, HFL_COMPLETED"""
+
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(self.message)
