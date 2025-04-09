@@ -11,6 +11,7 @@ from commons.api.middleware import LimitContentLengthMiddleware
 from commons.block_subscriber import start_block_subscriber
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import FatalSyntheticGenerationError
+from commons.human_feedback.feedback_loop import FeedbackLoop
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
 from dojo.chain import get_async_subtensor
@@ -19,6 +20,7 @@ from dojo.utils.config import source_dotenv
 source_dotenv()
 
 validator = ObjectManager.get_validator()
+feedback_loop = FeedbackLoop()
 
 
 @asynccontextmanager
@@ -91,6 +93,9 @@ async def main():
             )
         ),
         asyncio.create_task(validator.cleanup_resources()),
+        asyncio.create_task(feedback_loop.run(validator)),
+        asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
+        asyncio.create_task(feedback_loop.update_sf_task_results(validator)),
     ]
     # set a callback on validator.run() to check for fatal errors.
     running_tasks[1].add_done_callback(_check_fatal_errors)
