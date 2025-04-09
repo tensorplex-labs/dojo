@@ -682,7 +682,7 @@ class Validator:
             try:
                 # Grab tasks that were expired TASK_DEADLINE duration ago
                 expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
-                    hours=12
+                    hours=2
                 )
                 expire_to = datetime_as_utc(datetime.now(timezone.utc))
                 logger.info(
