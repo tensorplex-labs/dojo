@@ -34,7 +34,7 @@ class Metadata(BaseModel):
 # ---------------------------------------------------------------------------- #
 def map_task_synapse_object_to_validator_task(
     synapse: TaskSynapseObject,
-) -> ValidatorTaskCreateInput | None:
+) -> ValidatorTaskCreateInput:
     """Maps a TaskSynapseObject to ValidatorTask database model input.
 
     Args:
@@ -57,7 +57,9 @@ def map_task_synapse_object_to_validator_task(
         if synapse.ground_truth
         else []
     )
-    metadata = Metadata(git_tag=get_latest_git_tag(), commit_hash=get_commit_hash())
+    metadata = Metadata(
+        git_tag=get_latest_git_tag() or "unknown", commit_hash=get_commit_hash()
+    )
 
     return ValidatorTaskCreateInput(
         id=synapse.task_id,

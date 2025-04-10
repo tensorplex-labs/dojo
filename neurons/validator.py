@@ -1042,7 +1042,7 @@ class Validator:
         logger.info(
             f"Sending request to miners & processing took {get_epoch_time() - start}"
         )
-        return
+        return validator_task
 
     async def cleanup_resources(self):
         while True:
