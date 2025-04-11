@@ -14,8 +14,10 @@ import aiohttp
 import bittensor as bt
 import numpy as np
 import torch
-from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.weight_utils import process_weights_for_netuid
+
+# from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 from torch.nn import functional as F
 
 import dojo
@@ -62,7 +64,7 @@ from dojo.utils.uids import extract_miner_uids, is_miner
 from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
-
+SyntheticMetadata: TypeAlias = dict
 
 latest_local = get_latest_git_tag()
 latest_remote = get_latest_remote_tag()
@@ -631,11 +633,15 @@ class Validator:
                         synthetic_task,
                         ground_truth,
                         obfuscated_model_to_model,
+                        synthetic_metadata,
                     ) = await self._generate_synthetic_request()
 
                     if synthetic_task:
                         await self.send_request(
-                            synthetic_task, ground_truth, obfuscated_model_to_model
+                            synthetic_task,
+                            ground_truth,
+                            obfuscated_model_to_model,
+                            synthetic_metadata,
                         )
 
                 if self._should_exit:
@@ -835,7 +841,12 @@ class Validator:
 
     async def _generate_synthetic_request(
         self,
-    ) -> tuple[TaskSynapseObject | None, dict[str, int] | None, ObfuscatedModelMap]:
+    ) -> tuple[
+        TaskSynapseObject | None,
+        dict[str, int] | None,
+        ObfuscatedModelMap,
+        SyntheticMetadata,
+    ]:
         """
         Generate a synthetic request for code generation tasks.
 
@@ -848,7 +859,7 @@ class Validator:
             data: SyntheticQA | None = await SyntheticAPI.get_qa()
             if not data or not data.responses:
                 logger.error("Invalid or empty data returned from synthetic data API")
-                return None, None, {}
+                return None, None, {}, {}
 
             # Create criteria for each completion response
             criteria: List[CriteriaType] = [
@@ -871,7 +882,13 @@ class Validator:
                 completion_responses=data.responses,
             )
 
-            return synapse, data.ground_truth, obfuscated_model_to_model
+            syn_api_metadata: SyntheticMetadata = data.metadata
+            return (
+                synapse,
+                data.ground_truth,
+                obfuscated_model_to_model,
+                syn_api_metadata,
+            )
         except (
             ValueError,
             aiohttp.ClientError,
@@ -888,13 +905,14 @@ class Validator:
             logger.error(f"Unexpected error during synthetic data generation: {e}")
             logger.debug(f"Traceback: {traceback.format_exc()}")
 
-        return None, None, {}
+        return None, None, {}, {}
 
     async def send_request(
         self,
         synapse: TaskSynapseObject | None = None,
         ground_truth: dict[str, int] | None = None,
         obfuscated_model_to_model: ObfuscatedModelMap = {},
+        synthetic_metadata: dict | None = None,
     ):
         if not synapse:
             logger.warning("No synapse provided... skipping")
@@ -1003,6 +1021,7 @@ class Validator:
             validator_task=synapse,
             miner_responses=valid_miner_responses,
             ground_truth=ground_truth or {},
+            metadata=synthetic_metadata or {},
         ):
             logger.error("Failed to save dendrite response")
             return
