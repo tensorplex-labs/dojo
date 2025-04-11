@@ -30,7 +30,6 @@ from commons.exceptions import (
     SetWeightsFailed,
     SyntheticGenerationError,
 )
-from commons.logging import logging as logger
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager
 from commons.orm import ORM
@@ -46,6 +45,7 @@ from commons.utils import (
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.chain import parse_block_headers
+from dojo.logging.logging import logging as logger
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,

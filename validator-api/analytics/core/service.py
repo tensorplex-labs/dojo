@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from commons.logging import logging as logger
+from dojo.logging.logging import logging as logger
 
 from .models import (
     AnalyticsErrorResponse,

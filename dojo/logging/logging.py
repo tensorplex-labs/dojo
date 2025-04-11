@@ -1,29 +1,13 @@
-"""
-Custom logging handler for forwarding logs to the validator API.
-
-This module sets up Loguru as the primary logging system and provides:
-1. A mechanism to intercept standard Python logging and forward to Loguru
-2. A handler that forwards logs to the validator API
-3. Proper formatting with module paths and color support
-
-Features:
-- Python logging is forwarded to Loguru with correct module paths
-- Color tags are properly converted to ANSI codes
-- API logs are sent in batches for efficiency
-"""
-
 import asyncio
 import logging as python_logging
 from datetime import datetime
 
 import aiohttp
 import bittensor as bt
+from colors import convert_tags_to_ansi
 from loguru import logger
 
-from commons.color_utils import convert_tags_to_ansi
 
-
-# Create a filter for forwarded logs
 class ForwardedLogFilter:
     """Filter that extracts the original module path from forwarded logs"""
 
@@ -52,14 +36,17 @@ class ForwardedLogFilter:
         return True
 
 
-# Remove default handler and add custom handler with filter
 logger.remove()
-# Create an instance of the filter
 forwarded_log_filter = ForwardedLogFilter()
-# Add default handler with the filter
 logger.add(
     sink=lambda msg: print(msg, end="", flush=True),
-    format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level:^15}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>",
+    format=(
+        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+        "<level>{level:^15}</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
+        "<level>{message}</level>"
+    ),
+    # format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level:^15}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>",
     colorize=True,
     level="DEBUG",
     filter=forwarded_log_filter,  # Apply filter to console output
@@ -67,7 +54,7 @@ logger.add(
 logging = logger
 
 
-def setup_python_logging_to_loguru(level=python_logging.INFO):
+def python_logging_to_loguru(level=python_logging.INFO):
     """
     Intercepts standard Python logging and forwards it to Loguru.
     This allows libraries using standard Python logging to have their logs
@@ -82,9 +69,7 @@ def setup_python_logging_to_loguru(level=python_logging.INFO):
         def emit(self, record):
             # Map Python log levels to Loguru levels
             try:
-                # Get the corresponding Loguru level
                 level_name = record.levelname.lower()
-                # Loguru uses 'warn' instead of 'warning'
                 if level_name == "warning":
                     level_name = "warn"
 
@@ -103,16 +88,9 @@ def setup_python_logging_to_loguru(level=python_logging.INFO):
                 print(f"Failed to forward log to Loguru: {e}")
                 print(f"Original message: {record.getMessage()}")
 
-    # Remove all existing handlers from Python's root logger
     python_logging.root.handlers.clear()
-
-    # Set the level for the root logger
     python_logging.root.setLevel(level)
-
-    # Add the Loguru InterceptHandler to the root logger
     python_logging.root.addHandler(InterceptHandler())
-
-    # Disable propagation of logs to avoid duplicates
     for name in python_logging.root.manager.loggerDict:
         python_logging.getLogger(name).propagate = False
         python_logging.getLogger(name).handlers.clear()
@@ -126,7 +104,6 @@ class ValidatorAPILogHandler(python_logging.Handler):
         wallet: bt.wallet,
         batch_size: int = 100,
         flush_interval: float = 1.0,
-        console_output: bool = True,  # Flag to control console output
     ):
         super().__init__()
 
@@ -152,7 +129,6 @@ class ValidatorAPILogHandler(python_logging.Handler):
         self.log_queue: asyncio.Queue[dict[str, str | int | float]] = asyncio.Queue()
         self._shutdown = False
         self._flush_task = None
-        self.console_output = console_output  # Whether to also print to console
 
     def __call__(self, message):
         """
@@ -160,44 +136,30 @@ class ValidatorAPILogHandler(python_logging.Handler):
         Loguru will call this method with the message when logging
         """
         try:
-            # Extract time and format it
             record_time = message.record["time"].strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-            # Get level name and pad it
             level = message.record["level"].name
             level_padded = f"{level:^15}"
 
-            # Since we're no longer using the compatibility layer,
-            # we can directly extract caller information from the record
             module_name = message.record["name"]
             function_name = message.record["function"]
             line_no = message.record["line"]
 
             module_path = f"{module_name}:{function_name}:{line_no}"
 
-            # Get the original message (not formatted)
             original_message = message.record["message"]
-
-            # Convert any color tags to ANSI color codes
             original_message = convert_tags_to_ansi(original_message)
 
-            # Build our log message in desired format
             formatted_message = (
                 f"{record_time} | {level_padded} | {module_path} | {original_message}"
             )
 
-            # Create log entry for API only (never print to console from __call__)
-            # This avoids duplicates since Loguru already prints to console
             log_entry = {
                 "timestamp": datetime.now().isoformat(),
                 "level": level,
                 "message": formatted_message,
             }
-
-            # Put in queue for API
             asyncio.create_task(self.log_queue.put(log_entry))
         except Exception as e:
-            # Use print instead of logger to avoid recursion
             print(f"Error in ValidatorAPILogHandler.__call__: {e}")
 
     def sign_message(self, message: str) -> str:
@@ -233,10 +195,6 @@ class ValidatorAPILogHandler(python_logging.Handler):
             formatted_message = (
                 f"{timestamp} | {level_name:^15} | {module_path} | {message}"
             )
-
-            # Print to console if enabled (for Python's standard logging)
-            if self.console_output:
-                print(formatted_message, flush=True)
 
             # Convert the log record to a dict with only essential fields
             log_entry = {

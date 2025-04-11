@@ -14,7 +14,7 @@ from functools import partial
 from bs4 import BeautifulSoup
 from jsmin import jsmin
 
-from commons.logging import logging as logger
+from dojo.logging.logging import logging as logger
 
 
 # Obfuscator base class

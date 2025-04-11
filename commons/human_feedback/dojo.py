@@ -7,9 +7,9 @@ from typing import Dict, List
 import httpx
 
 from commons.exceptions import CreateTaskFailed
-from commons.logging import logging as logger
 from commons.utils import loaddotenv
 from dojo import get_dojo_api_base_url
+from dojo.logging.logging import logging as logger
 from dojo.protocol import (
     CodeAnswer,
     MultimediaAnswer,

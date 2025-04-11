@@ -6,9 +6,9 @@ from typing import Any, Callable
 
 import websockets
 
-from commons.logging import logging as logger
 from commons.objects import ObjectManager
 from dojo.chain import parse_block_headers
+from dojo.logging.logging import logging as logger
 
 BLOCK_TIME = 12
 WS_OPEN_TIMEOUT = 30

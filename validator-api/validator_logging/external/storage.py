@@ -3,7 +3,7 @@ from typing import List
 
 import requests
 
-from commons.logging import logging as logger
+from dojo.logging.logging import logging as logger
 
 from ..core.models import LogEntry
 

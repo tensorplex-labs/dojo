@@ -4,9 +4,9 @@ import sys
 import time
 from datetime import datetime
 
-from commons.logging import logging as logger
 from commons.utils import datetime_to_iso8601_str
 from dojo import get_latest_git_tag
+from dojo.logging.logging import logging as logger
 from dojo.utils.config import source_dotenv
 
 source_dotenv()

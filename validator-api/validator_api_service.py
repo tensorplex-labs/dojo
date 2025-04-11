@@ -14,8 +14,8 @@ from validator_logging.endpoints.routes import logging_router
 
 from commons.api_settings import ValidatorAPISettings, get_settings
 from commons.cache import RedisCache
-from commons.logging import logging as logger
 from commons.objects import ObjectManager
+from dojo.logging.logging import logging as logger
 from dojo.utils.config import source_dotenv
 
 source_dotenv()

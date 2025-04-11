@@ -10,7 +10,6 @@ from commons.exceptions import (
     NoNewExpiredTasksYet,
     NoProcessedTasksYet,
 )
-from commons.logging import logging as logger
 from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
 from database.mappers import (
@@ -34,6 +33,7 @@ from database.prisma.types import (
     ValidatorTaskWhereInput,
 )
 from dojo import TASK_DEADLINE
+from dojo.logging.logging import logging as logger
 from dojo.protocol import DendriteQueryResponse, Scores, TaskResult, TaskSynapseObject
 
 

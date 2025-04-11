@@ -4,8 +4,8 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from commons.logging import logging as logger
 from commons.utils import _terminal_plot
+from dojo.logging.logging import logging as logger
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,

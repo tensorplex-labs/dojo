@@ -7,8 +7,8 @@ from tenacity import (
     wait_fixed,
 )
 
-from commons.logging import logging as logger
 from commons.objects import ObjectManager
+from dojo.logging.logging import logging as logger
 
 
 @alru_cache(maxsize=1)

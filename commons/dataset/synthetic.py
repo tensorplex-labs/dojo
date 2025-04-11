@@ -14,7 +14,7 @@ from commons.exceptions import (
     FatalSyntheticGenerationError,
     SyntheticGenerationError,
 )
-from commons.logging import logging as logger
+from dojo.logging.logging import logging as logger
 from dojo.protocol import SyntheticQA
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")

@@ -1,9 +1,9 @@
 import asyncio
 
 from commons.block_subscriber import start_block_subscriber
-from commons.logging import logging as logger
 from commons.objects import ObjectManager
 from dojo.chain import get_async_subtensor
+from dojo.logging.logging import logging as logger
 from dojo.utils.config import source_dotenv
 
 source_dotenv()

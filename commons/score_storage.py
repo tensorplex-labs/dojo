@@ -3,9 +3,9 @@ from pathlib import Path
 
 import torch
 
-from commons.logging import logging as logger
 from database.client import connect_db
 from database.prisma.models import Score_Model
+from dojo.logging.logging import logging as logger
 
 
 class ScoreStorage:

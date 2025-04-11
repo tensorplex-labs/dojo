@@ -17,12 +17,12 @@ from bittensor.core.async_subtensor import AsyncSubtensor
 from bittensor.core.metagraph import AsyncMetagraph
 
 from commons.exceptions import NoProcessedTasksYet
-from commons.logging import logging as logger
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
 from dojo import ANALYTICS_UPLOAD, VALIDATOR_MIN_STAKE
+from dojo.logging.logging import logging as logger
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 
 DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
@@ -157,7 +157,7 @@ async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response
     try:
         logger.debug("POST-ing analytics data to validator API")
         response = await _http_client.post(
-            url=f"{DOJO_API_BASE_URL}/api/v1/analytics/validators/{hotkey}/tasks",
+            url=f"{DOJO_API_BASE_URL}/api/v1/analytics/validator/{hotkey}/tasks",
             json=payload.model_dump(mode="json"),
             headers={
                 "X-Hotkey": hotkey,

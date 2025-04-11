@@ -4,7 +4,7 @@ import traceback
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from commons.logging import logging as logger
+from dojo.logging.logging import logging as logger
 
 from ..core.models import LogBatch
 from ..core.service import LoggingService

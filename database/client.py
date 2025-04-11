@@ -1,8 +1,8 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from commons.logging import logging as logger
 from database.prisma import Prisma
+from dojo.logging.logging import logging as logger
 
 db = None
 

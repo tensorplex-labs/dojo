@@ -7,7 +7,7 @@ from typing import List
 
 from fastapi import UploadFile
 
-from commons.logging import logging as logger
+from dojo.logging.logging import logging as logger
 
 from .models import DatasetUploadResult
 

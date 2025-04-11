@@ -5,7 +5,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from shared.auth import ValidatorAuth
 
-from commons.logging import logging as logger
+from dojo.logging.logging import logging as logger
 
 from ..core.models import AnalyticsPayload
 from ..core.service import AnalyticsService

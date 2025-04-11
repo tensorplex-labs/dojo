@@ -7,10 +7,10 @@ from typing import List
 import bittensor as bt
 
 from commons.exceptions import FatalSubtensorConnectionError
-from commons.logging import logging as logger
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, get_effective_stake, keccak256_hash
 from dojo.chain import get_async_subtensor
+from dojo.logging.logging import logging as logger
 
 
 def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:

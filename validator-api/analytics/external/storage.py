@@ -5,7 +5,7 @@ from datetime import datetime
 import aioboto3
 
 from commons.cache import RedisCache
-from commons.logging import logging as logger
+from dojo.logging.logging import logging as logger
 
 from ..core.models import AnalyticsPayload
 

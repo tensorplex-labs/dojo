@@ -11,16 +11,18 @@ from commons.api.middleware import LimitContentLengthMiddleware
 from commons.block_subscriber import start_block_subscriber
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import FatalSyntheticGenerationError
-from commons.logging import (
-    ValidatorAPILogHandler,
-    forwarded_log_filter,
-    setup_python_logging_to_loguru,
-)
-from commons.logging import logging as logger
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
 from dojo import get_dojo_api_base_url
 from dojo.chain import get_async_subtensor
+from dojo.logging.logging import (
+    ValidatorAPILogHandler,
+    forwarded_log_filter,
+    python_logging_to_loguru,
+)
+from dojo.logging.logging import logging as logger
+
+# from dojo.logging.logging import logging as logger
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
@@ -36,7 +38,7 @@ async def lifespan(app: FastAPI):
     await connect_db()
 
     # Configure Python's standard logging to forward to Loguru
-    setup_python_logging_to_loguru(level=python_logging.INFO)
+    python_logging_to_loguru(level=python_logging.INFO)
 
     # Setup validator API logging
     global api_log_handler

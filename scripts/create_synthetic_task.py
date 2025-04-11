@@ -3,8 +3,8 @@ import json
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
-from commons.logging import logging as logger
 from commons.utils import set_expire_time
+from dojo.logging.logging import logging as logger
 from dojo.protocol import (
     ScoreCriteria,
     TaskSynapseObject,
