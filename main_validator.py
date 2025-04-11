@@ -46,7 +46,6 @@ async def lifespan(app: FastAPI):
     api_log_handler = ValidatorAPILogHandler(
         api_url=get_dojo_api_base_url(),
         wallet=validator.wallet,
-        console_output=False,  # Disable console output since logs are already handled by Loguru
     )
     api_log_handler.start()
 
@@ -56,7 +55,7 @@ async def lifespan(app: FastAPI):
         level="DEBUG",
         format="{message}",
         filter=forwarded_log_filter,
-        colorize=True,  # Enable colorization for API logs too
+        colorize=True,
     )
 
     yield

@@ -88,7 +88,7 @@ services:
 
   validator:
     container_name: validator
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: validator-api
     restart: on-failure
     labels:
       com.centurylinklabs.watchtower.enable: "true"
@@ -112,24 +112,26 @@ services:
         condition: service_healthy
       prisma-setup-vali:
         condition: service_completed_successfully
-    logging:
-      driver: loki
-      options:
-        mode: non-blocking
-        loki-url: "https://${DOJO_LOKI_URL}"
-        loki-external-labels: "validator=${VALIDATOR_HOTKEY}"
-        # disable loki's default of not saving to a file, so we have persistence
-        no-file: 0
-        max-size: "50m"
+#    logging:
+#      driver: loki
+#      options:
+#        mode: non-blocking
+#        loki-url: "https://${DOJO_LOKI_URL}"
+#        loki-external-labels: "validator=${VALIDATOR_HOTKEY}"
+#        # disable loki's default of not saving to a file, so we have persistence
+#        no-file: 0
+#        max-size: "50m"
 
   validator-api-service:
     container_name: validator-api-service
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: validator-api
     env_file:
       - .env
     ports:
       - "127.0.0.1:9999:9999"
     command: ["validator-api-service"]
+    networks:
+      - dojo-validator
     logging: *default-logging
 
   extract-dataset:

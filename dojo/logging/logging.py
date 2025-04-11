@@ -4,8 +4,9 @@ from datetime import datetime
 
 import aiohttp
 import bittensor as bt
-from colors import convert_tags_to_ansi
 from loguru import logger
+
+from dojo.logging.colors import convert_tags_to_ansi
 
 
 class ForwardedLogFilter:

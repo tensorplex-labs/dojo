@@ -78,20 +78,20 @@ async def create_analytics_data(
                 return JSONResponse(content=result.model_dump(), status_code=200)
 
             # Upload to S3
-            upload_success = await storage.upload_to_s3(
-                AnalyticsPayload(tasks=new_tasks), header_hotkey
-            )
+            # upload_success = await storage.upload_to_s3(
+            #     AnalyticsPayload(tasks=new_tasks), header_hotkey
+            # )
 
-            if not upload_success:
-                logger.error(
-                    f"Failed to upload analytics data for hotkey {header_hotkey}"
-                )
-                # Clean up cached tasks on failure
-                for task_id in newly_cached_tasks:
-                    await storage.remove_cached_task(task_id)
-                raise HTTPException(
-                    status_code=500, detail="Failed to upload analytics data"
-                )
+            # if not upload_success:
+            #     logger.error(
+            #         f"Failed to upload analytics data for hotkey {header_hotkey}"
+            #     )
+            #     # Clean up cached tasks on failure
+            #     for task_id in newly_cached_tasks:
+            #         await storage.remove_cached_task(task_id)
+            #     raise HTTPException(
+            #         status_code=500, detail="Failed to upload analytics data"
+            #     )
 
             logger.info(
                 f"Successfully processed {len(new_tasks)} analytics tasks for hotkey {header_hotkey}"
