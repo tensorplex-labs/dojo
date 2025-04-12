@@ -1,3 +1,6 @@
+import time
+from typing import Dict, Tuple
+
 from fastapi import HTTPException, Request
 
 from commons.utils import check_stake, verify_hotkey_in_metagraph, verify_signature
@@ -6,6 +9,9 @@ from dojo.logging.logging import logging as logger
 
 class ValidatorAuth:
     """Authentication handler for validator operations"""
+
+    _stake_cache: Dict[str, Tuple[bool, float]] = {}
+    _stake_cache_ttl: int = 300
 
     @staticmethod
     async def validate_validator(
@@ -28,7 +34,6 @@ class ValidatorAuth:
         """
         logger.info(f"Validating credentials for hotkey: {hotkey}")
 
-        # Verify signature format and validity
         if not signature.startswith("0x"):
             logger.error(f"Invalid signature format for hotkey: {hotkey}")
             raise HTTPException(status_code=401, detail="Invalid signature format")
@@ -37,14 +42,35 @@ class ValidatorAuth:
             logger.error(f"Invalid signature for hotkey: {hotkey}")
             raise HTTPException(status_code=401, detail="Invalid signature")
 
-        # Verify hotkey in metagraph
-        if not verify_hotkey_in_metagraph(request.app.state.metagraph, hotkey):
+        hotkey_in_metagraph = verify_hotkey_in_metagraph(
+            request.app.state.metagraph, hotkey
+        )
+        if not hotkey_in_metagraph:
             logger.error(f"Hotkey {hotkey} not found in metagraph")
             raise HTTPException(status_code=401, detail="Hotkey not found in metagraph")
 
-        # Verify stake
-        if not check_stake(request.app.state.subtensor, hotkey):
+        has_sufficient_stake = ValidatorAuth._check_stake_with_cache(
+            request.app.state.subtensor, hotkey
+        )
+        if not has_sufficient_stake:
             logger.error(f"Insufficient stake for hotkey {hotkey}")
             raise HTTPException(status_code=401, detail="Insufficient stake for hotkey")
 
         logger.info(f"Successfully validated credentials for hotkey: {hotkey}")
+
+    @staticmethod
+    def _check_stake_with_cache(subtensor, hotkey: str) -> bool:
+        current_time = time.time()
+
+        if hotkey in ValidatorAuth._stake_cache:
+            result, timestamp = ValidatorAuth._stake_cache[hotkey]
+            if current_time - timestamp < ValidatorAuth._stake_cache_ttl:
+                logger.debug(f"Using cached stake result for hotkey: {hotkey}")
+                return result
+
+        logger.debug(f"Cache miss for hotkey: {hotkey}, checking stake")
+        result = check_stake(subtensor, hotkey)
+
+        ValidatorAuth._stake_cache[hotkey] = (result, current_time)
+
+        return result
