@@ -3,13 +3,12 @@ import traceback
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
-from shared.auth import ValidatorAuth
 
 from dojo.logging.logging import logging as logger
-
-from ..core.models import AnalyticsPayload
-from ..core.service import AnalyticsService
-from ..external.storage import AnalyticsStorage
+from validator_api.analytics.core.models import AnalyticsPayload
+from validator_api.analytics.core.service import AnalyticsService
+from validator_api.analytics.external.storage import AnalyticsStorage
+from validator_api.shared.auth import ValidatorAuth
 
 analytics_router = APIRouter()
 
@@ -75,23 +74,25 @@ async def create_analytics_data(
                     message="No processed tasks to upload. Skipping analytics upload.",
                     task_count=0,
                 )
-                return JSONResponse(content=result.model_dump(), status_code=200)
+                return JSONResponse(
+                    content=result.model_dump(mode="json"), status_code=200
+                )
 
             # Upload to S3
-            # upload_success = await storage.upload_to_s3(
-            #     AnalyticsPayload(tasks=new_tasks), header_hotkey
-            # )
+            upload_success = await storage.upload_to_s3(
+                AnalyticsPayload(tasks=new_tasks), header_hotkey
+            )
 
-            # if not upload_success:
-            #     logger.error(
-            #         f"Failed to upload analytics data for hotkey {header_hotkey}"
-            #     )
-            #     # Clean up cached tasks on failure
-            #     for task_id in newly_cached_tasks:
-            #         await storage.remove_cached_task(task_id)
-            #     raise HTTPException(
-            #         status_code=500, detail="Failed to upload analytics data"
-            #     )
+            if not upload_success:
+                logger.error(
+                    f"Failed to upload analytics data for hotkey {header_hotkey}"
+                )
+                # Clean up cached tasks on failure
+                for task_id in newly_cached_tasks:
+                    await storage.remove_cached_task(task_id)
+                raise HTTPException(
+                    status_code=500, detail="Failed to upload analytics data"
+                )
 
             logger.info(
                 f"Successfully processed {len(new_tasks)} analytics tasks for hotkey {header_hotkey}"
@@ -103,7 +104,7 @@ async def create_analytics_data(
                 message=f"Successfully processed {len(new_tasks)} analytics tasks",
                 task_count=len(new_tasks),
             )
-            return JSONResponse(content=result.model_dump(), status_code=200)
+            return JSONResponse(content=result.model_dump(mode="json"), status_code=200)
 
         except Exception:
             # Clean up newly cached tasks on any error
@@ -131,4 +132,6 @@ async def create_analytics_data(
                 "traceback": traceback.format_exc(),
             },
         )
-        return JSONResponse(content=result.model_dump(), status_code=status_code)
+        return JSONResponse(
+            content=result.model_dump(mode="json"), status_code=status_code
+        )

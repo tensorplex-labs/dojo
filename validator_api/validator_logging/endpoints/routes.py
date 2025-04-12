@@ -5,10 +5,10 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from dojo.logging.logging import logging as logger
-
-from ..core.models import LogBatch
-from ..core.service import LoggingService
-from ..external.storage import LogStorage
+from validator_api.shared.auth import ValidatorAuth
+from validator_api.validator_logging.core.models import LogBatch
+from validator_api.validator_logging.core.service import LoggingService
+from validator_api.validator_logging.external.storage import LogStorage
 
 logging_router = APIRouter(tags=["logging"])
 
@@ -20,12 +20,12 @@ async def send_logs_to_loki(request: Request, log_batch: LogBatch):
         logger.info(f"Received logging request from hotkey {log_batch.hotkey}")
 
         # Validate validator credentials
-        # await ValidatorAuth.validate_validator(
-        #     request=request,
-        #     hotkey=log_batch.hotkey,
-        #     signature=log_batch.signature,
-        #     message=log_batch.message
-        # )
+        await ValidatorAuth.validate_validator(
+            request=request,
+            hotkey=log_batch.hotkey,
+            signature=log_batch.signature,
+            message=log_batch.message,
+        )
 
         auth_time = time.time()
         execution_time = auth_time - start_time

@@ -2,10 +2,10 @@ from typing import List
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
-from shared.auth import ValidatorAuth
 
-from ..core.service import DatasetExtractionService
-from ..external.storage import DatasetStorage
+from validator_api.dataset_extraction.core.service import DatasetExtractionService
+from validator_api.dataset_extraction.external.storage import DatasetStorage
+from validator_api.shared.auth import ValidatorAuth
 
 dataset_router = APIRouter()
 

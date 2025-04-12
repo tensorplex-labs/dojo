@@ -13,10 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from validator_logging.endpoints.routes import logging_router
 
 from commons.api_settings import ValidatorAPISettings, get_settings
-from commons.cache import RedisCache
 from commons.objects import ObjectManager
 from dojo.logging.logging import logging as logger
 from dojo.utils.config import source_dotenv
+from validator_api.shared.cache import RedisCache
 
 source_dotenv()
 settings: ValidatorAPISettings = get_settings()
@@ -113,12 +113,11 @@ async def server():
 
 
 if __name__ == "__main__":
-    import sys
-
-    if "--test" in sys.argv:
-        # Import and run test endpoint
-        from validator.endpoints.test import test_endpoint
-
-        asyncio.run(test_endpoint())
-    else:
-        asyncio.run(server())
+    # import sys
+    # if "--test" in sys.argv:
+    #     # Import and run test endpoint
+    #     from validator.endpoints.test import test_endpoint
+    #
+    #     asyncio.run(test_endpoint())
+    # else:
+    asyncio.run(server())

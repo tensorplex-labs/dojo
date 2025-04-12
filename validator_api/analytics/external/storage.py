@@ -4,10 +4,9 @@ from datetime import datetime
 
 import aioboto3
 
-from commons.cache import RedisCache
 from dojo.logging.logging import logging as logger
-
-from ..core.models import AnalyticsPayload
+from validator_api.analytics.core.models import AnalyticsPayload
+from validator_api.shared.cache import RedisCache
 
 
 class AnalyticsStorage:

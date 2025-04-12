@@ -1,15 +1,11 @@
-"""
-Service for handling dataset extraction and validation operations
-"""
-
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import UploadFile
 
 from dojo.logging.logging import logging as logger
 
-from .models import DatasetUploadResult
+from .models import DatasetExtractionResponse, DatasetUploadResult
 
 
 class DatasetExtractionService:
@@ -30,7 +26,7 @@ class DatasetExtractionService:
         return DatasetUploadResult(
             success=success,
             message=message,
-            timestamp=datetime.now(datetime.UTC),
+            timestamp=datetime.now(timezone.utc),
             filenames=filenames,
             total_size=total_size,
         )
@@ -43,3 +39,19 @@ class DatasetExtractionService:
             logger.error("Invalid signature format")
             return False
         return True
+
+    @staticmethod
+    def create_extraction_response(
+        message: str,
+        total_records: int,
+        saved_records: int,
+        warnings: List[str],
+    ) -> DatasetExtractionResponse:
+        return DatasetExtractionResponse(
+            success=True,
+            message=message,
+            timestamp=datetime.now(timezone.utc),
+            total_records=total_records,
+            saved_records=saved_records,
+            warnings=warnings,
+        )

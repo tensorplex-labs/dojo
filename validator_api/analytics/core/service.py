@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any, Dict
 
 from dojo.logging.logging import logging as logger
 
@@ -29,16 +30,16 @@ class AnalyticsService:
         message: str, task_count: int
     ) -> AnalyticsSuccessResponse:
         return AnalyticsSuccessResponse(
-            message=message, timestamp=datetime.now(datetime.UTC), task_count=task_count
+            message=message, timestamp=datetime.now(timezone.utc), task_count=task_count
         )
 
     @staticmethod
     def create_error_response(
-        message: str, error: str, error_details: dict
+        message: str, error: str, error_details: Dict[str, Any]
     ) -> AnalyticsErrorResponse:
         return AnalyticsErrorResponse(
             message=message,
-            timestamp=datetime.now(datetime.UTC),
+            timestamp=datetime.now(timezone.utc),
             error=error,
             details=ErrorDetails(**error_details),
         )
