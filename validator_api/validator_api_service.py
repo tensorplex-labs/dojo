@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -15,6 +16,7 @@ from validator_logging.endpoints.routes import logging_router
 from commons.api_settings import ValidatorAPISettings, get_settings
 from commons.objects import ObjectManager
 from dojo.logging.logging import logging as logger
+from dojo.logging.logging import python_logging_to_loguru
 from dojo.utils.config import source_dotenv
 from validator_api.shared.cache import RedisCache
 
@@ -22,6 +24,12 @@ source_dotenv()
 settings: ValidatorAPISettings = get_settings()
 cfg: bt.config = ObjectManager.get_config()
 bt.logging.set_debug(True)
+
+python_logging_to_loguru()
+for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
+    uvicorn_logger = logging.getLogger(logger_name)
+    uvicorn_logger.handlers = []
+    uvicorn_logger.propagate = True
 
 
 @asynccontextmanager
@@ -100,6 +108,10 @@ async def server():
     host = parsed_url.hostname or "0.0.0.0"
     port = parsed_url.port or 9999
 
+    # Reconfigure logging just before starting the server
+    python_logging_to_loguru()
+
+    # Start server with no log config to use our configured loggers
     config = uvicorn.Config(
         app,
         host=host,
@@ -107,6 +119,7 @@ async def server():
         log_level="debug",
         timeout_notify=300,
         timeout_keep_alive=240,
+        log_config=None,  # Disable uvicorn's default logging config
     )
     server = uvicorn.Server(config)
     await server.serve()

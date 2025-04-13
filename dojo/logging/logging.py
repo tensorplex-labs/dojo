@@ -65,10 +65,8 @@ def python_logging_to_loguru(level=python_logging.INFO):
         level: The minimum log level to capture (default: INFO)
     """
 
-    # Create a handler that forwards to Loguru
     class InterceptHandler(python_logging.Handler):
         def emit(self, record):
-            # Map Python log levels to Loguru levels
             try:
                 level_name = record.levelname.lower()
                 if level_name == "warning":
@@ -76,8 +74,6 @@ def python_logging_to_loguru(level=python_logging.INFO):
 
                 log_method = getattr(logger, level_name, logger.info)
 
-                # Forward the log with metadata that our filter can use
-                # Format: ORIG_MODULE=name|ORIG_FUNC=func|ORIG_LINE=line|message
                 log_method(
                     f"ORIG_MODULE={record.name}|"
                     f"ORIG_FUNC={record.funcName}|"
@@ -85,7 +81,6 @@ def python_logging_to_loguru(level=python_logging.INFO):
                     f"{record.getMessage()}"
                 )
             except Exception as e:
-                # Fallback if anything goes wrong
                 print(f"Failed to forward log to Loguru: {e}")
                 print(f"Original message: {record.getMessage()}")
 
