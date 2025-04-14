@@ -148,7 +148,11 @@ class Validator:
         else:
             logger.info(f"Sending back scores to miners for task id: {synapse.task_id}")
 
-        await self._semaphore_limited_forward(self.dendrite, axons, synapse, timeout=30)
+        # Use a simple forward call without retries for sending scores
+        async with self._forward_semaphore:
+            await self.dendrite.forward(
+                axons=axons, synapse=synapse, deserialize=False, timeout=30
+            )
 
     def obfuscate_model_names(
         self, completion_responses: list[CompletionResponse]
@@ -1070,6 +1074,7 @@ class Validator:
                         dendrite,
                         [axon],
                         shuffled_synapse,
+                        max_retries=3,
                     )
                 )
 
@@ -1087,17 +1092,50 @@ class Validator:
         return all_responses
 
     @staticmethod
-    async def _semaphore_limited_forward(dendrite, axons, synapse, timeout=12):
+    async def _semaphore_limited_forward(dendrite, axons, synapse, timeout=12, max_retries=3):
         """
         Wrapper around dendrite.forward that limits concurrent calls using a semaphore.
+        Includes built-in retry logic with exponential backoff.
+        
+        Args:
+            dendrite: The dendrite instance to use for forwarding
+            axons: List of axons to forward to
+            synapse: The synapse object to forward
+            timeout: Request timeout in seconds
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            The response from dendrite.forward
         """
-        async with Validator._forward_semaphore:
-            return await dendrite.forward(
-                axons=axons,
-                synapse=synapse,
-                deserialize=False,
-                timeout=timeout,
-            )
+        retry_count = 0
+        while retry_count < max_retries:
+            try:
+                async with Validator._forward_semaphore:
+                    response = await dendrite.forward(
+                        axons=axons,
+                        synapse=synapse,
+                        deserialize=False,
+                        timeout=timeout,
+                    )
+                    
+                # Check for valid response
+                if response and getattr(response, "dendrite", None) and response.dendrite.status_code == 200:
+                    return response
+                
+                # If response is invalid, increment retry counter and sleep with backoff
+                retry_count += 1
+                backoff_time = 2**retry_count  # Exponential backoff: 2, 4, 8 seconds
+                logger.info(f"Request failed, retrying in {backoff_time} seconds (attempt {retry_count}/{max_retries})")
+                await asyncio.sleep(backoff_time)
+                
+            except Exception as e:
+                retry_count += 1
+                backoff_time = 2**retry_count
+                logger.warning(f"Exception in forward request: {e}, retrying in {backoff_time} seconds (attempt {retry_count}/{max_retries})")
+                await asyncio.sleep(backoff_time)
+                
+        # Return whatever we got on the last attempt, even if it failed
+        return response
 
     # Validator update_score_and_send_feedback helper functions
     def _get_validator_hotkeys(self) -> List[str]:
@@ -1288,37 +1326,26 @@ class Validator:
 
             miner_axon = self.metagraph.axons[axon_index]
 
-            # Send the request via Dendrite and get the response
-            max_retries = 3
-            retry_count = 0
-
-            while retry_count < max_retries:
-                responses: list[
-                    TaskResultRequest
-                ] = await self._semaphore_limited_forward(
-                    self.dendrite,
-                    [miner_axon],
-                    TaskResultRequest(dojo_task_id=dojo_task_id),
-                    timeout=30,
-                )
-
-                if responses and responses[0] and responses[0].task_results:
-                    logger.info(
-                        f"Received task results from miner {miner_hotkey} for task {dojo_task_id} after {retry_count + 1} attempts"
-                    )
-                    return responses[0].task_results
-
-                retry_count += 1
-                if retry_count < max_retries:
-                    logger.info(
-                        f"Empty results from miner {miner_hotkey} for task {dojo_task_id}, retry {retry_count}/{max_retries}"
-                    )
-                    await asyncio.sleep(2**retry_count)  # Exponential backoff
-
-            logger.info(
-                f"No results from miner {miner_hotkey} for task {dojo_task_id} after {max_retries} attempts"
+            responses: list[
+                TaskResultRequest
+            ] = await self._semaphore_limited_forward(
+                self.dendrite,
+                [miner_axon],
+                TaskResultRequest(dojo_task_id=dojo_task_id),
+                timeout=30,
+                max_retries=3,
             )
-            return []
+
+            if responses and responses[0] and responses[0].task_results:
+                logger.info(
+                    f"Received task results from miner {miner_hotkey} for task {dojo_task_id} after {retry_count + 1} attempts"
+                )
+                return responses[0].task_results
+            else:
+                logger.info(
+                    f"No results from miner {miner_hotkey} for task {dojo_task_id} after {max_retries} attempts"
+                )
+                return []
 
         except Exception as e:
             logger.error(f"Error fetching from miner {miner_hotkey}: {str(e)}")
