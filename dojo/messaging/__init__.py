@@ -1,4 +1,5 @@
 # from .server import _register_route_handler as _register_route_handler
+from .client import Client, get_client
 from .server import Server
 
-__all__ = ["Server"]
+__all__ = ["Server", "Client", "get_client"]

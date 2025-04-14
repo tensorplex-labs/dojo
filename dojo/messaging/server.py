@@ -7,20 +7,21 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import ORJSONResponse
 from loguru import logger
 
+from dojo.messaging.middleware import SignatureMiddleware
 from dojo.messaging.types import PydanticModel, ServerHandlerFunc
 from dojo.messaging.utils import create_response, decode_body
 
 
 class Server:
     def __init__(self, app: FastAPI | None = None) -> None:
-        if not app:
-            self.app = FastAPI()
-        else:
-            self.app = app
+        self.app = FastAPI() or app
 
     def serve_synapse(
         self, synapse: Type[PydanticModel], handler: ServerHandlerFunc[PydanticModel]
     ) -> None:
+        # NOTE: we always want to have signature middleware, as miners should
+        # only be reachable by validators
+        self.app.add_middleware(SignatureMiddleware)
         self.app = _register_route_handler(self.app, handler, model=synapse)
 
     async def initialise(self, server_config: uvicorn.Config | None = None) -> bool:

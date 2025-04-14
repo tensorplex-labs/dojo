@@ -36,8 +36,16 @@ class Client:
         }
         self._compression_headers = {"Content-Encoding": "zstd"}
 
-    def _build_headers(self) -> dict[str, str]:
-        return {"Content-Type": "application/json", **self._compression_headers}
+    def _build_headers(
+        self, signature: str, hotkey: str, message: str
+    ) -> dict[str, str]:
+        return {
+            "Content-Type": "application/json",
+            "X-Signature": signature,
+            "X-Hotkey": hotkey,
+            "X-Message": message,
+            **self._compression_headers,
+        }
 
     async def send(
         self, url: str, model: PydanticModel
@@ -57,8 +65,16 @@ class Client:
         """
         compressed = encode_body(model)
         response: aiohttp.ClientResponse | None = None
+        # FIXME: properly
+        # FIXME: properly
+        signature: str = "asd"
+        hotkey: str = "wallet.ss58.address"
+        message: str = "message"
+        nonce: str = "nonce"
         async with self._session.post(
-            _build_url(url, model), data=compressed, headers=self._build_headers()
+            _build_url(url, model),
+            data=compressed,
+            headers=self._build_headers(signature, hotkey, message),
         ) as resp:
             response_json = await resp.json()
             response = resp
