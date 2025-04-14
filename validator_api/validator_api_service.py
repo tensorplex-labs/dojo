@@ -103,7 +103,7 @@ app.include_router(logging_router)
 
 async def server():
     """Start the API server"""
-    api_url = os.getenv("VALIDATOR_API_BASE_URL", "http://0.0.0.0:9999")
+    api_url = os.getenv("DOJO_API_BASE_URL", "http://0.0.0.0:9999")
     parsed_url = urlparse(api_url)
     host = parsed_url.hostname or "0.0.0.0"
     port = parsed_url.port or 9999

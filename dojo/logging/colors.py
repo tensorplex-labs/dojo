@@ -76,14 +76,3 @@ class ColorTagsFilter(logging.Filter):
         if hasattr(record, "msg") and isinstance(record.msg, str):
             record.msg = convert_tags_to_ansi(record.msg)
         return True
-
-
-# Convenience function to install the filter on a logger
-def install_color_tags_filter(logger: logging.Logger) -> None:
-    """
-    Install a color tags filter on the given logger.
-
-    Args:
-        logger: Logger instance to install the filter on
-    """
-    logger.addFilter(ColorTagsFilter())
