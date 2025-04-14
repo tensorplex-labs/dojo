@@ -1,3 +1,5 @@
+from typing import Any
+
 import substrateinterface  # pyright: ignore[reportMissingTypeStubs]
 import zstandard as zstd
 from fastapi import HTTPException, Request
@@ -10,7 +12,7 @@ from dojo.messaging.types import StdResponseBody
 
 def create_response(
     success: bool,
-    body: StdResponseBody | None = None,
+    body: StdResponseBody[Any] | None = None,
     error: str | None = None,
 ):
     """Helper function to create standardized responses"""

@@ -1,16 +1,20 @@
-from typing import Any, Dict, TypeVar
+from typing import Any, Awaitable, Callable, Dict, Generic, TypeAlias, TypeVar
 
+from fastapi import Request
 from pydantic import BaseModel
 
-StdResponseBody = Dict[str, Any] | BaseModel
+# TODO: clean these 2 type vars up
+PydanticModel = TypeVar("PydanticModel", bound=BaseModel)
+StdResponseBody: TypeAlias = Dict[str, Any] | PydanticModel
+
+# define a pydantic model here so that we can apply these to child of BaseModel
+ServerHandlerFunc: TypeAlias = Callable[[Request, PydanticModel], Awaitable[Any]]
 
 
-T = TypeVar("T", bound=BaseModel)
-
-
-class StdResponse(BaseModel):
+class StdResponse(BaseModel, Generic[PydanticModel]):
     success: bool
-    body: StdResponseBody | None = None
+    body: Dict[str, Any] | PydanticModel | None = None
+    error: str | None = None
     error: str | None = None
 
 

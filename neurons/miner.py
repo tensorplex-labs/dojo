@@ -8,6 +8,7 @@ from typing import Dict, Tuple
 import bittensor
 from bittensor.core.metagraph import AsyncMetagraph
 from bittensor.utils.btlogging import logging as logger
+from fastapi import Request
 
 from commons.exceptions import FatalSubtensorConnectionError
 from commons.human_feedback.dojo import DojoAPI
@@ -15,6 +16,7 @@ from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject, get_epoch_time, serve_axon
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import get_async_subtensor, parse_block_headers
+from dojo.messaging import Server
 from dojo.protocol import (
     Heartbeat,
     ScoringResult,
@@ -74,8 +76,29 @@ class Miner(aobject):
             blacklist_fn=self.blacklist_task_result_request,
         )
 
-        # Instantiate runners
-        self.should_exit: bool = False
+        # TODO: implementation for these skeleton functions
+        self.server = Server()
+
+        # NOTE: simply wrap so we don't need to deal with `self` atm
+        async def task_request_adapter(
+            request: Request, synapse: TaskSynapseObject
+        ) -> TaskSynapseObject:
+            return await self.forward_task_request(request, synapse)
+
+        async def task_result_request_adapter(
+            request: Request, synapse: TaskResultRequest
+        ) -> TaskResultRequest:
+            return await self.forward_task_result_request(synapse)
+
+        self.server.serve_synapse(
+            synapse=TaskSynapseObject,
+            handler=task_request_adapter,
+        )
+        self.server.serve_synapse(
+            synapse=TaskResultRequest,
+            handler=task_result_request_adapter,
+        )
+
         # log all incoming requests
         self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
 
@@ -84,7 +107,9 @@ class Miner(aobject):
         config = ObjectManager.get_config()
         subtensor = await get_async_subtensor()
         if not subtensor:
-            message = "Failed to connect to async subtensor during initialisation of validator"
+            message = (
+                "Failed to connect to async subtensor during initialisation of miner"
+            )
             logger.error(message)
             raise FatalSubtensorConnectionError(message)
 
@@ -125,6 +150,7 @@ class Miner(aobject):
             Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
         """
 
+        await self.server.initialise()
         # manually always register and always sync metagraph when application starts
         await self.resync_metagraph()
         await self.sync()
@@ -236,7 +262,7 @@ class Miner(aobject):
         return synapse
 
     async def forward_task_request(
-        self, synapse: TaskSynapseObject
+        self, request: Request, synapse: TaskSynapseObject
     ) -> TaskSynapseObject:
         # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
         if not synapse or not synapse.completion_responses:
