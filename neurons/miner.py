@@ -92,7 +92,7 @@ class Miner(aobject):
             handler=task_request_adapter,
         )
         # TODO: replacement for `forward_score_result`
-        # TODO: replacement for `forward_score_result`
+        # TODO: replacement for `forward_task_result_request`
 
         # log all incoming requests
         self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}

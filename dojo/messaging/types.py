@@ -13,7 +13,7 @@ ServerHandlerFunc: TypeAlias = Callable[[Request, PydanticModel], Awaitable[Any]
 
 class StdResponse(BaseModel, Generic[PydanticModel]):
     success: bool
-    body: Dict[str, Any] | PydanticModel | None = None
+    body: PydanticModel | None = None
     error: str | None = None
     error: str | None = None
 

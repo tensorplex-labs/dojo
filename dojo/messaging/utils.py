@@ -3,23 +3,26 @@ from typing import Any
 import substrateinterface  # pyright: ignore[reportMissingTypeStubs]
 import zstandard as zstd
 from fastapi import HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import ORJSONResponse
 from loguru import logger
 from pydantic import BaseModel
 
-from dojo.messaging.types import StdResponseBody
-
 
 def create_response(
     success: bool,
-    body: StdResponseBody[Any] | None = None,
+    body: dict[str, Any],
     error: str | None = None,
 ):
     """Helper function to create standardized responses"""
-    if isinstance(body, BaseModel):
-        body = body.model_dump()
 
-    return ORJSONResponse(content={"success": success, "body": body, "error": error})
+    return ORJSONResponse(
+        content={
+            "success": success,
+            "body": jsonable_encoder(body),
+            "error": error,
+        }
+    )
 
 
 def verify_signature(hotkey: str, signature: str, message: str) -> bool:

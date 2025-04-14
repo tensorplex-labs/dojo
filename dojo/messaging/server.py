@@ -1,8 +1,10 @@
-from typing import List, Type
+import traceback
+from typing import Any, List, Type
 
 import orjson
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import ORJSONResponse
 from loguru import logger
 
 from dojo.messaging.types import PydanticModel, ServerHandlerFunc
@@ -57,24 +59,32 @@ def _register_route_handler(
 ) -> FastAPI:
     """Register a route with a Pydantic model to allow easily adding new endpoints"""
 
-    async def handler_wrapper(request: Request):
+    async def handler_wrapper(request: Request) -> ORJSONResponse:
         """Wrapper around the request that handles zstd decompression and payload validation"""
         try:
-            body = await decode_body(request)
-
-            print(f"Got request: body: {body=}")
+            body: bytes = await decode_body(request)
+            logger.debug(f"Got request: body: {body=}")
+            data: dict[str, Any] = {}
             try:
+                logger.debug("Attempting to decode body")
+                logger.debug(f"Type: {type(body)} Body: {body}")
                 data = orjson.loads(body)
             except orjson.JSONDecodeError as e:
+                logger.error(f"JSON Decode error: {str(e)}")
                 return create_response(
-                    success=False, error=f"Invalid JSON, exception: {str(e)}"
+                    success=False,
+                    error=f"Invalid JSON, exception: {str(e)}",
+                    body=data,
                 )
 
             try:
+                logger.debug(f"Attempting to validate payload: {data=}")
                 payload = model.model_validate(data)
             except Exception as e:
                 return create_response(
-                    success=False, error=f"Validation error: {str(e)}"
+                    success=False,
+                    error=f"Validation error: {str(e)}",
+                    body=data,
                 )
 
             result = await handler(request, payload)
@@ -85,9 +95,11 @@ def _register_route_handler(
             logger.error(f"HTTPException: {str(e)}")
             raise e
         except Exception as e:
+            traceback.print_exc()
             logger.error(f"Error processing request due to: {str(e)}")
+            # TODO: add more context here
             return create_response(
-                success=False, error=f"Internal server error: {str(e)}"
+                success=False, error=f"Internal server error: {str(e)}", body={}
             )
 
     # grab docstrings from underlying function
