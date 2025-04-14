@@ -33,7 +33,9 @@ class Server:
                 reload=False,
             )
             if not server_config:
-                logger.info("Server config not provided, using default config")
+                logger.info(
+                    f"Server config not provided, using default config: host:{default_config.host}, port: {default_config.port}, log_level: {default_config.log_level}"
+                )
             server = uvicorn.Server(
                 default_config if not server_config else server_config
             )
@@ -88,49 +90,15 @@ def _register_route_handler(
                 success=False, error=f"Internal server error: {str(e)}"
             )
 
+    # grab docstrings from underlying function
+    description = handler.__doc__ if handler.__doc__ else handler_wrapper.__doc__
+
     handler_wrapper.__name__ = handler.__name__
     app.add_api_route(
         path="/" + model.__name__.lstrip("/"),
         endpoint=handler_wrapper,
         methods=methods,
         operation_id=f"handle_{model.__name__}",
+        description=description,
     )
     return app
-
-
-# # NOTE: example usage below
-# # TODO: cleanup example usage below
-#
-# app = FastAPI()
-#
-#
-# # e.g. miner here, and this gets called
-# async def handler_a(request: Request, payload: PayloadA) -> PayloadA:
-#     # Access both request info and the validated payload
-#     return payload
-#
-#
-# # Register routes with their respective payload models
-# _register_route_handler(
-#     app=app,
-#     handler=handler_a,
-#     model=PayloadA,
-# )
-#
-#
-# async def main():
-#     print(app.routes)
-#     config = uvicorn.Config(
-#         app=app,
-#         host="0.0.0.0",
-#         port=8001,
-#         workers=1,
-#         log_level="info",
-#         reload=False,
-#     )
-#     server = uvicorn.Server(config)
-#     await server.serve()
-#
-#
-# if __name__ == "__main__":
-#     asyncio.run(main())

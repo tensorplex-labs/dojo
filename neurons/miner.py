@@ -13,7 +13,7 @@ from fastapi import Request
 from commons.exceptions import FatalSubtensorConnectionError
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
-from commons.utils import aget_effective_stake, aobject, get_epoch_time, serve_axon
+from commons.utils import aget_effective_stake, aobject, get_epoch_time
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import get_async_subtensor, parse_block_headers
 from dojo.messaging import Server
@@ -58,23 +58,24 @@ class Miner(aobject):
         # while the forward synapse contains the full request body.
 
         logger.info("Attaching forward function to miner axon.")
-        self.axon.attach(
-            forward_fn=self.forward_task_request,
-            blacklist_fn=self.blacklist_task_request,
-            priority_fn=self.priority_ranking,
-        ).attach(
-            forward_fn=self.forward_score_result,
-            blacklist_fn=self.blacklist_score_result_request,
-        ).attach(
-            forward_fn=self.ack_heartbeat,
-            blacklist_fn=self.blacklist_heartbeat_request,
-        )
+        # TODO: replacement for `forward_task_request`
+        # self.axon.attach(
+        #     forward_fn=self.forward_task_request,
+        #     blacklist_fn=self.blacklist_task_request,
+        #     priority_fn=self.priority_ranking,
+        # ).attach(
+        #     forward_fn=self.forward_score_result,
+        #     blacklist_fn=self.blacklist_score_result_request,
+        # ).attach(
+        #     forward_fn=self.ack_heartbeat,
+        #     blacklist_fn=self.blacklist_heartbeat_request,
+        # )
 
         # Attach a handler for TaskResultRequest to return task results
-        self.axon.attach(
-            forward_fn=self.forward_task_result_request,
-            blacklist_fn=self.blacklist_task_result_request,
-        )
+        # self.axon.attach(
+        #     forward_fn=self.forward_task_result_request,
+        #     blacklist_fn=self.blacklist_task_result_request,
+        # )
 
         # TODO: implementation for these skeleton functions
         self.server = Server()
@@ -83,21 +84,15 @@ class Miner(aobject):
         async def task_request_adapter(
             request: Request, synapse: TaskSynapseObject
         ) -> TaskSynapseObject:
+            """Handles the task request from the validator and forwards it to the DojoAPI."""
             return await self.forward_task_request(request, synapse)
-
-        async def task_result_request_adapter(
-            request: Request, synapse: TaskResultRequest
-        ) -> TaskResultRequest:
-            return await self.forward_task_result_request(synapse)
 
         self.server.serve_synapse(
             synapse=TaskSynapseObject,
             handler=task_request_adapter,
         )
-        self.server.serve_synapse(
-            synapse=TaskResultRequest,
-            handler=task_result_request_adapter,
-        )
+        # TODO: replacement for `forward_score_result`
+        # TODO: replacement for `forward_score_result`
 
         # log all incoming requests
         self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
@@ -150,7 +145,17 @@ class Miner(aobject):
             Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
         """
 
-        await self.server.initialise()
+        serve_success = asyncio.create_task(self.server.initialise())
+        if not serve_success:
+            logger.error("Failed to start server, exiting.")
+            exit()
+        else:
+            logger.info("Server started successfully.")
+            logger.info("Server started successfully.")
+            logger.info("Server started successfully.")
+            logger.info("Server started successfully.")
+            logger.info("Server started successfully.")
+
         # manually always register and always sync metagraph when application starts
         await self.resync_metagraph()
         await self.sync()
@@ -158,12 +163,12 @@ class Miner(aobject):
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
         logger.info(f"Serving miner axon {self.axon} with netuid: {self.config.netuid}")
-        serve_success = await serve_axon(self.subtensor, self.axon, self.config)
-        if serve_success:
-            logger.success("Successfully served axon for miner!")
-        else:
-            logger.error("Failed to serve axon for miner, exiting.")
-            exit()
+        # serve_success = await serve_axon(self.subtensor, self.axon, self.config)
+        # if serve_success:
+        #     logger.success("Successfully served axon for miner!")
+        # else:
+        #     logger.error("Failed to serve axon for miner, exiting.")
+        #     exit()
 
         # Start  starts the miner's axon, making it active on the network.
         self.axon.start()
