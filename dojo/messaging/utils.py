@@ -10,19 +10,31 @@ from pydantic import BaseModel
 
 
 def create_response(
-    success: bool,
     body: dict[str, Any],
+    status_code: int = 200,
     error: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ):
-    """Helper function to create standardized responses"""
+    """
+    Helper function to create standardized RESTful API responses
 
-    return ORJSONResponse(
-        content={
-            "success": success,
-            "body": jsonable_encoder(body),
-            "error": error,
-        }
-    )
+    Args:
+        body: The response data
+        status_code: HTTP status code (default: 200)
+        error: Optional error message for error responses
+        metadata: Optional metadata like pagination info, request ID, etc.
+    """
+    content = {
+        "body": jsonable_encoder(body),
+    }
+
+    if error:
+        content["error"] = error
+
+    if metadata:
+        content["metadata"] = jsonable_encoder(metadata)
+
+    return ORJSONResponse(content=content, status_code=status_code)
 
 
 def verify_signature(hotkey: str, signature: str, message: str) -> bool:

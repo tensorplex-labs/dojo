@@ -42,7 +42,6 @@ class Server:
                 default_config if not server_config else server_config
             )
             await server.serve()
-            # TODO: remove after trying to use
 
             return True
         except Exception as e:
@@ -72,9 +71,9 @@ def _register_route_handler(
             except orjson.JSONDecodeError as e:
                 logger.error(f"JSON Decode error: {str(e)}")
                 return create_response(
-                    success=False,
                     error=f"Invalid JSON, exception: {str(e)}",
                     body=data,
+                    status_code=400,
                 )
 
             try:
@@ -82,15 +81,15 @@ def _register_route_handler(
                 payload = model.model_validate(data)
             except Exception as e:
                 return create_response(
-                    success=False,
                     error=f"Validation error: {str(e)}",
                     body=data,
+                    status_code=400,
                 )
 
             result = await handler(request, payload)
 
             # Return standardized response format
-            return create_response(success=True, body=result)
+            return create_response(body=result)
         except HTTPException as e:
             logger.error(f"HTTPException: {str(e)}")
             raise e
@@ -98,13 +97,10 @@ def _register_route_handler(
             traceback.print_exc()
             logger.error(f"Error processing request due to: {str(e)}")
             # TODO: add more context here
-            return create_response(
-                success=False, error=f"Internal server error: {str(e)}", body={}
-            )
+            return create_response(error=f"Internal server error: {str(e)}", body={})
 
     # grab docstrings from underlying function
     description = handler.__doc__ if handler.__doc__ else handler_wrapper.__doc__
-
     handler_wrapper.__name__ = handler.__name__
     app.add_api_route(
         path="/" + model.__name__.lstrip("/"),

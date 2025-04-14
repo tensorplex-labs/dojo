@@ -20,7 +20,7 @@ def get_client() -> ClientSession:
     return aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False, limit=256))
 
 
-def _build_url(url: str, model: BaseModel, protocol: str = "http"):
+def _build_url(url: str, model: BaseModel, protocol: str = "http") -> str:
     if not url.startswith("http") and not url.startswith("https"):
         url = f"{protocol}://{url}"
 
@@ -56,14 +56,16 @@ class Client:
                 the server
         """
         compressed = encode_body(model)
+        response: aiohttp.ClientResponse | None = None
         async with self._session.post(
             _build_url(url, model), data=compressed, headers=self._build_headers()
-        ) as response:
-            response = await response.json()
+        ) as resp:
+            response_json = await resp.json()
+            response = resp
             # parse object to the specific model
-            logger.info(f"Validator got response from miner: {response}")
+            logger.info(f"Validator got response from miner: {response_json}")
             try:
-                pydantic_model = model.model_validate(response)
+                pydantic_model = model.model_validate(response_json.get("body"))
                 return response, pydantic_model
             except JSONDecodeError as e:
                 logger.error(f"Failed to decode response: {e}")
@@ -95,20 +97,6 @@ async def main():
 
     # TODO: this should be miner's axon IP
     url = "http://127.0.0.1:8888"
-    # NOTE: just testing compression ratios here
-    # async with aiohttp.ClientSession() as session:
-    #     # Test with normal JSON
-    #     async with session.post(
-    #         "http://localhost:8888/TaskSynapseObject",
-    #         data=compressed,
-    #         headers={"Content-Type": "application/json", "Content-Encoding": "zstd"},
-    #     ) as response:
-    #         print(f"Status: {response.status}")
-    #         print(f"Response: {await response.text()}")
-    #         print(f"Original size: {len(json_data)} bytes")
-    #         print(f"Compressed size: {len(compressed)} bytes")
-    #         print(f"Compression ratio: {len(compressed) / len(json_data):.2f}")
-
     session = get_client()
     client = Client(session=session)
     response, returned_payload = await client.send(url, model=payload_a)
@@ -120,6 +108,8 @@ async def main():
         print(f"Compression ratio: {len(compressed) / len(json_data):.2f}")
     if returned_payload:
         print(f"Returned payload: {returned_payload}")
+
+    await session.close()
 
 
 if __name__ == "__main__":
