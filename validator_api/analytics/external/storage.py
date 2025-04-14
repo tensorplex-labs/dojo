@@ -10,6 +10,9 @@ from validator_api.shared.cache import RedisCache
 
 
 class AnalyticsStorage:
+    _anal_prefix_: str = "analytics"
+    _upload_key_: str = "uploaded"
+
     def __init__(self, redis_cache: RedisCache, aws_config: dict):
         self.redis = redis_cache
         self.aws_config = aws_config
@@ -28,9 +31,7 @@ class AnalyticsStorage:
 
     async def cache_task_id(self, task_id: str) -> bool:
         try:
-            key = self.redis._build_key(
-                self.redis._anal_prefix_, self.redis._upload_key_, task_id
-            )
+            key = self.redis._build_key(self._anal_prefix_, self._upload_key_, task_id)
             await self.redis.redis.set(key, task_id, self.ONE_DAY_SECONDS)
             return True
         except Exception as e:
@@ -39,9 +40,7 @@ class AnalyticsStorage:
 
     async def is_task_cached(self, task_id: str) -> bool:
         try:
-            key = self.redis._build_key(
-                self.redis._anal_prefix_, self.redis._upload_key_, task_id
-            )
+            key = self.redis._build_key(self._anal_prefix_, self._upload_key_, task_id)
             return bool(await self.redis.redis.get(key))
         except Exception as e:
             logger.error(f"Error checking cached task ID: {str(e)}")
@@ -66,9 +65,7 @@ class AnalyticsStorage:
 
     async def remove_cached_task(self, task_id: str) -> bool:
         try:
-            key = self.redis._build_key(
-                self.redis._anal_prefix_, self.redis._upload_key_, task_id
-            )
+            key = self.redis._build_key(self._anal_prefix_, self._upload_key_, task_id)
             await self.redis.delete(key)
             return True
         except Exception as e:

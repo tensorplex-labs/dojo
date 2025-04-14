@@ -47,10 +47,9 @@ logger.add(
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
         "<level>{message}</level>"
     ),
-    # format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level:^15}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>",
     colorize=True,
     level="DEBUG",
-    filter=forwarded_log_filter,  # Apply filter to console output
+    filter=forwarded_log_filter,
 )
 logging = logger
 
