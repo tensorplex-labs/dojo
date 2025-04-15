@@ -4,7 +4,7 @@ import traceback
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 from validator_api.analytics.core.models import AnalyticsPayload
 from validator_api.analytics.core.service import AnalyticsService
 from validator_api.analytics.external.storage import AnalyticsStorage

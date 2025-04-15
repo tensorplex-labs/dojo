@@ -9,7 +9,7 @@ from pathlib import Path
 import bittensor as bt
 from dotenv import find_dotenv, load_dotenv
 
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 
 base_path = Path.cwd()
 

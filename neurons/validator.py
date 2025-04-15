@@ -44,8 +44,9 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
+from dojo.analytics import run_analytics_upload
 from dojo.chain import parse_block_headers
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -60,7 +61,6 @@ from dojo.protocol import (
     TaskSynapseObject,
     TaskTypeEnum,
 )
-from dojo.utils.analytics import run_analytics_upload
 from dojo.utils.config import get_config
 from dojo.utils.uids import extract_miner_uids, is_miner
 

@@ -4,7 +4,7 @@ import aioboto3
 from fastapi import UploadFile
 
 from commons.api_settings import AWSSettings
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 
 
 class DatasetStorage:

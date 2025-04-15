@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 
 from .models import (
     AnalyticsErrorResponse,

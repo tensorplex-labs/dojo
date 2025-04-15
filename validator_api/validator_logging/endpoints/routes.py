@@ -4,7 +4,7 @@ import traceback
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 from validator_api.shared.auth import ValidatorAuth
 from validator_api.validator_logging.core.models import LogBatch
 from validator_api.validator_logging.core.service import LoggingService

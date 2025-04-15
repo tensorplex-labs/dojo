@@ -14,7 +14,7 @@ from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject, get_epoch_time, serve_axon
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import get_async_subtensor, parse_block_headers
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 from dojo.protocol import (
     Heartbeat,
     ScoringResult,

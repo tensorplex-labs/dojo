@@ -1,9 +1,5 @@
-import asyncio
 import logging as python_logging
-from datetime import datetime
 
-import aiohttp
-import bittensor as bt
 from loguru import logger
 
 from dojo.logging.colors import convert_tags_to_ansi
@@ -37,6 +33,7 @@ class ForwardedLogFilter:
         return True
 
 
+# Clears the default loguru handler and then add a customised version
 logger.remove()
 forwarded_log_filter = ForwardedLogFilter()
 logger.add(
@@ -83,229 +80,14 @@ def python_logging_to_loguru(level=python_logging.INFO):
                 print(f"Failed to forward log to Loguru: {e}")
                 print(f"Original message: {record.getMessage()}")
 
+    # Configures the root logger
     python_logging.root.handlers.clear()
     python_logging.root.setLevel(level)
     python_logging.root.addHandler(InterceptHandler())
+
+    # Configures the named loggers
+    # Disable propagation to prevent duplicate logs and add the InterceptHandler
     for name in python_logging.root.manager.loggerDict:
         python_logging.getLogger(name).propagate = False
         python_logging.getLogger(name).handlers.clear()
         python_logging.getLogger(name).addHandler(InterceptHandler())
-
-
-class ValidatorAPILogHandler(python_logging.Handler):
-    def __init__(
-        self,
-        api_url: str,
-        wallet: bt.wallet,
-        batch_size: int = 100,
-        flush_interval: float = 1.0,
-    ):
-        super().__init__()
-
-        # Ensure api_url is properly formatted
-        if api_url:
-            # Make sure the URL has a scheme
-            if not api_url.startswith(("http://", "https://")):
-                api_url = f"https://{api_url}"
-
-            # Remove trailing slash if present
-            if api_url.endswith("/"):
-                api_url = api_url[:-1]
-
-            logger.info(f"Initializing validator API logger with URL: {api_url}")
-        else:
-            logger.warning("API URL is not set, log forwarding to API will be disabled")
-
-        self.api_url = api_url
-        self.hotkey = wallet.hotkey.ss58_address
-        self.wallet = wallet  # Store wallet for signing messages
-        self.batch_size = batch_size
-        self.flush_interval = flush_interval
-        self.log_queue: asyncio.Queue[dict[str, str | int | float]] = asyncio.Queue()
-        self._shutdown = False
-        self._flush_task = None
-
-    def __call__(self, message):
-        """
-        This method makes the handler compatible with Loguru sinks
-        Loguru will call this method with the message when logging
-        """
-        try:
-            record_time = message.record["time"].strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            level = message.record["level"].name
-            level_padded = f"{level:^15}"
-
-            module_name = message.record["name"]
-            function_name = message.record["function"]
-            line_no = message.record["line"]
-
-            module_path = f"{module_name}:{function_name}:{line_no}"
-
-            original_message = message.record["message"]
-            original_message = convert_tags_to_ansi(original_message)
-
-            formatted_message = (
-                f"{record_time} | {level_padded} | {module_path} | {original_message}"
-            )
-
-            log_entry = {
-                "timestamp": datetime.now().isoformat(),
-                "level": level,
-                "message": formatted_message,
-            }
-            asyncio.create_task(self.log_queue.put(log_entry))
-        except Exception as e:
-            print(f"Error in ValidatorAPILogHandler.__call__: {e}")
-
-    def sign_message(self, message: str) -> str:
-        """Sign a message using the wallet's hotkey"""
-        signature = self.wallet.hotkey.sign(message).hex()
-        if not signature.startswith("0x"):
-            signature = f"0x{signature}"
-        return signature
-
-    def emit(self, record: python_logging.LogRecord) -> None:
-        """Emit a log record to the queue - for compatibility with Python logging"""
-        try:
-            # Get module path from record
-            module_path = f"{record.module}:{record.funcName}:{record.lineno}"
-
-            # Format time
-            timestamp = datetime.fromtimestamp(record.created).strftime(
-                "%Y-%m-%d %H:%M:%S.%f"
-            )[:-3]
-
-            # Get the original message
-            message = record.getMessage()
-
-            # Convert any color tags to ANSI color codes
-            message = convert_tags_to_ansi(message)
-
-            # Map custom log levels to their string representation
-            level_name = record.levelname
-            if record.levelno == 25:  # Loguru's SUCCESS level
-                level_name = "SUCCESS"
-
-            # Format message to match sample logs with ANSI colors
-            formatted_message = (
-                f"{timestamp} | {level_name:^15} | {module_path} | {message}"
-            )
-
-            # Convert the log record to a dict with only essential fields
-            log_entry = {
-                "timestamp": datetime.fromtimestamp(record.created).isoformat(),
-                "level": level_name,
-                "message": formatted_message,
-            }
-
-            # Put the log entry in the queue
-            asyncio.create_task(self.log_queue.put(log_entry))
-
-        except Exception as e:
-            # Use print instead of logger to avoid recursion
-            print(f"Error in ValidatorAPILogHandler.emit: {e}")
-
-    async def _flush_logs(self):
-        """Periodically flush logs to the API"""
-        while not self._shutdown:
-            try:
-                # Wait for flush interval or batch size
-                logs = []
-                try:
-                    while len(logs) < self.batch_size:
-                        log = await asyncio.wait_for(
-                            self.log_queue.get(), timeout=self.flush_interval
-                        )
-                        logs.append(log)
-                except asyncio.TimeoutError:
-                    pass
-
-                if logs and self.api_url:
-                    # Create a deterministic message for this batch
-                    current_time = datetime.now().isoformat()
-                    message = (
-                        f"Log batch containing {len(logs)} entries at {current_time}"
-                    )
-                    # Sign the message
-                    signature = self.sign_message(message)
-
-                    # Prepare the batch
-                    batch = {
-                        "hotkey": self.hotkey,
-                        "signature": signature,
-                        "message": message,
-                        "logs": logs,
-                    }
-
-                    # Construct the complete URL
-                    api_endpoint = f"{self.api_url}/api/v1/validator/logging"
-
-                    # Send to API
-                    async with aiohttp.ClientSession() as session:
-                        async with session.post(
-                            api_endpoint,
-                            json=batch,
-                            headers={"Content-Type": "application/json"},
-                        ) as response:
-                            if response.status != 200:
-                                logger.error(
-                                    f"Failed to send logs to API: {await response.text()}"
-                                )
-
-            except Exception as e:
-                logger.error(f"Error in _flush_logs: {e}")
-
-    def start(self):
-        """Start the flush task"""
-        if not self._flush_task:
-            self._flush_task = asyncio.create_task(self._flush_logs())
-
-    async def stop(self):
-        """Stop the handler and flush remaining logs"""
-        self._shutdown = True
-        if self._flush_task:
-            self._flush_task.cancel()
-            try:
-                await self._flush_task
-            except asyncio.CancelledError:
-                pass
-            self._flush_task = None
-
-        # Flush any remaining logs
-        logs = []
-        while not self.log_queue.empty():
-            try:
-                log = self.log_queue.get_nowait()
-                logs.append(log)
-            except asyncio.QueueEmpty:
-                break
-
-        if logs and self.api_url:
-            # Create a final message for this batch
-            current_time = datetime.now().isoformat()
-            message = (
-                f"Final log batch containing {len(logs)} entries at {current_time}"
-            )
-            # Sign the message
-            signature = self.sign_message(message)
-
-            batch = {
-                "hotkey": self.hotkey,
-                "signature": signature,
-                "message": message,
-                "logs": logs,
-            }
-
-            # Construct the complete URL
-            api_endpoint = f"{self.api_url}/api/v1/validator/logging"
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    api_endpoint,
-                    json=batch,
-                    headers={"Content-Type": "application/json"},
-                ) as response:
-                    if response.status != 200:
-                        logger.error(
-                            f"Failed to send final logs to API: {await response.text()}"
-                        )

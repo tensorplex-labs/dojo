@@ -4,7 +4,7 @@ from datetime import datetime
 
 import aioboto3
 
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 from validator_api.analytics.core.models import AnalyticsPayload
 from validator_api.shared.cache import RedisCache
 
@@ -17,6 +17,7 @@ class AnalyticsStorage:
         self.redis = redis_cache
         self.aws_config = aws_config
         self.ONE_DAY_SECONDS = 60 * 60 * 24  # 24 hours in seconds
+        self.session = aioboto3.Session(region_name=self.aws_config.AWS_REGION)
 
     def format_for_athena(self, data: AnalyticsPayload) -> str:
         try:
@@ -48,8 +49,7 @@ class AnalyticsStorage:
 
     async def upload_to_s3(self, data: AnalyticsPayload, hotkey: str) -> bool:
         try:
-            session = aioboto3.Session(region_name=self.aws_config.AWS_REGION)
-            async with session.resource("s3") as s3:
+            async with self.session.resource("s3") as s3:
                 bucket = await s3.Bucket(self.aws_config.BUCKET_NAME)
                 filename = f"analytics/{hotkey}_{datetime.now().strftime('%Y-%m-%d_%H-%M')}_analytics.txt"
 

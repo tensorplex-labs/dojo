@@ -3,7 +3,7 @@ from typing import List
 
 import requests
 
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 from validator_api.validator_logging.core.models import LogEntry
 
 

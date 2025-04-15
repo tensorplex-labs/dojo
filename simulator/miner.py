@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import redis
 
 from commons.utils import get_new_uuid
-from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 from dojo.protocol import FeedbackRequest, Result, TaskResult, TaskResultRequest
 from dojo.utils.config import get_config
 from neurons.miner import Miner

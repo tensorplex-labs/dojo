@@ -15,21 +15,19 @@ from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
 from dojo import get_dojo_api_base_url
 from dojo.chain import get_async_subtensor
-from dojo.logging.logging import (
-    ValidatorAPILogHandler,
+from dojo.logging import (
+    ValidatorLogForwarder,
     forwarded_log_filter,
     python_logging_to_loguru,
 )
-from dojo.logging.logging import logging as logger
-
-# from dojo.logging.logging import logging as logger
+from dojo.logging import logging as logger
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
 
 validator = ObjectManager.get_validator()
 
-api_log_handler = None
+api_log_forwarder = None
 
 
 @asynccontextmanager
@@ -41,17 +39,17 @@ async def lifespan(app: FastAPI):
     python_logging_to_loguru(level=python_logging.INFO)
 
     # Setup validator API logging
-    global api_log_handler
+    global api_log_forwarder
 
-    api_log_handler = ValidatorAPILogHandler(
+    api_log_forwarder = ValidatorLogForwarder(
         api_url=get_dojo_api_base_url(),
         wallet=validator.wallet,
     )
-    api_log_handler.start()
+    api_log_forwarder.start()
 
     # Add the handler directly to Loguru with the filter
     handler_id = logger.add(
-        api_log_handler,
+        api_log_forwarder,
         level="DEBUG",
         format="{message}",
         filter=forwarded_log_filter,
@@ -61,7 +59,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup logging handlers
-    if api_log_handler:
+    if api_log_forwarder:
         try:
             # Remove the Loguru handler we added
             if handler_id:
@@ -70,7 +68,7 @@ async def lifespan(app: FastAPI):
             print(f"Error removing Loguru handlers: {e}")
 
         # Stop the handler and flush logs
-        await api_log_handler.stop()
+        await api_log_forwarder.stop()
 
     await _shutdown_validator()
 
