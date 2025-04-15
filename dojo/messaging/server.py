@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import ORJSONResponse
 from loguru import logger
 
+from dojo.messaging.exceptions import InvalidSignatureException
 from dojo.messaging.middleware import SignatureMiddleware
 from dojo.messaging.types import PydanticModel, ServerHandlerFunc
 from dojo.messaging.utils import create_response, decode_body
@@ -15,13 +16,17 @@ from dojo.messaging.utils import create_response, decode_body
 class Server:
     def __init__(self, app: FastAPI | None = None) -> None:
         self.app = FastAPI() or app
+        self.app.add_middleware(SignatureMiddleware)
+        # NOTE: here we register some exception handlers that make it easier to
+        # write miner's code
         self._add_http_exception_handler()
+        self._add_invalid_signature_exception_handler()
 
     def _add_http_exception_handler(self) -> None:
         """Register exception handlers to standardize error responses"""
 
         @self.app.exception_handler(HTTPException)
-        async def http_exception_handler(
+        async def http_exception_handler(  # pyright: ignore[reportUnusedFunction]
             request: Request, exc: HTTPException
         ) -> ORJSONResponse:
             """Convert HTTPExceptions to standardized response format"""
@@ -30,12 +35,26 @@ class Server:
                 error=str(exc.detail), body={}, status_code=exc.status_code
             )
 
+    def _add_invalid_signature_exception_handler(self) -> None:
+        """Register invalid signature exception handler to standardize error responses"""
+
+        @self.app.exception_handler(InvalidSignatureException)
+        async def invalid_signature_exc_handler(  # pyright: ignore[reportUnusedFunction]
+            request: Request, exc: InvalidSignatureException
+        ) -> ORJSONResponse:
+            """Convert InvalidSignatureException to standardized response format"""
+            logger.error(f"HTTPException: {str(exc)}")
+            return create_response(
+                error=str(exc),
+                body={},
+                status_code=403,
+            )
+
     def serve_synapse(
         self, synapse: Type[PydanticModel], handler: ServerHandlerFunc[PydanticModel]
     ) -> None:
         # NOTE: we always want to have signature middleware, as miners should
         # only be reachable by validators
-        self.app.add_middleware(SignatureMiddleware)
         self.app = _register_route_handler(self.app, handler, model=synapse)
 
     async def initialise(self, server_config: uvicorn.Config | None = None) -> bool:
@@ -77,11 +96,11 @@ def _register_route_handler(
         """Wrapper around the request that handles zstd decompression and payload validation"""
         try:
             body: bytes = await decode_body(request)
-            logger.debug(f"Got request: body: {body=}")
+            logger.info(f"Got request: body: {body=}")
             data: dict[str, Any] = {}
             try:
-                logger.debug("Attempting to decode body")
-                logger.debug(f"Type: {type(body)} Body: {body}")
+                logger.info("Attempting to decode body")
+                logger.info(f"Type: {type(body)} Body: {body}")
                 data = orjson.loads(body)
             except orjson.JSONDecodeError as e:
                 logger.error(f"JSON Decode error: {str(e)}")
@@ -92,7 +111,7 @@ def _register_route_handler(
                 )
 
             try:
-                logger.debug(f"Attempting to validate payload: {data=}")
+                logger.info(f"Attempting to validate payload: {data=}")
                 payload = model.model_validate(data)
             except Exception as e:
                 return create_response(

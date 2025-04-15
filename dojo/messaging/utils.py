@@ -8,6 +8,8 @@ from fastapi.responses import ORJSONResponse
 from loguru import logger
 from pydantic import BaseModel
 
+from dojo.messaging.types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
+
 
 def create_response(
     body: dict[str, Any],
@@ -77,3 +79,39 @@ async def decode_body(request: Request) -> bytes:
             )
 
     return body
+
+
+def extract_headers(request: Request) -> tuple[str, str, str]:
+    """Based on the headers, extract the hotkey, message and signature"""
+    try:
+        headers: dict[str, Any] = {}
+        for header, value in request.headers.items():
+            if header.startswith("X-"):
+                headers[header] = value
+        signature = headers.get(SIGNATURE_HEADER, "")
+        hotkey = headers.get(HOTKEY_HEADER, "")
+        message = headers.get(MESSAGE_HEADER, "")
+        return hotkey, message, signature
+
+    except Exception:
+        return "", "", ""
+
+
+def is_valid_signature(request: Request) -> bool:
+    try:
+        headers: dict[str, Any] = {}
+        for header, value in request.headers.items():
+            if header.startswith("X-"):
+                headers[header] = value
+
+        signature = headers.get(SIGNATURE_HEADER)
+        hotkey = headers.get(HOTKEY_HEADER)
+        message = headers.get(MESSAGE_HEADER)
+        if not signature or not hotkey or not message:
+            return False
+        is_valid = verify_signature(hotkey=hotkey, signature=signature, message=message)
+        logger.success(f"Signature verified, signed by {hotkey}")
+        return is_valid
+    except Exception as e:
+        logger.error(f"Error occurred while verifying signature, exception {e}")
+        return False

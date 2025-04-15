@@ -1,15 +1,18 @@
 import http
-from typing import Callable
+from typing import Any, Callable
 
-from fastapi import Request, Response
+from fastapi import Request
+from fastapi.responses import ORJSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from dojo.messaging.types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
-from dojo.messaging.utils import verify_signature
+from dojo.messaging.utils import create_response, verify_signature
 
 
 class SignatureMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next: Callable):
+    async def dispatch(
+        self, request: Request, call_next: Callable
+    ) -> ORJSONResponse | Any:
         signature = request.headers.get(SIGNATURE_HEADER, "")
         hotkey = request.headers.get(HOTKEY_HEADER, "")
         message = request.headers.get(MESSAGE_HEADER, "")
@@ -17,9 +20,14 @@ class SignatureMiddleware(BaseHTTPMiddleware):
             message = f"{http.HTTPStatus(400).phrase}, missing \
                     headers, expected: {SIGNATURE_HEADER}, {HOTKEY_HEADER}, {MESSAGE_HEADER}, \
                     got: {hotkey=}, {signature=}, {message=}"
-            return Response(content=message, status_code=400)
+            return create_response(body={}, status_code=400, error=message)
+
         if not verify_signature(hotkey, signature, message):
-            return Response(content=http.HTTPStatus(403).phrase, status_code=403)
+            return create_response(
+                body={},
+                status_code=403,
+                error=f"{http.HTTPStatus(403).phrase} due to invalid signature",
+            )
 
         # otherwise, proceed with the normal request
         response = await call_next(request)

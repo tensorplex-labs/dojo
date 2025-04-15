@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import http
 import time
 import traceback
 from datetime import datetime
@@ -7,8 +8,10 @@ from typing import Dict, Tuple
 
 import bittensor
 from bittensor.core.metagraph import AsyncMetagraph
-from bittensor.utils.btlogging import logging as logger
-from fastapi import Request
+from fastapi import HTTPException, Request
+
+# from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.exceptions import FatalSubtensorConnectionError
 from commons.human_feedback.dojo import DojoAPI
@@ -16,7 +19,7 @@ from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject, get_epoch_time
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import get_async_subtensor, parse_block_headers
-from dojo.messaging import Server
+from dojo.messaging import Server, extract_headers
 from dojo.protocol import (
     Heartbeat,
     ScoringResult,
@@ -271,19 +274,18 @@ class Miner(aobject):
     ) -> TaskSynapseObject:
         # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
         if not synapse or not synapse.completion_responses:
-            logger.error("Invalid synapse: missing synapse or completion_responses")
-            return synapse
+            message = "Invalid synapse: missing synapse or completion_responses"
+            logger.error(message)
+            raise HTTPException(status_code=http.HTTPStatus.BAD_REQUEST, detail=message)
 
-        if not synapse.dendrite or not synapse.dendrite.hotkey:
-            logger.error("Invalid synapse: missing dendrite information")
-            return synapse
+        hotkey, _, _ = extract_headers(request)
 
         try:
             logger.info(
-                f"Miner received task id: {synapse.task_id} from {synapse.dendrite.hotkey}, with expire_at: {synapse.expire_at}"
+                f"Miner received task id: {synapse.task_id} from {hotkey}, with expire_at: {synapse.expire_at}"
             )
 
-            self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
+            self.hotkey_to_request[hotkey] = synapse
 
             # Create task and store ID
             if task_ids := await DojoAPI.create_task(synapse):

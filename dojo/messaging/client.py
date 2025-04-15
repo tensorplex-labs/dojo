@@ -1,12 +1,18 @@
 import asyncio
 
 import aiohttp
+import substrateinterface
 from aiohttp.client import ClientSession
 from loguru import logger
 from orjson import JSONDecodeError
 from pydantic import BaseModel
 
-from dojo.messaging.types import SIGNATURE_HEADER, PydanticModel
+from dojo.messaging.types import (
+    HOTKEY_HEADER,
+    MESSAGE_HEADER,
+    SIGNATURE_HEADER,
+    PydanticModel,
+)
 from dojo.messaging.utils import encode_body
 from dojo.protocol import (
     CodeAnswer,
@@ -36,9 +42,11 @@ class Client:
         }
         self._compression_headers = {"Content-Encoding": "zstd"}
 
-    def _build_headers(
-        self, signature: str, hotkey: str, message: str
-    ) -> dict[str, str]:
+    def _build_headers(self, keypair: substrateinterface.Keypair) -> dict[str, str]:
+        hotkey: str = keypair.ss58_address
+        message: str = f"I solemnly swear that I am up to some good. Hotkey: {hotkey}"
+        signature: str = "0x" + keypair.sign(message).hex()
+        # TODO: use wallet nonce
         return {
             "Content-Type": "application/json",
             SIGNATURE_HEADER: signature,
@@ -48,7 +56,7 @@ class Client:
         }
 
     async def send(
-        self, url: str, model: PydanticModel
+        self, url: str, model: PydanticModel, keypair: substrateinterface.Keypair
     ) -> tuple[aiohttp.ClientResponse | None, PydanticModel | None]:
         """Sends the following payload to the given URL.
         Expects that the endpoint is hosted at:
@@ -57,6 +65,7 @@ class Client:
         Args:
             url (str): url
             model (PydanticModel): model
+            keypair (substrateinterface.Keypair): keypair
 
         Returns:
             tuple[aiohttp.ClientResponse | None, PydanticModel | None]: Returns
@@ -64,28 +73,39 @@ class Client:
                 the server
         """
         compressed = encode_body(model)
-        response: aiohttp.ClientResponse | None = None
-        # FIXME: properly
-        # FIXME: properly
-        signature: str = "asd"
-        hotkey: str = "wallet.ss58.address"
-        message: str = "message"
-        nonce: str = "nonce"
+        # response: aiohttp.ClientResponse | None = None
+        # TODO: remove after testing
+        keypair = substrateinterface.Keypair.create_from_uri("//Alice")
+        ERROR_RESPONSE = None, None
         async with self._session.post(
             _build_url(url, model),
             data=compressed,
-            headers=self._build_headers(signature, hotkey, message),
+            headers=self._build_headers(keypair),
         ) as resp:
-            response_json = await resp.json()
-            response = resp
+            logger.info(f"Received response from: {url}, status: {resp.status}")
+            response_json = {}
+            try:
+                response_json = await resp.json()
+            except JSONDecodeError as e:
+                logger.error(
+                    f"Failed to decode response: {await resp.text()}, exception: {e}"
+                )
+                pass
+
+            if not response_json:
+                return ERROR_RESPONSE
+
             # parse object to the specific model
             logger.info(f"Validator got response from miner: {response_json}")
             try:
-                pydantic_model = model.model_validate(response_json.get("body"))
-                return response, pydantic_model
+                body = response_json.get("body", {})
+                if body:
+                    pydantic_model = model.model_validate(body)
+                    return resp, pydantic_model
             except JSONDecodeError as e:
                 logger.error(f"Failed to decode response: {e}")
-        return None, None
+
+        return ERROR_RESPONSE
 
     async def cleanup(self):
         try:
@@ -110,12 +130,22 @@ async def main():
     )
     compressed = encode_body(payload_a)
     json_data = payload_a.model_dump_json()
+    # NOTE: example here to generate a valid signature, message, and hotkey
+    keypair = substrateinterface.Keypair.create_from_uri("//Alice")
+    message = "bingbong"
+    signature = keypair.sign(message)
+    logger.info(f"Signature: {signature}")
+    logger.info(f"Hotkey: {keypair.ss58_address}")
+    logger.info(f"message: {message}")
 
     # TODO: this should be miner's axon IP
     url = "http://127.0.0.1:8888"
     session = get_client()
     client = Client(session=session)
-    response, returned_payload = await client.send(url, model=payload_a)
+    response, returned_payload = await client.send(
+        url, model=payload_a, keypair=keypair
+    )
+
     if response:
         print(f"Status: {response.status}")
         print(f"Response: {await response.text()}")
