@@ -13,7 +13,7 @@ from validator_api.shared.auth import ValidatorAuth
 analytics_router = APIRouter()
 
 
-@analytics_router.post("/api/v1/analytics/validator/tasks")
+@analytics_router.post("/api/v1/validator/analytics/tasks")
 async def create_analytics_data(
     request: Request,
     data: AnalyticsPayload,
