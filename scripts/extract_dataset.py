@@ -292,12 +292,6 @@ async def upload(hotkey: str, signature: str, message: str, filename: str) -> bo
     if not signature.startswith("0x"):
         signature = f"0x{signature}"
 
-    # Build form data similar to how dojo.py does it
-    form_body = {
-        "hotkey": hotkey,
-        "signature": signature,
-        "message": message,
-    }
     # Add file to form data if it exists
     if os.path.exists(filename):
         try:
@@ -312,7 +306,11 @@ async def upload(hotkey: str, signature: str, message: str, filename: str) -> bo
                     ]
                     response = await client.post(
                         f"{DOJO_API_BASE_URL}/api/v1/validator/upload_dataset",
-                        data=form_body,
+                        headers={
+                            "X-Hotkey": hotkey,
+                            "X-Signature": signature,
+                            "X-Message": message,
+                        },
                         files=files,
                         timeout=60.0,
                     )

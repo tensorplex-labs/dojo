@@ -1,48 +1,27 @@
 import time
 import traceback
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from dojo.logging import logging as logger
-from validator_api.analytics.core.models import AnalyticsPayload
 from validator_api.analytics.core.service import AnalyticsService
+from validator_api.analytics.core.types import AnalyticsPayload
 from validator_api.analytics.external.storage import AnalyticsStorage
 from validator_api.shared.auth import ValidatorAuth
 
 analytics_router = APIRouter()
 
 
-@analytics_router.post("/api/v1/analytics/validator/{path_hotkey}/tasks")
+@analytics_router.post("/api/v1/analytics/validator/tasks")
 async def create_analytics_data(
     request: Request,
     data: AnalyticsPayload,
-    path_hotkey: str,
-    header_hotkey: str = Header(..., alias="X-Hotkey"),
-    signature: str = Header(..., alias="X-Signature"),
-    message: str = Header(..., alias="X-Message"),
+    hotkey: str = Depends(ValidatorAuth.validate_validator),
 ):
     start_time = time.time()
     try:
-        logger.info(f"Received analytics request from hotkey {header_hotkey}")
-
-        # Verify that path hotkey matches header hotkey
-        if path_hotkey != header_hotkey:
-            logger.error(
-                f"Path hotkey {path_hotkey} does not match header hotkey {header_hotkey}"
-            )
-            raise HTTPException(
-                status_code=401, detail="Hotkey in path does not match hotkey in header"
-            )
-
-        # Validate validator credentials
-        await ValidatorAuth.validate_validator(
-            request=request, hotkey=header_hotkey, signature=signature, message=message
-        )
-
-        auth_time = time.time()
-        execution_time = auth_time - start_time
-        logger.info(f"Auth completed in {execution_time:.4f} seconds")
+        logger.info(f"Received analytics request from hotkey {hotkey}")
 
         # Initialize storage
         storage = AnalyticsStorage(
@@ -51,7 +30,7 @@ async def create_analytics_data(
 
         # Validate analytics data
         if not AnalyticsService.validate_analytics_data(data):
-            logger.error(f"Invalid analytics data from hotkey {header_hotkey}")
+            logger.error(f"Invalid analytics data from hotkey {hotkey}")
             raise HTTPException(status_code=400, detail="Invalid analytics data")
 
         # Process and upload data
@@ -69,7 +48,7 @@ async def create_analytics_data(
                 logger.info("No processed tasks to upload. Skipping analytics upload.")
                 end_time = time.time()
                 execution_time = end_time - start_time
-                logger.info(f"Request completed in {execution_time:.4f} seconds")
+                logger.debug(f"Request completed in {execution_time:.4f} seconds")
                 result = AnalyticsService.create_success_response(
                     message="No processed tasks to upload. Skipping analytics upload.",
                     task_count=0,
@@ -80,13 +59,11 @@ async def create_analytics_data(
 
             # Upload to S3
             upload_success = await storage.upload_to_s3(
-                AnalyticsPayload(tasks=new_tasks), header_hotkey
+                AnalyticsPayload(tasks=new_tasks), hotkey
             )
 
             if not upload_success:
-                logger.error(
-                    f"Failed to upload analytics data for hotkey {header_hotkey}"
-                )
+                logger.error(f"Failed to upload analytics data for hotkey {hotkey}")
                 # Clean up cached tasks on failure
                 for task_id in newly_cached_tasks:
                     await storage.remove_cached_task(task_id)
@@ -95,11 +72,11 @@ async def create_analytics_data(
                 )
 
             logger.info(
-                f"Successfully processed {len(new_tasks)} analytics tasks for hotkey {header_hotkey}"
+                f"Successfully processed {len(new_tasks)} analytics tasks for hotkey {hotkey}"
             )
             end_time = time.time()
             execution_time = end_time - start_time
-            logger.info(f"Request completed in {execution_time:.4f} seconds")
+            logger.debug(f"Request completed in {execution_time:.4f} seconds")
             result = AnalyticsService.create_success_response(
                 message=f"Successfully processed {len(new_tasks)} analytics tasks",
                 task_count=len(new_tasks),
@@ -113,9 +90,6 @@ async def create_analytics_data(
             raise
 
     except Exception as e:
-        end_time = time.time()
-        execution_time = end_time - start_time
-        logger.error(f"Error processing request: {execution_time:.4f} seconds")
         logger.error(f"Error: {str(e)}")
         logger.error(traceback.format_exc())
 

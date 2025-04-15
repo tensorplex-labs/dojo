@@ -3,7 +3,7 @@ from typing import Any, Dict
 
 from dojo.logging import logging as logger
 
-from .models import (
+from .types import (
     AnalyticsErrorResponse,
     AnalyticsPayload,
     AnalyticsSuccessResponse,

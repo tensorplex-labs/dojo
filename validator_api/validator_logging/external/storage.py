@@ -4,7 +4,7 @@ from typing import List
 import requests
 
 from dojo.logging import logging as logger
-from validator_api.validator_logging.core.models import LogEntry
+from validator_api.validator_logging.core.types import LogEntry
 
 
 class LogStorage:

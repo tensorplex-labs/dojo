@@ -2,7 +2,7 @@ from typing import Dict, List
 
 from dojo.logging import logging as logger
 
-from .models import LogEntry, LogResponse
+from .types import LogEntry, LogResponse
 
 
 class LoggingService:

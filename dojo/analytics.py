@@ -157,7 +157,7 @@ async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response
     try:
         logger.debug("POST-ing analytics data to validator API")
         response = await _http_client.post(
-            url=f"{DOJO_API_BASE_URL}/api/v1/analytics/validator/{hotkey}/tasks",
+            url=f"{DOJO_API_BASE_URL}/api/v1/analytics/validator/tasks",
             json=payload.model_dump(mode="json"),
             headers={
                 "X-Hotkey": hotkey,

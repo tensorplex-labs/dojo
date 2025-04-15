@@ -1,7 +1,7 @@
 import time
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
-from fastapi import HTTPException, Request
+from fastapi import Header, HTTPException, Request
 
 from commons.utils import check_stake, verify_hotkey_in_metagraph, verify_signature
 from dojo.logging import logging as logger
@@ -16,18 +16,22 @@ class ValidatorAuth:
     @staticmethod
     async def validate_validator(
         request: Request,
-        hotkey: str,
-        signature: str,
-        message: str,
-    ) -> None:
+        hotkey: str = Header(..., alias="X-Hotkey"),
+        signature: str = Header(..., alias="X-Signature"),
+        message: str = Header(..., alias="X-Message"),
+    ) -> str:
         """
-        Validate a validator's credentials and permissions
+        Validate a validator's credentials and permissions.
+        Can be used directly as a FastAPI dependency.
 
         Args:
             request: FastAPI request object containing app state
-            hotkey: Validator's hotkey
-            signature: Signature of the message
-            message: Original message that was signed
+            hotkey: Validator's hotkey from X-Hotkey header
+            signature: Signature from X-Signature header
+            message: Message from X-Message header
+
+        Returns:
+            The validated hotkey
 
         Raises:
             HTTPException: If validation fails
@@ -57,9 +61,10 @@ class ValidatorAuth:
             raise HTTPException(status_code=401, detail="Insufficient stake for hotkey")
 
         logger.info(f"Successfully validated credentials for hotkey: {hotkey}")
+        return hotkey
 
     @staticmethod
-    def _check_stake_with_cache(subtensor, hotkey: str) -> bool:
+    def _check_stake_with_cache(subtensor: Any, hotkey: str) -> bool:
         current_time = time.time()
 
         if hotkey in ValidatorAuth._stake_cache:

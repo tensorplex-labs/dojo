@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from validator_api.dataset_extraction.core.service import DatasetExtractionService
@@ -13,20 +13,13 @@ dataset_router = APIRouter()
 @dataset_router.post("/api/v1/validator/upload_dataset")
 async def upload_dataset(
     request: Request,
-    hotkey: str = Form(...),
-    signature: str = Form(...),
-    message: str = Form(...),
+    hotkey: str = Depends(ValidatorAuth.validate_validator),
     files: List[UploadFile] = File(...),
 ):
     """
     Endpoint for uploading datasets from extractors
     """
     try:
-        # Validate extractor credentials
-        await ValidatorAuth.validate_validator(
-            request=request, hotkey=hotkey, signature=signature, message=message
-        )
-
         # Validate file sizes
         for file in files:
             if not DatasetExtractionService.validate_file_size(

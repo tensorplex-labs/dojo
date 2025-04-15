@@ -13,9 +13,6 @@ class LogEntry(BaseModel):
 
 
 class LogBatch(BaseModel):
-    hotkey: str
-    signature: str
-    message: str
     logs: List[LogEntry]
 
 

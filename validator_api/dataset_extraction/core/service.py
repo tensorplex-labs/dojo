@@ -5,7 +5,7 @@ from fastapi import UploadFile
 
 from dojo.logging import logging as logger
 
-from .models import DatasetExtractionResponse, DatasetUploadResult
+from .types import DatasetExtractionResponse, DatasetUploadResult
 
 
 class DatasetExtractionService:

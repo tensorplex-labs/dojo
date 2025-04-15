@@ -140,20 +140,18 @@ class ValidatorLogForwarder(python_logging.Handler):
         message = f"{message_prefix} containing {len(logs)} entries at {current_time}"
         signature = self.sign_message(message)
 
-        batch = {
-            "hotkey": self.hotkey,
-            "signature": signature,
-            "message": message,
-            "logs": logs,
-        }
-
         api_endpoint = f"{self.api_url}/api/v1/validator/logging"
         session = await self.get_session()
 
         async with session.post(
             api_endpoint,
-            json=batch,
-            headers={"Content-Type": "application/json"},
+            json={"logs": logs},
+            headers={
+                "X-Hotkey": self.hotkey,
+                "X-Signature": signature,
+                "X-Message": message,
+                "Content-Type": "application/json",
+            },
         ) as response:
             if response.status != 200:
                 logger.error(f"Failed to send logs to API: {await response.text()}")
