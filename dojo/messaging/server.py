@@ -15,6 +15,20 @@ from dojo.messaging.utils import create_response, decode_body
 class Server:
     def __init__(self, app: FastAPI | None = None) -> None:
         self.app = FastAPI() or app
+        self._add_http_exception_handler()
+
+    def _add_http_exception_handler(self) -> None:
+        """Register exception handlers to standardize error responses"""
+
+        @self.app.exception_handler(HTTPException)
+        async def http_exception_handler(
+            request: Request, exc: HTTPException
+        ) -> ORJSONResponse:
+            """Convert HTTPExceptions to standardized response format"""
+            logger.error(f"HTTPException: {str(exc)}")
+            return create_response(
+                error=str(exc.detail), body={}, status_code=exc.status_code
+            )
 
     def serve_synapse(
         self, synapse: Type[PydanticModel], handler: ServerHandlerFunc[PydanticModel]
