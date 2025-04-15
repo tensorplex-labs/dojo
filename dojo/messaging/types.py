@@ -8,6 +8,11 @@ PydanticModel = TypeVar("PydanticModel", bound=BaseModel)
 ServerHandlerFunc: TypeAlias = Callable[[Request, PydanticModel], Awaitable[Any]]
 
 
+SIGNATURE_HEADER = "X-Signature"
+HOTKEY_HEADER = "X-Hotkey"
+MESSAGE_HEADER = "X-Message"
+
+
 class StdResponse(BaseModel, Generic[PydanticModel]):
     success: bool
     body: PydanticModel | None = None

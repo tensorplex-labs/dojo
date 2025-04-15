@@ -6,7 +6,7 @@ from loguru import logger
 from orjson import JSONDecodeError
 from pydantic import BaseModel
 
-from dojo.messaging.types import PydanticModel
+from dojo.messaging.types import SIGNATURE_HEADER, PydanticModel
 from dojo.messaging.utils import encode_body
 from dojo.protocol import (
     CodeAnswer,
@@ -41,9 +41,9 @@ class Client:
     ) -> dict[str, str]:
         return {
             "Content-Type": "application/json",
-            "X-Signature": signature,
-            "X-Hotkey": hotkey,
-            "X-Message": message,
+            SIGNATURE_HEADER: signature,
+            HOTKEY_HEADER: hotkey,
+            MESSAGE_HEADER: message,
             **self._compression_headers,
         }
 

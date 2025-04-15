@@ -4,17 +4,18 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from dojo.messaging.types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
 from dojo.messaging.utils import verify_signature
 
 
 class SignatureMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable):
-        signature = request.headers.get("X-Signature", "")
-        hotkey = request.headers.get("X-Hotkey", "")
-        message = request.headers.get("X-Message", "")
+        signature = request.headers.get(SIGNATURE_HEADER, "")
+        hotkey = request.headers.get(HOTKEY_HEADER, "")
+        message = request.headers.get(MESSAGE_HEADER, "")
         if not hotkey or not signature or not message:
             message = f"{http.HTTPStatus(400).phrase}, missing \
-                    headers, expected: X-Hotkey, X-Signature, X-Message, \
+                    headers, expected: {SIGNATURE_HEADER}, {HOTKEY_HEADER}, {MESSAGE_HEADER}, \
                     got: {hotkey=}, {signature=}, {message=}"
             return Response(content=message, status_code=400)
         if not verify_signature(hotkey, signature, message):
