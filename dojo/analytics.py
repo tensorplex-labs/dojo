@@ -22,7 +22,7 @@ from commons.orm import ORM
 from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
 from dojo import ANALYTICS_UPLOAD, VALIDATOR_MIN_STAKE
-from dojo.logging import logging as logger
+from dojo.logging import logger
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 
 DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")

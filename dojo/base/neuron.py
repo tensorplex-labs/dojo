@@ -5,7 +5,7 @@ import bittensor as bt
 from commons.objects import ObjectManager
 from commons.utils import initialise, ttl_get_block
 from dojo import get_spec_version
-from dojo.logging import logging as logger
+from dojo.logging import logger
 
 
 class BaseNeuron(ABC):

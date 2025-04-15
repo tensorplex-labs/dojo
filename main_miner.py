@@ -3,7 +3,7 @@ import asyncio
 from commons.block_subscriber import start_block_subscriber
 from commons.objects import ObjectManager
 from dojo.chain import get_async_subtensor
-from dojo.logging import logging as logger
+from dojo.logging import configure_logger, get_log_level, logger
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
@@ -21,6 +21,10 @@ async def shutdown_miner():
 
 async def main():
     miner = await ObjectManager.get_miner()
+
+    log_level = get_log_level(ObjectManager.get_config())
+    configure_logger(log_level)
+
     tasks = [
         asyncio.create_task(miner.log_miner_status()),
         asyncio.create_task(miner.run()),

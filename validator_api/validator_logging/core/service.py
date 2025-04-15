@@ -1,6 +1,6 @@
 from typing import Dict, List
 
-from dojo.logging import logging as logger
+from dojo.logging import logger
 
 from .types import LogEntry, LogResponse
 

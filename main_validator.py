@@ -17,15 +17,18 @@ from dojo import get_dojo_api_base_url
 from dojo.chain import get_async_subtensor
 from dojo.logging import (
     ValidatorLogForwarder,
+    configure_logger,
     forwarded_log_filter,
+    get_log_level,
+    logger,
     python_logging_to_loguru,
 )
-from dojo.logging import logging as logger
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
 
 validator = ObjectManager.get_validator()
+config = ObjectManager.get_config()
 
 api_log_forwarder = None
 
@@ -34,6 +37,9 @@ api_log_forwarder = None
 async def lifespan(app: FastAPI):
     logger.info("Performing startup tasks...")
     await connect_db()
+
+    log_level = get_log_level(config)
+    configure_logger(log_level)
 
     # Configure Python's standard logging to forward to Loguru
     python_logging_to_loguru(level=python_logging.INFO)
@@ -50,7 +56,7 @@ async def lifespan(app: FastAPI):
     # Add the handler directly to Loguru with the filter
     handler_id = logger.add(
         api_log_forwarder,
-        level="DEBUG",
+        level=log_level,
         format="{message}",
         filter=forwarded_log_filter,
         colorize=True,

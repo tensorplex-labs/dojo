@@ -83,7 +83,8 @@ services:
 
   validator:
     container_name: validator
-    image: ghcr.io/tensorplex-labs/dojo:main
+#    image: ghcr.io/tensorplex-labs/dojo:main
+    image: validator-api
     restart: on-failure
     labels:
       com.centurylinklabs.watchtower.enable: "true"
@@ -111,7 +112,11 @@ services:
 
   validator-api-service:
     container_name: validator-api-service
-    image: ghcr.io/tensorplex-labs/dojo:main
+#    image: ghcr.io/tensorplex-labs/dojo:main
+    image: validator-api
+    networks:
+      - dojo-validator
+      - subtensor
     env_file:
       - .env
     ports:

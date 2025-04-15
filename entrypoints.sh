@@ -4,6 +4,17 @@ set -e
 
 git fetch --tags
 
+# Setup Log level
+if [ "${LOGGING_LEVEL}" = "DEBUG" ]; then
+    LOGGING_PARAM="--logging.debug"
+elif [ "${LOGGING_LEVEL}" = "TRACE" ]; then
+    LOGGING_PARAM="--logging.trace"
+else
+    LOGGING_PARAM="--logging.info"
+fi
+echo "LOG_LEVEL: ${LOGGING_LEVEL:-INFO}"
+
+
 # run bash
 if [ "$1" = 'btcli' ]; then
     exec /bin/bash -c "btcli --help && exec /bin/bash"
@@ -38,7 +49,7 @@ if [ "$1" = 'miner' ]; then
     --netuid ${NETUID} \
     --subtensor.network ${SUBTENSOR_NETWORK} \
     --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
-    --logging.info \
+    ${LOGGING_PARAM} \
     --wallet.name ${WALLET_COLDKEY} \
     --wallet.hotkey ${WALLET_HOTKEY} \
     --axon.port ${AXON_PORT} \
@@ -68,7 +79,7 @@ if [ "$1" = 'validator' ]; then
     --netuid ${NETUID} \
     --subtensor.network ${SUBTENSOR_NETWORK} \
     --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
-    --logging.info \
+    ${LOGGING_PARAM} \
     --wallet.name ${WALLET_COLDKEY} \
     --wallet.hotkey ${WALLET_HOTKEY} \
     --neuron.type validator \
@@ -93,6 +104,7 @@ if [ "$1" = 'validator-api-service' ]; then
     echo "MAX_CHUNK_SIZE_MB: ${MAX_CHUNK_SIZE_MB}"
     python validator_api/validator_api_service.py \
     --netuid ${NETUID} \
+    ${LOGGING_PARAM} \
     --subtensor.network ${SUBTENSOR_NETWORK} \
     --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT}
 fi

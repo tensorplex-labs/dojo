@@ -4,7 +4,7 @@ from datetime import datetime
 
 import aioboto3
 
-from dojo.logging import logging as logger
+from dojo.logging import logger
 from validator_api.analytics.core.types import AnalyticsPayload
 from validator_api.shared.cache import RedisCache
 

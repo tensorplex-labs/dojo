@@ -8,7 +8,7 @@ import websockets
 
 from commons.objects import ObjectManager
 from dojo.chain import parse_block_headers
-from dojo.logging import logging as logger
+from dojo.logging import logger
 
 BLOCK_TIME = 12
 WS_OPEN_TIMEOUT = 30

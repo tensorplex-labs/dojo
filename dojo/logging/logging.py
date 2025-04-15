@@ -33,22 +33,15 @@ class ForwardedLogFilter:
         return True
 
 
-# Clears the default loguru handler and then add a customised version
-logger.remove()
-forwarded_log_filter = ForwardedLogFilter()
-logger.add(
-    sink=lambda msg: print(msg, end="", flush=True),
-    format=(
-        "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-        "<level>{level:^15}</level> | "
-        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
-        "<level>{message}</level>"
-    ),
-    colorize=True,
-    level="DEBUG",
-    filter=forwarded_log_filter,
-)
-logging = logger
+def get_log_level(config):
+    try:
+        if config.logging.trace:
+            return "TRACE"
+        elif config.logging.debug:
+            return "DEBUG"
+    except Exception as e:
+        print(f"Failed to configure logging: {str(e)}")
+    return "INFO"
 
 
 def python_logging_to_loguru(level=python_logging.INFO):
@@ -91,3 +84,28 @@ def python_logging_to_loguru(level=python_logging.INFO):
         python_logging.getLogger(name).propagate = False
         python_logging.getLogger(name).handlers.clear()
         python_logging.getLogger(name).addHandler(InterceptHandler())
+
+
+# Function to configure logger with given level
+def configure_logger(level):
+    logger.remove()
+    logger.add(
+        sink=lambda msg: print(msg, end="", flush=True),
+        format=(
+            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+            "<level>{level:^15}</level> | "
+            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
+            "<level>{message}</level>"
+        ),
+        colorize=True,
+        level=level,
+        filter=forwarded_log_filter,
+    )
+
+
+# Clears the default loguru handler and then add a customised version
+forwarded_log_filter = ForwardedLogFilter()
+
+# Set default level to INFO to avoid dealing with circular imports.
+# Reconfigure it in miner or validator code as necessary
+configure_logger("INFO")

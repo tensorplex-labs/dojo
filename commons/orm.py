@@ -33,7 +33,7 @@ from database.prisma.types import (
     ValidatorTaskWhereInput,
 )
 from dojo import TASK_DEADLINE
-from dojo.logging import logging as logger
+from dojo.logging import logger
 from dojo.protocol import DendriteQueryResponse, Scores, TaskResult, TaskSynapseObject
 
 

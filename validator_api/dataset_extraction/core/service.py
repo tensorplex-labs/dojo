@@ -3,7 +3,7 @@ from typing import List
 
 from fastapi import UploadFile
 
-from dojo.logging import logging as logger
+from dojo.logging import logger
 
 from .types import DatasetExtractionResponse, DatasetUploadResult
 

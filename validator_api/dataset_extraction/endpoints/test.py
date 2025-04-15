@@ -3,7 +3,7 @@ import os
 import aiofiles
 import httpx
 
-from dojo.logging import logging as logger
+from dojo.logging import logger
 
 
 async def test_endpoint():

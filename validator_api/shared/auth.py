@@ -4,7 +4,7 @@ from typing import Any, Dict, Tuple
 from fastapi import Header, HTTPException, Request
 
 from commons.utils import check_stake, verify_hotkey_in_metagraph, verify_signature
-from dojo.logging import logging as logger
+from dojo.logging import logger
 
 
 class ValidatorAuth:

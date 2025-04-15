@@ -15,21 +15,27 @@ from validator_logging.endpoints.routes import logging_router
 
 from commons.api_settings import ValidatorAPISettings, get_settings
 from commons.objects import ObjectManager
-from dojo.logging import logging as logger
-from dojo.logging.logging import python_logging_to_loguru
+from dojo.logging import (
+    configure_logger,
+    get_log_level,
+    logger,
+    python_logging_to_loguru,
+)
 from dojo.utils.config import source_dotenv
 from validator_api.shared.cache import RedisCache
 
 source_dotenv()
 settings: ValidatorAPISettings = get_settings()
 cfg: bt.config = ObjectManager.get_config()
-bt.logging.set_debug(True)
+# bt.logging.set_debug(True)
 
 python_logging_to_loguru()
 for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
     uvicorn_logger = logging.getLogger(logger_name)
     uvicorn_logger.handlers = []
     uvicorn_logger.propagate = True
+
+print(cfg)
 
 
 @asynccontextmanager
@@ -39,6 +45,9 @@ async def lifespan(app: FastAPI):
     app.state.api_config = settings.aws
     app.state.redis = RedisCache(settings.redis)
     app.state.subtensor = bt.subtensor(config=app.state.bt_cfg)
+
+    log_level = get_log_level(cfg)
+    configure_logger(log_level)
 
     # Initialize metagraph
     logger.info("Initializing metagraph...")

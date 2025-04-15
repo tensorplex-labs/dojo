@@ -46,7 +46,7 @@ from commons.utils import (
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.analytics import run_analytics_upload
 from dojo.chain import parse_block_headers
-from dojo.logging import logging as logger
+from dojo.logging import logger
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,

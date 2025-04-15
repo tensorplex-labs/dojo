@@ -6,7 +6,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from dojo.logging import logging as logger
+from dojo.logging import logger
 
 MAX_CONTENT_LENGTH = 1 * 1024 * 1024
 

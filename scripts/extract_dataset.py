@@ -18,7 +18,7 @@ from database.prisma.models import Completion, MinerScore, ValidatorTask
 from database.prisma.types import (
     ValidatorTaskWhereInput,
 )
-from dojo.logging import logging as logger
+from dojo.logging import logger
 from dojo.protocol import Scores
 from dojo.utils.config import source_dotenv
 
