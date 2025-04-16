@@ -1043,24 +1043,27 @@ class Validator:
             )
             synapses.append(shuffled_synapse)
 
-        responses = await self.client.batch_send(urls=urls, models=synapses)
+        from dojo.messaging.types import StdResponse
+
+        # TODO: fix pyright
+        responses: list[
+            tuple[aiohttp.ClientResponse | None, StdResponse[TaskSynapseObject] | None]
+            | BaseException
+        ] = await self.client.batch_send(urls=urls, models=synapses)
         valid_resp: list[TaskSynapseObject] = []
         for miner_uid, r in enumerate(responses):  # pyright: ignore[reportAssignmentType]
-            if isinstance(r, Exception):
+            if isinstance(r, BaseException):
                 logger.error(
                     f"Error sending request to miner: {miner_uid} at {urls[miner_uid]}, exception: {r}"
                 )
-                continue
-
-            client_response, miner_response = r
-            if client_response:
-                if client_response.status == int(http.HTTPStatus.OK):
-                    if miner_response:
-                        valid_resp.append(miner_response)
-                else:
-                    logger.error(
-                        f"Error sending request to miner, status code: {client_response.status}"
-                    )
+            else:
+                client_response, miner_response = r
+                if (
+                    client_response
+                    and client_response.status == http.HTTPStatus.OK
+                    and miner_response
+                ):
+                    valid_resp.append(miner_response.body)
 
         return valid_resp
 
