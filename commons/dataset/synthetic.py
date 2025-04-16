@@ -2,11 +2,9 @@ import os
 import traceback
 
 import aiohttp
-from bittensor.utils.btlogging import logging as logger
 from tenacity import (
     AsyncRetrying,
     RetryError,
-    before_sleep_log,
     stop_after_attempt,
     wait_exponential,
 )
@@ -15,6 +13,7 @@ from commons.exceptions import (
     FatalSyntheticGenerationError,
     SyntheticGenerationError,
 )
+from dojo.logging import logger
 from dojo.protocol import SyntheticQA
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
@@ -75,8 +74,8 @@ class SyntheticAPI:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(MAX_RETRIES),
                 wait=wait_exponential(multiplier=1, max=30),
-                before_sleep=before_sleep_log(
-                    logger._logger, log_level=10, exc_info=True
+                before_sleep=lambda retry_state: logger.debug(
+                    f"Retrying after exception, attempt {retry_state.attempt_number}"
                 ),
             ):
                 with attempt:

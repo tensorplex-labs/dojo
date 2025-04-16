@@ -4,13 +4,13 @@ from typing import List
 
 import aiohttp
 import bittensor as bt
-from bittensor.utils.btlogging import logging as logger
 from tenacity import RetryError
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.orm import ORM
 from commons.utils import get_epoch_time, get_new_uuid, set_expire_time, ttl_get_block
+from dojo.logging import logger
 from dojo.protocol import (
     DendriteQueryResponse,
     FeedbackRequest,

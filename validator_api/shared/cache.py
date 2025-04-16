@@ -1,7 +1,3 @@
-"""
-redis client class to use redis using singleton pattern.
-"""
-
 from redis import asyncio as aioredis
 from redis.asyncio.client import Redis
 
@@ -24,8 +20,6 @@ def build_redis_url(config: RedisSettings) -> str:
 
 class RedisCache:
     _instance = None
-    _anal_prefix_: str = "analytics"
-    _upload_key_: str = "uploaded"
     redis: Redis
     config: RedisSettings
     redis_url: str

@@ -4,10 +4,9 @@ import sys
 import time
 from datetime import datetime
 
-from bittensor.utils.btlogging import logging as logger
-
 from commons.utils import datetime_to_iso8601_str
 from dojo import get_latest_git_tag
+from dojo.logging import logger
 from dojo.utils.config import source_dotenv
 
 source_dotenv()

@@ -4,8 +4,6 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List
 
-from bittensor.utils.btlogging import logging as logger
-
 from commons.exceptions import (
     ExpiredFromMoreThanExpireTo,
     InvalidMinerResponse,
@@ -35,6 +33,7 @@ from database.prisma.types import (
     ValidatorTaskWhereInput,
 )
 from dojo import TASK_DEADLINE
+from dojo.logging import logger
 from dojo.protocol import DendriteQueryResponse, Scores, TaskResult, TaskSynapseObject
 
 

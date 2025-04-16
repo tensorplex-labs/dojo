@@ -4,6 +4,17 @@ set -e
 
 git fetch --tags
 
+# Setup Log level
+if [ "${LOGGING_LEVEL}" = "DEBUG" ]; then
+    LOGGING_PARAM="--logging.debug"
+elif [ "${LOGGING_LEVEL}" = "TRACE" ]; then
+    LOGGING_PARAM="--logging.trace"
+else
+    LOGGING_PARAM="--logging.info"
+fi
+echo "LOG_LEVEL: ${LOGGING_LEVEL:-INFO}"
+
+
 # run bash
 if [ "$1" = 'btcli' ]; then
     exec /bin/bash -c "btcli --help && exec /bin/bash"
@@ -38,7 +49,7 @@ if [ "$1" = 'miner' ]; then
     --netuid ${NETUID} \
     --subtensor.network ${SUBTENSOR_NETWORK} \
     --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
-    --logging.info \
+    ${LOGGING_PARAM} \
     --wallet.name ${WALLET_COLDKEY} \
     --wallet.hotkey ${WALLET_HOTKEY} \
     --axon.port ${AXON_PORT} \
@@ -68,7 +79,7 @@ if [ "$1" = 'validator' ]; then
     --netuid ${NETUID} \
     --subtensor.network ${SUBTENSOR_NETWORK} \
     --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
-    --logging.info \
+    ${LOGGING_PARAM} \
     --wallet.name ${WALLET_COLDKEY} \
     --wallet.hotkey ${WALLET_HOTKEY} \
     --neuron.type validator \
@@ -79,7 +90,7 @@ if [ "$1" = 'extract-dataset' ]; then
     echo "Environment variables:"
     echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"
     echo "DATABASE_URL: ${DATABASE_URL}"
-    echo "VALIDATOR_API_BASE_URL: ${VALIDATOR_API_BASE_URL}"
+    echo "DOJO_API_BASE_URL: ${DOJO_API_BASE_URL}"
     echo "WALLET_COLDKEY: ${WALLET_COLDKEY}"
     echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"
     python scripts/extract_dataset.py \
@@ -89,18 +100,11 @@ fi
 
 if [ "$1" = 'validator-api-service' ]; then
     echo "Environment variables:"
-    echo "VALIDATOR_API_BASE_URL: ${VALIDATOR_API_BASE_URL}"
-    echo "AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}"
-    echo "AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}"
-    echo "S3_BUCKET_NAME: ${S3_BUCKET_NAME}"
-    echo "AWS_REGION: ${AWS_REGION}"
-    echo "REDIS_HOST: ${REDIS_HOST}"
-    echo "REDIS_PORT: ${REDIS_PORT}"
-    echo "REDIS_USERNAME: ${REDIS_USERNAME}"
-    echo "REDIS_PASSWORD: ${REDIS_PASSWORD}"
+#    echo "S3_BUCKET_NAME: ${S3_BUCKET_NAME}"
     echo "MAX_CHUNK_SIZE_MB: ${MAX_CHUNK_SIZE_MB}"
-    python entrypoints/validator_api_service.py \
-    --netuid 52 \
+    python validator_api/validator_api_service.py \
+    --netuid ${NETUID} \
+    ${LOGGING_PARAM} \
     --subtensor.network ${SUBTENSOR_NETWORK} \
     --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT}
 fi

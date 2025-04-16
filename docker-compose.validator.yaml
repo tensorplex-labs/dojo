@@ -16,11 +16,6 @@ networks:
     name: subtensor
 
 services:
-#  watchtower:
-#    extends:
-#      file: docker-compose.shared.yaml
-#      service: watchtower
-
   redis:
     extends:
       file: docker-compose.shared.yaml
@@ -112,15 +107,7 @@ services:
         condition: service_healthy
       prisma-setup-vali:
         condition: service_completed_successfully
-    logging:
-      driver: loki
-      options:
-        mode: non-blocking
-        loki-url: "https://${DOJO_LOKI_URL}"
-        loki-external-labels: "validator=${VALIDATOR_HOTKEY}"
-        # disable loki's default of not saving to a file, so we have persistence
-        no-file: 0
-        max-size: "50m"
+    logging: *default-logging
 
   validator-api-service:
     container_name: validator-api-service

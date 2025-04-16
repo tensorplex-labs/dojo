@@ -1,3 +1,6 @@
+"""The validator neuron registers on the substrate chain and then serves up requested
+prompts for miners to respond to."""
+
 import asyncio
 import copy
 import gc
@@ -14,7 +17,6 @@ import aiohttp
 import bittensor as bt
 import numpy as np
 import torch
-from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from torch.nn import functional as F
 
@@ -42,7 +44,9 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
+from dojo.analytics import run_analytics_upload
 from dojo.chain import parse_block_headers
+from dojo.logging import logger
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -59,7 +63,6 @@ from dojo.protocol import (
 )
 from dojo.utils.config import get_config
 from dojo.utils.uids import extract_miner_uids, is_miner
-from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
 SyntheticMetadata: TypeAlias = dict

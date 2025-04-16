@@ -1,6 +1,5 @@
 import bittensor
 from async_lru import alru_cache
-from bittensor.utils.btlogging import logging as logger
 from tenacity import (
     AsyncRetrying,
     RetryError,
@@ -9,6 +8,7 @@ from tenacity import (
 )
 
 from commons.objects import ObjectManager
+from dojo.logging import logger
 
 
 @alru_cache(maxsize=1)

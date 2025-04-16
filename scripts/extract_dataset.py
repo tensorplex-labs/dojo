@@ -9,7 +9,6 @@ from typing import AsyncGenerator
 import aiofiles
 import bittensor as bt
 import httpx
-from bittensor.utils.btlogging import logging as logger
 from pydantic import BaseModel, ValidationError
 
 from commons.objects import ObjectManager
@@ -19,16 +18,17 @@ from database.prisma.models import Completion, MinerScore, ValidatorTask
 from database.prisma.types import (
     ValidatorTaskWhereInput,
 )
+from dojo.logging import logger
 from dojo.protocol import Scores
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
 
-VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
+DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
 MAX_CHUNK_SIZE_MB = int(os.getenv("MAX_CHUNK_SIZE_MB", 50))
 
-if VALIDATOR_API_BASE_URL is None:
-    raise ValueError("VALIDATOR_API_BASE_URL must be set")
+if DOJO_API_BASE_URL is None:
+    raise ValueError("DOJO_API_BASE_URL must be set")
 if MAX_CHUNK_SIZE_MB is None:
     raise ValueError("MAX_CHUNK_SIZE_MB must be set")
 
@@ -288,40 +288,49 @@ async def get_processed_tasks(
     yield [], False
 
 
-async def upload(hotkey: str, signature: str, message: str, filename: str):
+async def upload(hotkey: str, signature: str, message: str, filename: str) -> bool:
     if not signature.startswith("0x"):
         signature = f"0x{signature}"
 
-    # Build form data similar to how dojo.py does it
-    form_body = {
-        "hotkey": hotkey,
-        "signature": signature,
-        "message": message,
-    }
     # Add file to form data if it exists
     if os.path.exists(filename):
-        chunks = await chunk_file(filename, MAX_CHUNK_SIZE_MB)
+        try:
+            chunks = await chunk_file(filename, MAX_CHUNK_SIZE_MB)
 
-        # Make request using httpx
-        async with httpx.AsyncClient() as client:
-            for chunk_filename, chunk_content in chunks:
-                # Append to files list with correct format
-                files = [("files", (chunk_filename, chunk_content, "application/json"))]
-                response = await client.post(
-                    f"{VALIDATOR_API_BASE_URL}/upload_dataset",
-                    data=form_body,
-                    files=files,
-                    timeout=60.0,
-                )
-                logger.info(f"Status: {response.status_code}")
-                response_json = response.json()
-                logger.info(f"Response: {response_json}")
-                is_success = response.status_code == 200 and response_json.get(
-                    "success"
-                )
-                if not is_success:
-                    raise Exception(f"Failed to upload file {chunk_filename}")
-                await asyncio.sleep(1)
+            # Make request using httpx
+            async with httpx.AsyncClient() as client:
+                for chunk_filename, chunk_content in chunks:
+                    # Append to files list with correct format
+                    files = [
+                        ("files", (chunk_filename, chunk_content, "application/json"))
+                    ]
+                    response = await client.post(
+                        f"{DOJO_API_BASE_URL}/api/v1/validator/upload_dataset",
+                        headers={
+                            "X-Hotkey": hotkey,
+                            "X-Signature": signature,
+                            "X-Message": message,
+                        },
+                        files=files,
+                        timeout=60.0,
+                    )
+                    logger.info(f"Status: {response.status_code}")
+                    response_json = response.json()
+                    logger.info(f"Response: {response_json}")
+                    is_success = response.status_code == 200 and response_json.get(
+                        "success"
+                    )
+                    if not is_success:
+                        logger.error(f"Failed to upload file {chunk_filename}")
+                        return False
+                    await asyncio.sleep(1)
+                return True
+        except Exception as e:
+            logger.error(f"Error during upload: {str(e)}")
+            return False
+    else:
+        logger.error(f"File {filename} does not exist")
+        return False
 
 
 async def chunk_file(filename: str, chunk_size_mb: int = 50):
