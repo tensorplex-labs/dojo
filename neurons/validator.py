@@ -910,40 +910,18 @@ class Validator:
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{sel_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
-        miner_responses = await self._send_request_to_miners(synapse)
-        valid_count = 0
-        fails = []
-        for response in miner_responses:
-            try:
-                status_code = response.dendrite.status_code
-            except Exception:
-                status_code = None
-            try:
-                logger.info(
-                    f"Miner hotkey: {response.axon.hotkey}, dojo_task_id: {response.dojo_task_id}, status_code: {status_code}"
-                )
-                if response.dojo_task_id:
-                    valid_count += 1
-                else:
-                    fails.append(
-                        (response.axon.hotkey, status_code, response.dojo_task_id)
-                    )
-            except Exception as e:
-                logger.error(f"Error logging miner response: {e}")
-                logger.info("dendrite", response.dendrite)
-                fails.append((response.axon.hotkey, status_code, response))
+        all_miner_responses = await self._send_request_to_miners(synapse)
+        valid_miner_responses: list[TaskSynapseObject] = []
+        for uid, response in enumerate(all_miner_responses):
+            if isinstance(response, BaseException):
                 continue
 
-        logger.info(f"Fails: {fails}")
-        logger.info(f"Valid miner responses: {valid_count}")
-        valid_miner_responses: List[TaskSynapseObject] = []
-        for response in miner_responses:
             try:
                 if not response.dojo_task_id:
                     continue
 
                 # map obfuscated model names back to the original model names
-                real_model_ids = []
+                real_model_ids: list[str | None] = []
                 if response.completion_responses:
                     for i, completion in enumerate(response.completion_responses):
                         found_model_id = obfuscated_model_to_model.get(
@@ -958,18 +936,8 @@ class Validator:
                     logger.warning("Failed to map obfuscated model to original model")
                     continue
 
-                response.miner_hotkey = response.axon.hotkey if response.axon else None
-                # Get coldkey from metagraph using hotkey index
-                if response.axon and response.axon.hotkey:
-                    try:
-                        hotkey_index = self.metagraph.hotkeys.index(
-                            response.axon.hotkey
-                        )
-                        response.miner_coldkey = self.metagraph.coldkeys[hotkey_index]
-                    except ValueError:
-                        response.miner_coldkey = None
-                else:
-                    response.miner_coldkey = None
+                response.miner_hotkey = self.metagraph.hotkeys[uid]
+                response.miner_coldkey = self.metagraph.coldkeys[uid]
                 valid_miner_responses.append(response)
 
             except Exception as e:
@@ -981,9 +949,10 @@ class Validator:
             logger.info("No valid miner responses to process... skipping")
             return
 
-        # include the ground_truth to keep in data manager
+        # include the ground_truth to keep in data
         synapse.ground_truth = ground_truth
-        synapse.dendrite.hotkey = self.vali_hotkey
+        # TODO: not sure if we'll need this later
+        # synapse.dendrite.hotkey = self.vali_hotkey
 
         logger.info("Attempting to saving dendrite response")
         if not await ORM.save_task(
@@ -1008,7 +977,7 @@ class Validator:
 
     async def _send_request_to_miners(
         self, synapse: TaskSynapseObject
-    ) -> list[TaskSynapseObject]:
+    ) -> list[TaskSynapseObject | BaseException]:
         if not synapse.completion_responses:
             logger.warning("No completion responses to send... skipping")
             return []
@@ -1045,13 +1014,16 @@ class Validator:
         responses: Sequence[
             tuple[aiohttp.ClientResponse | None, StdResponse[TaskSynapseObject] | None]
             | BaseException
-        ] = await self.client.batch_send(urls=urls, models=synapses)
-        valid_responses: list[TaskSynapseObject] = []
+        ] = await self.client.batch_send(
+            urls=urls, models=synapses, semaphore=self._forward_semaphore
+        )
+        all_responses: list[TaskSynapseObject | BaseException] = []
         for miner_uid, r in enumerate(responses):
             if isinstance(r, BaseException):
                 logger.error(
                     f"Error sending request to miner: {miner_uid} at {urls[miner_uid]}, exception: {r}"
                 )
+                all_responses.append(r)
             else:
                 client_response, miner_response = r
                 if (
@@ -1059,9 +1031,9 @@ class Validator:
                     and client_response.status == http.HTTPStatus.OK
                     and miner_response
                 ):
-                    valid_responses.append(miner_response.body)
+                    all_responses.append(miner_response.body)
 
-        return valid_responses
+        return all_responses
 
     # TODO: deprecate this shit
     @staticmethod

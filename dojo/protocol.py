@@ -148,7 +148,7 @@ class FeedbackRequest(bt.Synapse):
     )
 
 
-class TaskSynapseObject(bt.Synapse):
+class TaskSynapseObject(BaseModel):
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the task",
