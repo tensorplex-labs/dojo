@@ -9,7 +9,7 @@ import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from typing import AsyncGenerator, Dict, List, TypeAlias
+from typing import AsyncGenerator, Dict, List, Sequence, TypeAlias
 
 import aiohttp
 import bittensor as bt
@@ -910,9 +910,7 @@ class Validator:
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{sel_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
-        miner_responses: List[TaskSynapseObject] = await self._send_shuffled_requests(
-            self.dendrite, axons, synapse
-        )
+        miner_responses = await self._send_request_to_miners(synapse)
         valid_count = 0
         fails = []
         for response in miner_responses:
@@ -1008,7 +1006,6 @@ class Validator:
                 self.dendrite.synapse_history.clear()
             await asyncio.sleep(300)
 
-    # TODO: fuck the concept of dendrite/axons?
     async def _send_request_to_miners(
         self, synapse: TaskSynapseObject
     ) -> list[TaskSynapseObject]:
@@ -1045,13 +1042,12 @@ class Validator:
 
         from dojo.messaging.types import StdResponse
 
-        # TODO: fix pyright
-        responses: list[
+        responses: Sequence[
             tuple[aiohttp.ClientResponse | None, StdResponse[TaskSynapseObject] | None]
             | BaseException
         ] = await self.client.batch_send(urls=urls, models=synapses)
-        valid_resp: list[TaskSynapseObject] = []
-        for miner_uid, r in enumerate(responses):  # pyright: ignore[reportAssignmentType]
+        valid_responses: list[TaskSynapseObject] = []
+        for miner_uid, r in enumerate(responses):
             if isinstance(r, BaseException):
                 logger.error(
                     f"Error sending request to miner: {miner_uid} at {urls[miner_uid]}, exception: {r}"
@@ -1063,9 +1059,9 @@ class Validator:
                     and client_response.status == http.HTTPStatus.OK
                     and miner_response
                 ):
-                    valid_resp.append(miner_response.body)
+                    valid_responses.append(miner_response.body)
 
-        return valid_resp
+        return valid_responses
 
     # TODO: deprecate this shit
     @staticmethod

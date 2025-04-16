@@ -6,16 +6,18 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import ORJSONResponse
 from loguru import logger
+from pydantic import BaseModel
 
 from dojo.messaging.exceptions import InvalidSignatureException
-from dojo.messaging.middleware import SignatureMiddleware
+from dojo.messaging.middleware import SignatureMiddleware, ZstdMiddleware
 from dojo.messaging.types import PydanticModel, ServerHandlerFunc
-from dojo.messaging.utils import create_response, decode_body
+from dojo.messaging.utils import create_response
 
 
 class Server:
     def __init__(self, app: FastAPI | None = None) -> None:
         self.app = FastAPI() or app
+        self.app.add_middleware(ZstdMiddleware)
         self.app.add_middleware(SignatureMiddleware)
         # NOTE: here we register some exception handlers that make it easier to
         # write miner's code
@@ -95,13 +97,11 @@ def _register_route_handler(
     async def handler_wrapper(request: Request) -> ORJSONResponse:
         """Wrapper around the request that handles zstd decompression and payload validation"""
         try:
-            body: bytes = await decode_body(request)
-            logger.info(f"Got request: body: {body=}")
             data: dict[str, Any] = {}
             try:
-                logger.info("Attempting to decode body")
-                logger.info(f"Type: {type(body)} Body: {body}")
-                data = orjson.loads(body)
+                # NOTE: we should be able to just read the data directly since
+                # there's ZstdMiddleware enabled
+                data = orjson.loads(await request.body())
             except orjson.JSONDecodeError as e:
                 logger.error(f"JSON Decode error: {str(e)}")
                 return create_response(
@@ -114,15 +114,26 @@ def _register_route_handler(
                 logger.info(f"Attempting to validate payload: {data=}")
                 payload = model.model_validate(data)
             except Exception as e:
+                logger.error(f"Validation error: {str(e)}")
                 return create_response(
                     error=f"Validation error: {str(e)}",
                     body=data,
                     status_code=400,
                 )
 
+            # TODO: figure out why result is None?
             result = await handler(request, payload)
 
-            # Return standardized response format
+            logger.success(
+                f"Handler: {handler.__name__}, result type:{type(result)}, result:{result}"
+            )
+            if not isinstance(result, dict):
+                if isinstance(result, bytes):
+                    result = orjson.loads(result)
+                elif issubclass(type(result), BaseModel):
+                    result = result.model_dump()
+                return create_response(body=result)
+
             return create_response(body=result)
         except HTTPException as e:
             logger.error(f"HTTPException: {str(e)}")

@@ -3,7 +3,9 @@ import http
 from typing import Any, Sequence
 
 import aiohttp
+import orjson
 import substrateinterface
+import zstandard as zstd
 from aiohttp.client import ClientSession
 from loguru import logger
 from orjson import JSONDecodeError
@@ -58,20 +60,25 @@ class Client:
     ) -> None:
         self._keypair = keypair
         self._session: ClientSession = session or get_client()
-        self._compression_headers = {"Content-Encoding": "zstd"}
+        self._compression_headers = {
+            "content-encoding": "zstd",
+            "accept-encoding": "zstd",
+        }
 
     def _build_headers(self, keypair: substrateinterface.Keypair) -> dict[str, str]:
         hotkey: str = keypair.ss58_address
         message: str = f"I solemnly swear that I am up to some good. Hotkey: {hotkey}"
         signature: str = "0x" + keypair.sign(message).hex()
         # TODO: use wallet nonce
-        return {
+        headers = {
             "Content-Type": "application/json",
             SIGNATURE_HEADER: signature,
             HOTKEY_HEADER: hotkey,
             MESSAGE_HEADER: message,
             **self._compression_headers,
         }
+        logger.debug(f"Sending request with headers: {headers}")
+        return headers
 
     async def batch_send(
         self,
@@ -149,18 +156,27 @@ class Client:
             logger.info(f"Received response from: {url}, status: {client_resp.status}")
             response_json = {}
             try:
-                response_json = await client_resp.json()
+                if client_resp.headers.get("content-encoding", "").lower() == "zstd":
+                    logger.info("Attempting zstd decoding")
+                    response_bytes = await client_resp.read()
+                    dctx = zstd.ZstdDecompressor()
+                    decompressed_bytes = dctx.decompress(response_bytes)
+                    response_text = decompressed_bytes.decode()
+                    response_json = orjson.loads(response_text)
+                    logger.success(
+                        f"Response JSON: {response_json}, type: {type(response_json)}"
+                    )
+                else:
+                    response_json = await client_resp.json()
             except JSONDecodeError as e:
                 logger.error(
                     f"Failed to decode response: {await client_resp.text()}, exception: {e}"
                 )
-                pass
 
             if not response_json:
+                logger.error("Empty response JSON received")
                 return ERROR_RESPONSE
 
-            # parse object to the specific model
-            logger.info(f"Validator got response from miner: {response_json}")
             try:
                 # TODO: fix pyright typing
                 error: str | None = response_json.get("error", None)  # pyright: ignore
@@ -168,9 +184,28 @@ class Client:
                 body: dict[str, Any] = response_json.get("body", {})  # pyright: ignore
 
                 if body:
-                    pydantic_model = model.model_validate(body)
+                    try:
+                        # parse object to the specific model
+                        pydantic_model = model.model_validate(body)
+                        return client_resp, StdResponse(
+                            body=pydantic_model,
+                            error=error,  # pyright: ignore
+                            metadata=metadata,  # pyright: ignore
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to validate model with body: {e}, returning the raw body"
+                        )
+                        # Return the raw body if validation fails
+                        return client_resp, StdResponse(
+                            body=model.model_construct(**body),
+                            error=error,  # pyright: ignore
+                            metadata=metadata,  # pyright: ignore
+                        )
+                else:
+                    logger.warning("Response body is empty, returning empty model")
                     return client_resp, StdResponse(
-                        body=pydantic_model,
+                        body=model.model_construct(),
                         error=error,  # pyright: ignore
                         metadata=metadata,  # pyright: ignore
                     )
@@ -219,15 +254,15 @@ async def main():
     response, returned_payload = await client.send(url, model=payload_a)
 
     if response:
-        print(f"Status: {response.status}")
-        print(f"Response: {await response.text()}")
-        print(f"Original size: {len(json_data)} bytes")
-        print(f"Compressed size: {len(compressed)} bytes")
-        print(f"Compression ratio: {len(compressed) / len(json_data):.2f}")
+        logger.debug(f"Status: {response.status}")
+        logger.debug(f"Response: {await response.read()}")
+        logger.debug(f"Original size: {len(json_data)} bytes")
+        logger.debug(f"Compressed size: {len(compressed)} bytes")
+        logger.debug(f"Compression ratio: {len(compressed) / len(json_data):.2f}")
 
     if returned_payload:
-        print(f"Returned payload: {returned_payload}")
-        print(f"{returned_payload.body=}")
+        logger.debug(f"Returned payload: {returned_payload}")
+        logger.debug(f"{returned_payload.body=}")
 
     await session.close()
 
