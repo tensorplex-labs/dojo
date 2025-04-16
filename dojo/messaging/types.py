@@ -8,13 +8,14 @@ PydanticModel = TypeVar("PydanticModel", bound=BaseModel)
 ServerHandlerFunc: TypeAlias = Callable[[Request, PydanticModel], Awaitable[Any]]
 
 
+class StdResponse(BaseModel, Generic[PydanticModel]):
+    """Standardized response that preserves error and metadata returned from `server.py`"""
+
+    body: PydanticModel
+    error: str | None = None
+    metadata: dict[str, Any] = {}
+
+
 SIGNATURE_HEADER = "X-Signature"
 HOTKEY_HEADER = "X-Hotkey"
 MESSAGE_HEADER = "X-Message"
-
-
-class StdResponse(BaseModel, Generic[PydanticModel]):
-    success: bool
-    body: PydanticModel | None = None
-    error: str | None = None
-    error: str | None = None

@@ -15,7 +15,7 @@ def create_response(
     body: dict[str, Any],
     status_code: int = 200,
     error: str | None = None,
-    metadata: dict[str, Any] | None = None,
+    metadata: dict[str, Any] = {},
 ):
     """
     Helper function to create standardized RESTful API responses
@@ -26,12 +26,7 @@ def create_response(
         error: Optional error message for error responses
         metadata: Optional metadata like pagination info, request ID, etc.
     """
-    content = {
-        "body": jsonable_encoder(body),
-    }
-
-    if error:
-        content["error"] = error
+    content = {"body": jsonable_encoder(body), "error": error, "metadata": {}}  # pyright: ignore
 
     if metadata:
         content["metadata"] = jsonable_encoder(metadata)

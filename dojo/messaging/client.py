@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 
 import aiohttp
 import substrateinterface
@@ -12,6 +13,7 @@ from dojo.messaging.types import (
     MESSAGE_HEADER,
     SIGNATURE_HEADER,
     PydanticModel,
+    StdResponse,
 )
 from dojo.messaging.utils import encode_body
 from dojo.protocol import (
@@ -41,10 +43,6 @@ class Client:
     ) -> None:
         self._keypair = keypair
         self._session: ClientSession = session or get_client()
-        self._headers: dict[str, str] = {
-            "Content-Type": "application/json",
-            "Content-Encoding": "zstd",
-        }
         self._compression_headers = {"Content-Encoding": "zstd"}
 
     def _build_headers(self, keypair: substrateinterface.Keypair) -> dict[str, str]:
@@ -60,9 +58,56 @@ class Client:
             **self._compression_headers,
         }
 
+    # async def batch_send(
+    #     self,
+    #     urls: list[str],
+    #     models: list[PydanticModel],
+    #     semaphore: asyncio.Semaphore | None = None,
+    # ) -> list[Response | BaseException]:
+    #     """Sends the following payloads to the given URLs concurrently.
+    #     Expects that the endpoint is hosted at:
+    #         http://<url>/<model_name> where model_name is the name of the Pydantic model
+    #
+    #     Args:
+    #         urls (list[str]): urls
+    #         models (list[PydanticModel]): models
+    #         keypair (substrateinterface.Keypair): keypair
+    #
+    #     Returns:
+    #         list[Response]: Returns both the aiohttp Response, and the model that
+    #             was returned from the server, or the exception if the request failed
+    #     """
+    #
+    #     if semaphore is None:
+    #         logger.info("Attempting to batch sending requests without semaphore")
+    #         responses = await asyncio.gather(
+    #             *[self.send(url, model) for url, model in zip(urls, models)],
+    #             return_exceptions=True,
+    #         )
+    #         for i, response in enumerate(responses):
+    #             if isinstance(response, Exception):
+    #                 logger.error(f"Error due to exception: {response}")
+    #             elif response:
+    #                 client_response, model = response
+    #                 if client_response.status != http.HTTPStatus.OK:
+    #                     logger.error(f"Error due to response: {client_response.status}")
+    #
+    #     async def _send_with_semaphore(
+    #         url: str, model: PydanticModel
+    #     ) -> Response:
+    #         async with semaphore:
+    #             return await self.send(url, model)
+    #
+    #     responses = await asyncio.gather(
+    #         *[_send_with_semaphore(url, model) for url, model in zip(urls, models)],
+    #         return_exceptions=True,
+    #     )
+    #
+    #     return responses
+
     async def send(
         self, url: str, model: PydanticModel
-    ) -> tuple[aiohttp.ClientResponse | None, PydanticModel | None]:
+    ) -> tuple[aiohttp.ClientResponse | None, StdResponse[PydanticModel] | None]:
         """Sends the following payload to the given URL.
         Expects that the endpoint is hosted at:
             http://<url>/<model_name> where model_name is the name of the Pydantic model
@@ -73,9 +118,8 @@ class Client:
             keypair (substrateinterface.Keypair): keypair
 
         Returns:
-            tuple[aiohttp.ClientResponse | None, PydanticModel | None]: Returns
-                both the aiohttp Response, and the model that was returned from
-                the server
+            Response: Returns both the aiohttp Response, and the model that
+                was returned from the server
         """
         compressed = encode_body(model)
         # response: aiohttp.ClientResponse | None = None
@@ -84,14 +128,14 @@ class Client:
             _build_url(url, model),
             data=compressed,
             headers=self._build_headers(self._keypair),
-        ) as resp:
-            logger.info(f"Received response from: {url}, status: {resp.status}")
+        ) as client_resp:
+            logger.info(f"Received response from: {url}, status: {client_resp.status}")
             response_json = {}
             try:
-                response_json = await resp.json()
+                response_json = await client_resp.json()
             except JSONDecodeError as e:
                 logger.error(
-                    f"Failed to decode response: {await resp.text()}, exception: {e}"
+                    f"Failed to decode response: {await client_resp.text()}, exception: {e}"
                 )
                 pass
 
@@ -101,10 +145,19 @@ class Client:
             # parse object to the specific model
             logger.info(f"Validator got response from miner: {response_json}")
             try:
-                body = response_json.get("body", {})
+                # TODO: fix pyright typing
+                error: str | None = response_json.get("error", None)  # pyright: ignore
+                metadata: dict[str, Any] = response_json.get("metadata", {})  # pyright: ignore
+                body: dict[str, Any] = response_json.get("body", {})  # pyright: ignore
+
                 if body:
                     pydantic_model = model.model_validate(body)
-                    return resp, pydantic_model
+                    return client_resp, StdResponse(
+                        body=pydantic_model,
+                        error=error,  # pyright: ignore
+                        metadata=metadata,  # pyright: ignore
+                    )
+
             except JSONDecodeError as e:
                 logger.error(f"Failed to decode response: {e}")
 
@@ -154,8 +207,10 @@ async def main():
         print(f"Original size: {len(json_data)} bytes")
         print(f"Compressed size: {len(compressed)} bytes")
         print(f"Compression ratio: {len(compressed) / len(json_data):.2f}")
+
     if returned_payload:
         print(f"Returned payload: {returned_payload}")
+        print(f"{returned_payload.body=}")
 
     await session.close()
 

@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import gc
+import http
 import math
 import random
 import time
@@ -14,8 +15,8 @@ import aiohttp
 import bittensor as bt
 import numpy as np
 import torch
-from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.weight_utils import process_weights_for_netuid
+from loguru import logger
 from torch.nn import functional as F
 
 import dojo
@@ -42,6 +43,7 @@ from commons.utils import (
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.chain import parse_block_headers
+from dojo.messaging import Client, get_client
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -138,6 +140,11 @@ class Validator:
 
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.load_state()
+
+        self._client_session = get_client()
+        self.client = Client(
+            session=self._client_session, keypair=self.wallet.get_hotkey()
+        )
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
@@ -1001,6 +1008,63 @@ class Validator:
                 self.dendrite.synapse_history.clear()
             await asyncio.sleep(300)
 
+    # TODO: fuck the concept of dendrite/axons?
+    async def _send_request_to_miners(
+        self, synapse: TaskSynapseObject
+    ) -> list[TaskSynapseObject]:
+        if not synapse.completion_responses:
+            logger.warning("No completion responses to send... skipping")
+            return []
+
+        UNSERVED_AXON_IP = "0.0.0.0"
+        # TODO: fix pyright typing
+        urls: list[str] = [
+            f"http://{axon.ip}:{axon.port}"  # pyright: ignore
+            for axon in self.metagraph.axons  # pyright: ignore
+            if axon.ip != UNSERVED_AXON_IP  # pyright: ignore
+        ]
+
+        synapses: list[TaskSynapseObject] = []
+        for _ in range(len(urls)):
+            # shuffle synapse Responses
+
+            shuffled_completions = random.sample(
+                synapse.completion_responses,
+                k=len(synapse.completion_responses),
+            )
+
+            shuffled_synapse = TaskSynapseObject(
+                epoch_timestamp=synapse.epoch_timestamp,
+                task_id=synapse.task_id,
+                prompt=synapse.prompt,
+                task_type=synapse.task_type,
+                expire_at=synapse.expire_at,
+                completion_responses=shuffled_completions,
+            )
+            synapses.append(shuffled_synapse)
+
+        responses = await self.client.batch_send(urls=urls, models=synapses)
+        valid_resp: list[TaskSynapseObject] = []
+        for miner_uid, r in enumerate(responses):  # pyright: ignore[reportAssignmentType]
+            if isinstance(r, Exception):
+                logger.error(
+                    f"Error sending request to miner: {miner_uid} at {urls[miner_uid]}, exception: {r}"
+                )
+                continue
+
+            client_response, miner_response = r
+            if client_response:
+                if client_response.status == int(http.HTTPStatus.OK):
+                    if miner_response:
+                        valid_resp.append(miner_response)
+                else:
+                    logger.error(
+                        f"Error sending request to miner, status code: {client_response.status}"
+                    )
+
+        return valid_resp
+
+    # TODO: deprecate this shit
     @staticmethod
     async def _send_shuffled_requests(
         dendrite: bt.dendrite, axons: List[bt.AxonInfo], synapse: TaskSynapseObject
@@ -1021,7 +1085,7 @@ class Validator:
 
         if not synapse.completion_responses:
             logger.warning("No completion responses to send... skipping")
-            return all_responses
+            return []
 
         for i in range(0, len(axons), batch_size):
             batch_axons = axons[i : i + batch_size]
@@ -1033,10 +1097,6 @@ class Validator:
                     synapse.completion_responses,
                     k=len(synapse.completion_responses),
                 )
-
-                # Apply obfuscation to each completion's files
-                # TODO re-nable obfuscation
-                # await Validator._obfuscate_completion_files(shuffled_completions)
 
                 shuffled_synapse = TaskSynapseObject(
                     epoch_timestamp=synapse.epoch_timestamp,

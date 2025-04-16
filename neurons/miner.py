@@ -217,7 +217,9 @@ class Miner(aobject):
         logger.info(f"⬆️ Respondng to heartbeat synapse: {synapse}")
         return synapse
 
-    async def forward_score_result(self, synapse: ScoringResult) -> ScoringResult:
+    async def forward_score_result(
+        self, request: Request, synapse: ScoringResult
+    ) -> ScoringResult:
         logger.info("Received scoring result from validators")
         try:
             # Validate that synapse is not None and has the required fields
@@ -287,14 +289,15 @@ class Miner(aobject):
 
             self.hotkey_to_request[hotkey] = synapse
 
+            synapse.dojo_task_id = "dummy_task_id"  # Placeholder for task ID
             # Create task and store ID
-            if task_ids := await DojoAPI.create_task(synapse):
-                synapse.dojo_task_id = task_ids[0]
-                # Clear completion field in completion_responses to optimize network traffic
-                for response in synapse.completion_responses:
-                    response.completion = None
-            else:
-                logger.error("Failed to create task: no task IDs returned")
+            # if task_ids := await DojoAPI.create_task(synapse):
+            #     synapse.dojo_task_id = task_ids[0]
+            #     # Clear completion field in completion_responses to optimize network traffic
+            #     for response in synapse.completion_responses:
+            #         response.completion = None
+            # else:
+            #     logger.error("Failed to create task: no task IDs returned")
 
         except Exception as e:
             logger.error(
