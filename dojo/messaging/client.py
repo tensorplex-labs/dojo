@@ -65,17 +65,17 @@ class Client:
             "accept-encoding": "zstd",
         }
 
-    def _build_headers(self, keypair: substrateinterface.Keypair) -> dict[str, str]:
-        hotkey: str = keypair.ss58_address
+    def _build_headers(self) -> dict[str, str]:
+        hotkey: str = self._keypair.ss58_address
         message: str = f"I solemnly swear that I am up to some good. Hotkey: {hotkey}"
-        signature: str = "0x" + keypair.sign(message).hex()
+        signature: str = "0x" + self._keypair.sign(message).hex()
         # TODO: use wallet nonce
         headers = {
-            "Content-Type": "application/json",
+            "content-type": "application/json",
             SIGNATURE_HEADER: signature,
             HOTKEY_HEADER: hotkey,
             MESSAGE_HEADER: message,
-            **self._compression_headers,
+            # **self._compression_headers,
         }
         logger.debug(f"Sending request with headers: {headers}")
         return headers
@@ -145,13 +145,14 @@ class Client:
             Response: Returns both the aiohttp Response, and the model that
                 was returned from the server
         """
-        compressed = encode_body(model)
+        _headers = self._build_headers()
+        payload = encode_body(model, _headers)
         # response: aiohttp.ClientResponse | None = None
         ERROR_RESPONSE = None, None
         async with self._session.post(
             _build_url(url, model),
-            data=compressed,
-            headers=self._build_headers(self._keypair),
+            data=payload,
+            headers=_headers,
         ) as client_resp:
             logger.info(f"Received response from: {url}, status: {client_resp.status}")
             response_json = {}
@@ -237,7 +238,6 @@ async def main():
         ],
         expire_at="2026-10-01T00:00:00Z",
     )
-    compressed = encode_body(payload_a)
     json_data = payload_a.model_dump_json()
     # NOTE: example here to generate a valid signature, message, and hotkey
     keypair = substrateinterface.Keypair.create_from_uri("//Alice")
@@ -253,9 +253,10 @@ async def main():
     client = Client(session=session, keypair=keypair)
     response, returned_payload = await client.send(url, model=payload_a)
 
+    compressed = encode_body(payload_a, client._build_headers())  # pyright: ignore
+
     if response:
         logger.debug(f"Status: {response.status}")
-        logger.debug(f"Response: {await response.read()}")
         logger.debug(f"Original size: {len(json_data)} bytes")
         logger.debug(f"Compressed size: {len(compressed)} bytes")
         logger.debug(f"Compression ratio: {len(compressed) / len(json_data):.2f}")
@@ -264,7 +265,12 @@ async def main():
         logger.debug(f"Returned payload: {returned_payload}")
         logger.debug(f"{returned_payload.body=}")
 
-    await session.close()
+    try:
+        await client.cleanup()
+        await session.close()
+    except Exception:
+        logger.warning("Exception occurred while cleaning up the client session")
+        pass
 
 
 if __name__ == "__main__":

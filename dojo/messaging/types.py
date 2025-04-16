@@ -16,6 +16,6 @@ class StdResponse(BaseModel, Generic[PydanticModel]):
     metadata: dict[str, Any] = {}
 
 
-SIGNATURE_HEADER = "X-Signature"
-HOTKEY_HEADER = "X-Hotkey"
-MESSAGE_HEADER = "X-Message"
+SIGNATURE_HEADER = "x-signature"
+HOTKEY_HEADER = "x-hotkey"
+MESSAGE_HEADER = "x-message"

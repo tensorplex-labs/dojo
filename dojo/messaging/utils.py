@@ -51,11 +51,20 @@ def verify_signature(hotkey: str, signature: str, message: str) -> bool:
         return False
 
 
-def encode_body(model: BaseModel) -> bytes:
-    json_data = model.model_dump_json().encode()
-    compressor = zstd.ZstdCompressor(level=3)
-    compressed = compressor.compress(json_data)
-    return compressed
+def encode_body(model: BaseModel, headers: dict[str, Any]) -> bytes:
+    content_encoding = headers.get("content-encoding")
+    if content_encoding:
+        if content_encoding.lower() == "zstd":
+            json_data = model.model_dump_json().encode()
+            compressor = zstd.ZstdCompressor(level=3)
+            compressed = compressor.compress(json_data)
+            return compressed
+        else:
+            raise NotImplementedError(
+                f"Content encoding of type {content_encoding} is not supported at the moment"
+            )
+
+    return model.model_dump_json().encode()
 
 
 async def decode_body(request: Request) -> bytes:
