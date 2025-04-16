@@ -34,7 +34,12 @@ def _build_url(url: str, model: BaseModel, protocol: str = "http") -> str:
 
 
 class Client:
-    def __init__(self, session: ClientSession | None = None) -> None:
+    def __init__(
+        self,
+        keypair: substrateinterface.Keypair,
+        session: ClientSession | None = None,
+    ) -> None:
+        self._keypair = keypair
         self._session: ClientSession = session or get_client()
         self._headers: dict[str, str] = {
             "Content-Type": "application/json",
@@ -56,7 +61,7 @@ class Client:
         }
 
     async def send(
-        self, url: str, model: PydanticModel, keypair: substrateinterface.Keypair
+        self, url: str, model: PydanticModel
     ) -> tuple[aiohttp.ClientResponse | None, PydanticModel | None]:
         """Sends the following payload to the given URL.
         Expects that the endpoint is hosted at:
@@ -74,13 +79,11 @@ class Client:
         """
         compressed = encode_body(model)
         # response: aiohttp.ClientResponse | None = None
-        # TODO: remove after testing
-        keypair = substrateinterface.Keypair.create_from_uri("//Alice")
         ERROR_RESPONSE = None, None
         async with self._session.post(
             _build_url(url, model),
             data=compressed,
-            headers=self._build_headers(keypair),
+            headers=self._build_headers(self._keypair),
         ) as resp:
             logger.info(f"Received response from: {url}, status: {resp.status}")
             response_json = {}
@@ -119,6 +122,7 @@ async def main():
     payload_a = TaskSynapseObject(
         prompt="Hello",
         task_type=TaskTypeEnum.CODE_GENERATION,
+        # completion_responses=[],
         completion_responses=[
             CompletionResponse(
                 model="gpt-4",
@@ -141,10 +145,8 @@ async def main():
     # TODO: this should be miner's axon IP
     url = "http://127.0.0.1:8888"
     session = get_client()
-    client = Client(session=session)
-    response, returned_payload = await client.send(
-        url, model=payload_a, keypair=keypair
-    )
+    client = Client(session=session, keypair=keypair)
+    response, returned_payload = await client.send(url, model=payload_a)
 
     if response:
         print(f"Status: {response.status}")
