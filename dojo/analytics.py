@@ -221,7 +221,7 @@ async def run_analytics_upload(
             all_miners = await _get_all_miner_hotkeys(subnet_metagraph, root_metagraph)
 
         # 1. collect processed tasks from db
-        anal_data = await _get_task_data(
+        anal_data: AnalyticsPayload = await _get_task_data(
             validator_hotkey, all_miners, expire_from, expire_to
         )
 
@@ -245,6 +245,7 @@ async def run_analytics_upload(
             if res and res.status_code == 200:
                 return expire_to
             return last_analytics_upload_time
+
         except NoProcessedTasksYet:
             logger.info("No processed tasks to upload. Skipping analytics upload.")
             return last_analytics_upload_time
