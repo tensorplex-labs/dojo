@@ -28,11 +28,9 @@ source_dotenv()
 settings: ValidatorAPISettings = get_settings()
 cfg: bt.config = ObjectManager.get_config()
 
-python_logging_to_loguru()
-for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
-    uvicorn_logger = logging.getLogger(logger_name)
-    uvicorn_logger.handlers = []
-    uvicorn_logger.propagate = True
+log_level = get_log_level(cfg)
+configure_logger(log_level)
+python_logging_to_loguru(level=getattr(logging, log_level))
 
 
 @asynccontextmanager
@@ -42,9 +40,6 @@ async def lifespan(app: FastAPI):
     app.state.api_config = settings.aws
     app.state.redis = RedisCache(settings.redis)
     app.state.subtensor = bt.subtensor(config=app.state.bt_cfg)
-
-    log_level = get_log_level(cfg)
-    configure_logger(log_level)
 
     # Initialize metagraph
     logger.info("Initializing metagraph...")
@@ -113,9 +108,6 @@ async def server():
     parsed_url = urlparse(api_url)
     host = parsed_url.hostname or "0.0.0.0"
     port = parsed_url.port or 9999
-
-    # Reconfigure logging just before starting the server
-    python_logging_to_loguru()
 
     # Start server with no log config to use our configured loggers
     config = uvicorn.Config(

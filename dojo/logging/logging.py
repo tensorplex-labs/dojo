@@ -93,7 +93,7 @@ def configure_logger(level):
         sink=lambda msg: print(msg, end="", flush=True),
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-            "<level>{level:^15}</level> | "
+            "<level>{level:^16}</level> | "
             "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
             "<level>{message}</level>"
         ),

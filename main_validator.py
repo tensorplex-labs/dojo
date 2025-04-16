@@ -30,6 +30,11 @@ source_dotenv()
 validator = ObjectManager.get_validator()
 config = ObjectManager.get_config()
 
+# Set it here to ensure all logs goes to loguru
+log_level = get_log_level(config)
+configure_logger(log_level)
+python_logging_to_loguru(level=getattr(python_logging, log_level))
+
 api_log_forwarder = None
 
 
@@ -38,15 +43,8 @@ async def lifespan(app: FastAPI):
     logger.info("Performing startup tasks...")
     await connect_db()
 
-    log_level = get_log_level(config)
-    configure_logger(log_level)
-
-    # Configure Python's standard logging to forward to Loguru
-    python_logging_to_loguru(level=getattr(python_logging, log_level))
-
     # Setup validator API logging
     global api_log_forwarder
-
     api_log_forwarder = ValidatorLogForwarder(
         api_url=get_dojo_api_base_url(),
         wallet=validator.wallet,
@@ -54,7 +52,7 @@ async def lifespan(app: FastAPI):
     api_log_forwarder.start()
 
     # Add the handler directly to Loguru with the filter
-    handler_id = logger.add(
+    log_forwarder_handler = logger.add(
         api_log_forwarder,
         level=log_level,
         format="{message}",
@@ -68,8 +66,8 @@ async def lifespan(app: FastAPI):
     if api_log_forwarder:
         try:
             # Remove the Loguru handler we added
-            if handler_id:
-                logger.remove(handler_id)
+            if log_forwarder_handler:
+                logger.remove(log_forwarder_handler)
         except Exception as e:
             print(f"Error removing Loguru handlers: {e}")
 
@@ -125,8 +123,9 @@ async def main():
         host="0.0.0.0",
         port=ObjectManager.get_config().api.port,
         workers=1,
-        log_level="info",
         reload=False,
+        log_level="debug",
+        log_config=None,  # Disable uvicorn's default logging config
     )
     server = uvicorn.Server(config)
     running_tasks = [
