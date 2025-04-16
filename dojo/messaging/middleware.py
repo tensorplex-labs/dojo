@@ -1,7 +1,7 @@
 import http
-from typing import Any, Callable
+from typing import Awaitable, Callable
 
-from fastapi import Request
+from fastapi import Request, Response
 from fastapi.responses import ORJSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -11,8 +11,8 @@ from dojo.messaging.utils import create_response, verify_signature
 
 class SignatureMiddleware(BaseHTTPMiddleware):
     async def dispatch(
-        self, request: Request, call_next: Callable
-    ) -> ORJSONResponse | Any:
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> ORJSONResponse | Response:
         signature = request.headers.get(SIGNATURE_HEADER, "")
         hotkey = request.headers.get(HOTKEY_HEADER, "")
         message = request.headers.get(MESSAGE_HEADER, "")
