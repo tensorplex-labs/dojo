@@ -27,15 +27,12 @@ from validator_api.shared.cache import RedisCache
 source_dotenv()
 settings: ValidatorAPISettings = get_settings()
 cfg: bt.config = ObjectManager.get_config()
-# bt.logging.set_debug(True)
 
 python_logging_to_loguru()
 for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
     uvicorn_logger = logging.getLogger(logger_name)
     uvicorn_logger.handlers = []
     uvicorn_logger.propagate = True
-
-print(cfg)
 
 
 @asynccontextmanager

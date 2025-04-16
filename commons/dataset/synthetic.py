@@ -5,7 +5,6 @@ import aiohttp
 from tenacity import (
     AsyncRetrying,
     RetryError,
-    before_sleep_log,
     stop_after_attempt,
     wait_exponential,
 )
@@ -74,8 +73,8 @@ class SyntheticAPI:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(MAX_RETRIES),
                 wait=wait_exponential(multiplier=1, max=30),
-                before_sleep=before_sleep_log(
-                    logger._logger, log_level=10, exc_info=True
+                before_sleep=lambda retry_state: logger.debug(
+                    f"Retrying after exception, attempt {retry_state.attempt_number}"
                 ),
             ):
                 with attempt:

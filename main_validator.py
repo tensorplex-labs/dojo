@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     configure_logger(log_level)
 
     # Configure Python's standard logging to forward to Loguru
-    python_logging_to_loguru(level=python_logging.INFO)
+    python_logging_to_loguru(level=getattr(python_logging, log_level))
 
     # Setup validator API logging
     global api_log_forwarder
