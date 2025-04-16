@@ -1,7 +1,6 @@
 import asyncio
 import copy
 import gc
-import http
 import math
 import random
 import time
@@ -9,7 +8,7 @@ import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from typing import AsyncGenerator, Dict, List, Sequence, TypeAlias
+from typing import AsyncGenerator, Dict, List, TypeAlias
 
 import aiohttp
 import bittensor as bt
@@ -18,6 +17,7 @@ import torch
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from loguru import logger
 from torch.nn import functional as F
+from validator_comms import send_request_to_miners
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
@@ -85,7 +85,7 @@ class Validator:
     _request_alock = asyncio.Lock()
     _threshold = 0.1
     _active_miner_uids: set[int] = set()
-    _forward_semaphore = asyncio.Semaphore(16)  # Limit to 16 concurrent forward calls
+    _forward_semaphore = asyncio.Semaphore(32)
 
     subtensor: bt.subtensor
     wallet: bt.wallet  # type: ignore
@@ -910,7 +910,12 @@ class Validator:
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{sel_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
-        all_miner_responses = await self._send_request_to_miners(synapse)
+        all_miner_responses = await send_request_to_miners(
+            synapse,
+            metagraph=self.metagraph,
+            client=self.client,
+            semaphore=self._forward_semaphore,
+        )
         valid_miner_responses: list[TaskSynapseObject] = []
         for uid, response in enumerate(all_miner_responses):
             if isinstance(response, BaseException):
@@ -974,66 +979,6 @@ class Validator:
             if self.dendrite.synapse_history:
                 self.dendrite.synapse_history.clear()
             await asyncio.sleep(300)
-
-    async def _send_request_to_miners(
-        self, synapse: TaskSynapseObject
-    ) -> list[TaskSynapseObject | BaseException]:
-        if not synapse.completion_responses:
-            logger.warning("No completion responses to send... skipping")
-            return []
-
-        UNSERVED_AXON_IP = "0.0.0.0"
-        # TODO: fix pyright typing
-        urls: list[str] = [
-            f"http://{axon.ip}:{axon.port}"  # pyright: ignore
-            for axon in self.metagraph.axons  # pyright: ignore
-            if axon.ip != UNSERVED_AXON_IP  # pyright: ignore
-        ]
-
-        synapses: list[TaskSynapseObject] = []
-        for _ in range(len(urls)):
-            # shuffle synapse Responses
-
-            shuffled_completions = random.sample(
-                synapse.completion_responses,
-                k=len(synapse.completion_responses),
-            )
-
-            shuffled_synapse = TaskSynapseObject(
-                epoch_timestamp=synapse.epoch_timestamp,
-                task_id=synapse.task_id,
-                prompt=synapse.prompt,
-                task_type=synapse.task_type,
-                expire_at=synapse.expire_at,
-                completion_responses=shuffled_completions,
-            )
-            synapses.append(shuffled_synapse)
-
-        from dojo.messaging.types import StdResponse
-
-        responses: Sequence[
-            tuple[aiohttp.ClientResponse | None, StdResponse[TaskSynapseObject] | None]
-            | BaseException
-        ] = await self.client.batch_send(
-            urls=urls, models=synapses, semaphore=self._forward_semaphore
-        )
-        all_responses: list[TaskSynapseObject | BaseException] = []
-        for miner_uid, r in enumerate(responses):
-            if isinstance(r, BaseException):
-                logger.error(
-                    f"Error sending request to miner: {miner_uid} at {urls[miner_uid]}, exception: {r}"
-                )
-                all_responses.append(r)
-            else:
-                client_response, miner_response = r
-                if (
-                    client_response
-                    and client_response.status == http.HTTPStatus.OK
-                    and miner_response
-                ):
-                    all_responses.append(miner_response.body)
-
-        return all_responses
 
     # TODO: deprecate this shit
     @staticmethod
