@@ -1,5 +1,6 @@
 import asyncio
-from typing import Any
+import http
+from typing import Any, Sequence
 
 import aiohttp
 import substrateinterface
@@ -35,6 +36,20 @@ def _build_url(url: str, model: BaseModel, protocol: str = "http") -> str:
     return f"{url}/{model.__class__.__name__}"
 
 
+async def _log_context(
+    response: tuple[aiohttp.ClientResponse | None, StdResponse[PydanticModel] | None]
+    | BaseException,
+) -> None:
+    if isinstance(response, BaseException):
+        logger.error(f"Error due to exception: {response}")
+    else:
+        client_response, std_response = response
+        if client_response and client_response.status != http.HTTPStatus.OK:
+            logger.error(
+                f"NOT OK, HTTP status: {client_response.status}, text: {client_response.text()} error: {std_response.error if std_response else ''}, metadata: {std_response.metadata if std_response else ''}"
+            )
+
+
 class Client:
     def __init__(
         self,
@@ -58,52 +73,54 @@ class Client:
             **self._compression_headers,
         }
 
-    # async def batch_send(
-    #     self,
-    #     urls: list[str],
-    #     models: list[PydanticModel],
-    #     semaphore: asyncio.Semaphore | None = None,
-    # ) -> list[Response | BaseException]:
-    #     """Sends the following payloads to the given URLs concurrently.
-    #     Expects that the endpoint is hosted at:
-    #         http://<url>/<model_name> where model_name is the name of the Pydantic model
-    #
-    #     Args:
-    #         urls (list[str]): urls
-    #         models (list[PydanticModel]): models
-    #         keypair (substrateinterface.Keypair): keypair
-    #
-    #     Returns:
-    #         list[Response]: Returns both the aiohttp Response, and the model that
-    #             was returned from the server, or the exception if the request failed
-    #     """
-    #
-    #     if semaphore is None:
-    #         logger.info("Attempting to batch sending requests without semaphore")
-    #         responses = await asyncio.gather(
-    #             *[self.send(url, model) for url, model in zip(urls, models)],
-    #             return_exceptions=True,
-    #         )
-    #         for i, response in enumerate(responses):
-    #             if isinstance(response, Exception):
-    #                 logger.error(f"Error due to exception: {response}")
-    #             elif response:
-    #                 client_response, model = response
-    #                 if client_response.status != http.HTTPStatus.OK:
-    #                     logger.error(f"Error due to response: {client_response.status}")
-    #
-    #     async def _send_with_semaphore(
-    #         url: str, model: PydanticModel
-    #     ) -> Response:
-    #         async with semaphore:
-    #             return await self.send(url, model)
-    #
-    #     responses = await asyncio.gather(
-    #         *[_send_with_semaphore(url, model) for url, model in zip(urls, models)],
-    #         return_exceptions=True,
-    #     )
-    #
-    #     return responses
+    async def batch_send(
+        self,
+        urls: list[str],
+        models: list[PydanticModel],
+        semaphore: asyncio.Semaphore | None = None,
+    ) -> Sequence[
+        tuple[aiohttp.ClientResponse | None, StdResponse[PydanticModel] | None]
+        | BaseException
+    ]:
+        """Sends the following payloads to the given URLs concurrently.
+        Expects that the endpoint is hosted at:
+            http://<url>/<model_name> where model_name is the name of the Pydantic model
+
+        Args:
+            urls (list[str]): urls
+            models (list[PydanticModel]): models
+            keypair (substrateinterface.Keypair): keypair
+
+        Returns:
+            list[Response]: Returns both the aiohttp Response, and the model that
+                was returned from the server, or the exception if the request failed
+        """
+
+        if semaphore is None:
+            logger.info("Attempting to batch sending requests without semaphore")
+            responses = await asyncio.gather(
+                *[self.send(url, model) for url, model in zip(urls, models)],
+                return_exceptions=True,
+            )
+            for r in responses:
+                await _log_context(r)
+
+            return responses
+
+        async def _send_with_semaphore(
+            url: str, model: PydanticModel
+        ) -> tuple[aiohttp.ClientResponse | None, StdResponse[PydanticModel] | None]:
+            async with semaphore:
+                return await self.send(url, model)
+
+        responses = await asyncio.gather(
+            *[_send_with_semaphore(url, model) for url, model in zip(urls, models)],
+            return_exceptions=True,
+        )
+        for r in responses:
+            await _log_context(r)
+
+        return responses
 
     async def send(
         self, url: str, model: PydanticModel
