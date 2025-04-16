@@ -75,7 +75,7 @@ class Client:
             SIGNATURE_HEADER: signature,
             HOTKEY_HEADER: hotkey,
             MESSAGE_HEADER: message,
-            # **self._compression_headers,
+            **self._compression_headers,
         }
         logger.debug(f"Sending request with headers: {headers}")
         return headers
