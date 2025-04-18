@@ -84,16 +84,21 @@ class Miner(aobject):
         self.server = Server()
 
         # NOTE: simply wrap so we don't need to deal with `self` atm
-        async def task_request_adapter(
+        async def _task_synapse_adapter(
             request: Request, synapse: TaskSynapseObject
         ) -> TaskSynapseObject:
             """Handles the task request from the validator and forwards it to the DojoAPI."""
             return await self.forward_task_request(request, synapse)
 
+        async def _heartbeat_adapter(request: Request, synapse: Heartbeat) -> Heartbeat:
+            return await self.ack_heartbeat(request, synapse)
+
         self.server.serve_synapse(
             synapse=TaskSynapseObject,
-            handler=task_request_adapter,
+            handler=_task_synapse_adapter,
         )
+        self.server.serve_synapse(synapse=Heartbeat, handler=_heartbeat_adapter)
+
         # TODO: replacement for `forward_score_result`
         # TODO: replacement for `forward_task_result_request`
 
@@ -204,10 +209,8 @@ class Miner(aobject):
     def _cleanup(self):
         self.axon.stop()
 
-    async def ack_heartbeat(self, synapse: Heartbeat) -> Heartbeat:
-        caller_hotkey = (
-            synapse.dendrite.hotkey if synapse.dendrite else "unknown hotkey"
-        )
+    async def ack_heartbeat(self, request: Request, synapse: Heartbeat) -> Heartbeat:
+        caller_hotkey, _, _ = extract_headers(request)
         logger.info(f"⬇️ Received heartbeat synapse from {caller_hotkey}")
         if not synapse:
             logger.error("Invalid synapse object")

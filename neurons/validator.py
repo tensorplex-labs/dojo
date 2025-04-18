@@ -17,12 +17,14 @@ import torch
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from loguru import logger
 from torch.nn import functional as F
+from validator_heartbeats import extract_miner_uids
 from validator_tasks import send_synthetic_task
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import (
     EmptyScores,
+    FatalSubtensorConnectionError,
     FatalSyntheticGenerationError,
     InvalidMinerResponse,
     NoNewExpiredTasksYet,
@@ -42,7 +44,7 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
-from dojo.chain import parse_block_headers
+from dojo.chain import get_async_subtensor, parse_block_headers
 from dojo.messaging import Client, get_client
 from dojo.protocol import (
     CompletionResponse,
@@ -59,7 +61,7 @@ from dojo.protocol import (
     TaskTypeEnum,
 )
 from dojo.utils.config import get_config
-from dojo.utils.uids import extract_miner_uids, is_miner
+from dojo.utils.uids import is_miner
 from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
@@ -563,7 +565,13 @@ class Validator:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
 
             try:
-                all_miner_uids = await extract_miner_uids()
+                subtensor = await get_async_subtensor()
+                if not subtensor:
+                    logger.error("Failed to connect to async subtensor")
+                    raise FatalSubtensorConnectionError(
+                        "Failed to connect to async subtensor"
+                    )
+                all_miner_uids = await extract_miner_uids(subtensor)
                 logger.info(f"Sending heartbeats to {len(all_miner_uids)} miners")
 
                 axons: list[bt.AxonInfo] = [
@@ -572,7 +580,7 @@ class Validator:
 
                 # Send heartbeats in batches
                 batch_size = 10
-                active_hotkeys = set()
+                active_hotkeys: set[str] = set()
 
                 for i in range(0, len(axons), batch_size):
                     batch = axons[i : i + batch_size]

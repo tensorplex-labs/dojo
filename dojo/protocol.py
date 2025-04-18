@@ -196,7 +196,7 @@ class ScoringResult(bt.Synapse):
     )
 
 
-class Heartbeat(bt.Synapse):
+class Heartbeat(BaseModel):
     ack: bool = Field(description="Acknowledgement of the heartbeat", default=False)
 
 
