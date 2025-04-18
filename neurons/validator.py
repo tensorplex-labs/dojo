@@ -17,7 +17,7 @@ import torch
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from loguru import logger
 from torch.nn import functional as F
-from validator_comms import send_synthetic_task
+from validator_tasks import send_synthetic_task
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
@@ -561,6 +561,7 @@ class Validator:
         """Perform a health check periodically to ensure and check which miners are reachable"""
         while True:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
+
             try:
                 all_miner_uids = await extract_miner_uids()
                 logger.info(f"Sending heartbeats to {len(all_miner_uids)} miners")

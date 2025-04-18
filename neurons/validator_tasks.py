@@ -1,7 +1,6 @@
 """
-Once code is more modular, this should exist in validator/comms.py <- or a better name
-validator/comms.py <- or a better name
-
+Once code is more modular, this should exist in validator/tasks.py <- or a better name
+This is meant to contain all logic related to synthetic tasks
 """
 
 import http
