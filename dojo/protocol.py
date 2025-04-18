@@ -149,7 +149,7 @@ class FeedbackRequest(bt.Synapse):
     )
 
 
-class TaskSynapseObject(bt.Synapse):
+class TaskSynapseObject(BaseModel):
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the task",
@@ -197,7 +197,7 @@ class ScoringResult(bt.Synapse):
     )
 
 
-class Heartbeat(bt.Synapse):
+class Heartbeat(BaseModel):
     ack: bool = Field(description="Acknowledgement of the heartbeat", default=False)
 
 

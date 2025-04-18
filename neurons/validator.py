@@ -14,21 +14,23 @@ import aiohttp
 import bittensor as bt
 import numpy as np
 import torch
-from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.weight_utils import process_weights_for_netuid
+from loguru import logger
 from torch.nn import functional as F
+from validator_heartbeats import extract_miner_uids
+from validator_tasks import send_synthetic_task
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import (
     EmptyScores,
+    FatalSubtensorConnectionError,
     FatalSyntheticGenerationError,
     InvalidMinerResponse,
     NoNewExpiredTasksYet,
     SetWeightsFailed,
     SyntheticGenerationError,
 )
-from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.score_storage import ScoreStorage
@@ -42,7 +44,8 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
-from dojo.chain import parse_block_headers
+from dojo.chain import get_async_subtensor, parse_block_headers
+from dojo.messaging import Client, get_client
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -58,7 +61,7 @@ from dojo.protocol import (
     TaskTypeEnum,
 )
 from dojo.utils.config import get_config
-from dojo.utils.uids import extract_miner_uids, is_miner
+from dojo.utils.uids import is_miner
 from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
@@ -84,7 +87,7 @@ class Validator:
     _request_alock = asyncio.Lock()
     _threshold = 0.1
     _active_miner_uids: set[int] = set()
-    _forward_semaphore = asyncio.Semaphore(16)  # Limit to 16 concurrent forward calls
+    _forward_semaphore = asyncio.Semaphore(32)
 
     subtensor: bt.subtensor
     wallet: bt.wallet  # type: ignore
@@ -140,6 +143,11 @@ class Validator:
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.load_state()
 
+        self._client_session = get_client()
+        self.client = Client(
+            session=self._client_session, keypair=self.wallet.get_hotkey()
+        )
+
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
         axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
@@ -162,28 +170,6 @@ class Validator:
             completion.model = completion.completion_id
             obfuscated_model_to_model[completion.completion_id] = original_model
         return obfuscated_model_to_model
-
-    @staticmethod
-    async def _obfuscate_completion_files(
-        completion_responses: List[CompletionResponse],
-    ):
-        """Obfuscate HTML files in each completion response."""
-        for completion in completion_responses:
-            if hasattr(completion.completion, "files"):
-                for file in completion.completion.files:
-                    if file.filename.lower().endswith(".html"):
-                        try:
-                            original_size = len(file.content)
-                            logger.debug(
-                                f"Original size of {file.filename}: {original_size} bytes"
-                            )
-                            file.content = await obfuscate_html_and_js(file.content)
-                            obfuscated_size = len(file.content)
-                            logger.debug(
-                                f"Obfuscated size of {file.filename}: {obfuscated_size} bytes"
-                            )
-                        except Exception as e:
-                            logger.error(f"Error obfuscating {file.filename}: {e}")
 
     async def get_miner_uids(self):
         async with self._uids_alock:
@@ -572,8 +558,15 @@ class Validator:
         """Perform a health check periodically to ensure and check which miners are reachable"""
         while True:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
+
             try:
-                all_miner_uids = await extract_miner_uids()
+                subtensor = await get_async_subtensor()
+                if not subtensor:
+                    logger.error("Failed to connect to async subtensor")
+                    raise FatalSubtensorConnectionError(
+                        "Failed to connect to async subtensor"
+                    )
+                all_miner_uids = await extract_miner_uids(subtensor)
                 logger.info(f"Sending heartbeats to {len(all_miner_uids)} miners")
 
                 axons: list[bt.AxonInfo] = [
@@ -582,7 +575,7 @@ class Validator:
 
                 # Send heartbeats in batches
                 batch_size = 10
-                active_hotkeys = set()
+                active_hotkeys: set[str] = set()
 
                 for i in range(0, len(axons), batch_size):
                     batch = axons[i : i + batch_size]
@@ -937,42 +930,24 @@ class Validator:
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{sel_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
-        miner_responses: List[TaskSynapseObject] = await self._send_shuffled_requests(
-            self.dendrite, axons, synapse
+        all_miner_responses = await send_synthetic_task(
+            synapse,
+            metagraph=self.metagraph,
+            client=self.client,
+            semaphore=self._forward_semaphore,
         )
-        valid_count = 0
-        fails = []
-        for response in miner_responses:
-            try:
-                status_code = response.dendrite.status_code
-            except Exception:
-                status_code = None
-            try:
-                logger.info(
-                    f"Miner hotkey: {response.axon.hotkey}, dojo_task_id: {response.dojo_task_id}, status_code: {status_code}"
-                )
-                if response.dojo_task_id:
-                    valid_count += 1
-                else:
-                    fails.append(
-                        (response.axon.hotkey, status_code, response.dojo_task_id)
-                    )
-            except Exception as e:
-                logger.error(f"Error logging miner response: {e}")
-                logger.info("dendrite", response.dendrite)
-                fails.append((response.axon.hotkey, status_code, response))
+
+        valid_miner_responses: list[TaskSynapseObject] = []
+        for uid, response in enumerate(all_miner_responses):
+            if isinstance(response, BaseException):
                 continue
 
-        logger.info(f"Fails: {fails}")
-        logger.info(f"Valid miner responses: {valid_count}")
-        valid_miner_responses: List[TaskSynapseObject] = []
-        for response in miner_responses:
             try:
                 if not response.dojo_task_id:
                     continue
 
                 # map obfuscated model names back to the original model names
-                real_model_ids = []
+                real_model_ids: list[str | None] = []
                 if response.completion_responses:
                     for i, completion in enumerate(response.completion_responses):
                         found_model_id = obfuscated_model_to_model.get(
@@ -987,18 +962,8 @@ class Validator:
                     logger.warning("Failed to map obfuscated model to original model")
                     continue
 
-                response.miner_hotkey = response.axon.hotkey if response.axon else None
-                # Get coldkey from metagraph using hotkey index
-                if response.axon and response.axon.hotkey:
-                    try:
-                        hotkey_index = self.metagraph.hotkeys.index(
-                            response.axon.hotkey
-                        )
-                        response.miner_coldkey = self.metagraph.coldkeys[hotkey_index]
-                    except ValueError:
-                        response.miner_coldkey = None
-                else:
-                    response.miner_coldkey = None
+                response.miner_hotkey = self.metagraph.hotkeys[uid]
+                response.miner_coldkey = self.metagraph.coldkeys[uid]
                 valid_miner_responses.append(response)
 
             except Exception as e:
@@ -1010,9 +975,10 @@ class Validator:
             logger.info("No valid miner responses to process... skipping")
             return
 
-        # include the ground_truth to keep in data manager
+        # include the ground_truth to keep in data
         synapse.ground_truth = ground_truth
-        synapse.dendrite.hotkey = self.vali_hotkey
+        # TODO: not sure if we'll need this later
+        # synapse.dendrite.hotkey = self.vali_hotkey
 
         logger.info("Attempting to saving dendrite response")
         if not await ORM.save_task(
@@ -1036,6 +1002,7 @@ class Validator:
                 self.dendrite.synapse_history.clear()
             await asyncio.sleep(300)
 
+    # TODO: deprecate this shit
     @staticmethod
     async def _send_shuffled_requests(
         dendrite: bt.dendrite, axons: List[bt.AxonInfo], synapse: TaskSynapseObject
@@ -1056,7 +1023,7 @@ class Validator:
 
         if not synapse.completion_responses:
             logger.warning("No completion responses to send... skipping")
-            return all_responses
+            return []
 
         for i in range(0, len(axons), batch_size):
             batch_axons = axons[i : i + batch_size]
@@ -1068,10 +1035,6 @@ class Validator:
                     synapse.completion_responses,
                     k=len(synapse.completion_responses),
                 )
-
-                # Apply obfuscation to each completion's files
-                # TODO re-nable obfuscation
-                # await Validator._obfuscate_completion_files(shuffled_completions)
 
                 shuffled_synapse = TaskSynapseObject(
                     epoch_timestamp=synapse.epoch_timestamp,
