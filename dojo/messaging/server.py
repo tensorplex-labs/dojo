@@ -1,9 +1,10 @@
 import traceback
+from http import HTTPStatus
 from typing import Any, List, Type
 
 import orjson
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import ORJSONResponse
 from loguru import logger
 from pydantic import BaseModel
@@ -13,10 +14,18 @@ from dojo.messaging.middleware import SignatureMiddleware, ZstdMiddleware
 from dojo.messaging.types import PydanticModel, ServerHandlerFunc
 from dojo.messaging.utils import create_response
 
+router = APIRouter()
+
+
+@router.api_route("/health", methods=["GET", "HEAD"])
+async def health_check():
+    return ORJSONResponse(content={}, status_code=HTTPStatus.OK)
+
 
 class Server:
     def __init__(self, app: FastAPI | None = None) -> None:
         self.app = FastAPI() or app
+        # self.app.include_router(router)
         self.app.add_middleware(ZstdMiddleware)
         self.app.add_middleware(SignatureMiddleware)
         # NOTE: here we register some exception handlers that make it easier to
@@ -49,7 +58,7 @@ class Server:
             return create_response(
                 error=str(exc),
                 body={},
-                status_code=403,
+                status_code=HTTPStatus.FORBIDDEN,
             )
 
     def serve_synapse(
@@ -90,7 +99,7 @@ def _register_route_handler(
     handler: ServerHandlerFunc[PydanticModel],
     model: Type[PydanticModel],
     # NOTE: let's just default to post for now
-    methods: List[str] = ["POST"],
+    methods: List[str] = ["POST", "HEAD"],
 ) -> FastAPI:
     """Register a route with a Pydantic model to allow easily adding new endpoints"""
 
@@ -148,7 +157,7 @@ def _register_route_handler(
     description = handler.__doc__ if handler.__doc__ else handler_wrapper.__doc__
     handler_wrapper.__name__ = handler.__name__
     app.add_api_route(
-        path="/" + model.__name__.lstrip("/"),
+        path="/" + model.__name__.lstrip("/").rstrip("/"),
         endpoint=handler_wrapper,
         methods=methods,
         operation_id=f"handle_{model.__name__}",

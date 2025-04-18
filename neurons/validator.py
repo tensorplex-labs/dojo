@@ -17,7 +17,7 @@ import torch
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from loguru import logger
 from torch.nn import functional as F
-from validator_comms import send_request_to_miners
+from validator_comms import send_synthetic_task
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
@@ -910,12 +910,13 @@ class Validator:
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{sel_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
-        all_miner_responses = await send_request_to_miners(
+        all_miner_responses = await send_synthetic_task(
             synapse,
             metagraph=self.metagraph,
             client=self.client,
             semaphore=self._forward_semaphore,
         )
+
         valid_miner_responses: list[TaskSynapseObject] = []
         for uid, response in enumerate(all_miner_responses):
             if isinstance(response, BaseException):

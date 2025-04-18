@@ -1,5 +1,7 @@
 """
 Once code is more modular, this should exist in validator/comms.py <- or a better name
+validator/comms.py <- or a better name
+
 """
 
 import http
@@ -17,21 +19,44 @@ from dojo.protocol import (
 )
 
 
-async def send_request_to_miners(
+# TODO: actually this can be generic
+async def send_synthetic_task(
     synapse: TaskSynapseObject,
     metagraph: bt.metagraph,
     client: Client,
     semaphore: Semaphore,
+    active_uids: Sequence[int] = None,  # type: ignore[assignment]
 ) -> list[TaskSynapseObject | BaseException]:
+    """Function to send a request to miners, using the provided metagraph and
+    client. The function sends the request to all miners in the metagraph if no
+    specified indices are provided, and returns a list of responses.
+
+    Args:
+        synapse (TaskSynapseObject): synapse
+        metagraph (bt.metagraph): metagraph
+        client (Client): client
+        semaphore (Semaphore): semaphore
+        active_uids (Sequence[int], optional): list of active uids. Defaults to None.
+
+    Returns:
+        list[TaskSynapseObject | BaseException]:
+    """
     if not synapse.completion_responses:
         logger.warning("No completion responses to send... skipping")
         return []
 
     UNSERVED_AXON_IP = "0.0.0.0"
-    # TODO: fix pyright typing
+
+    # FIXME: fix pyright typing
+    axons: list[bt.AxonInfo] = (  # pyright: ignore
+        metagraph.axons  # pyright: ignore
+        if not active_uids
+        else [metagraph.axons[uid] for uid in active_uids]  # pyright: ignore
+    )
+
     urls: list[str] = [
         f"http://{axon.ip}:{axon.port}"  # pyright: ignore
-        for axon in metagraph.axons  # pyright: ignore
+        for axon in axons  # pyright: ignore
         if axon.ip != UNSERVED_AXON_IP  # pyright: ignore
     ]
 
