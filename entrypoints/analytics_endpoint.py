@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import State
 
 from commons.utils import check_stake, verify_hotkey_in_metagraph, verify_signature
+from dojo.messaging.types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 
 analytics_router = APIRouter()
@@ -115,9 +116,9 @@ async def create_analytics_data(
     request: Request,
     data: AnalyticsPayload,
     path_hotkey: str,  # Path parameter
-    header_hotkey: str = Header(..., alias="X-Hotkey"),
-    signature: str = Header(..., alias="X-Signature"),
-    message: str = Header(..., alias="X-Message"),
+    header_hotkey: str = Header(..., alias=HOTKEY_HEADER),
+    signature: str = Header(..., alias=SIGNATURE_HEADER),
+    message: str = Header(..., alias=MESSAGE_HEADER),
 ):
     """
     create_analytics_data() is the route that receives analytics data from validators

@@ -78,9 +78,11 @@ Repository = "https://github.com/tensorplex-labs/dojo"
 name = "cz_conventional_commits"
 
 [tool.pyright]
-exclude = ["**/__pycache__", "database/prisma", "wandb", ".nox"]
+exclude = ["**/__pycache__", "database/prisma", "wandb", ".nox", "simulator", "tests"]
 reportUnusedCallResult = false
+reportMissingTypeStubs = "information"
 typeCheckingMode = "strict"
+stubPath = "./typings"
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
