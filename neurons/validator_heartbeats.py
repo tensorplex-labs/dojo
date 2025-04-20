@@ -16,7 +16,7 @@ from commons.utils import aget_effective_stake
 from dojo import VALIDATOR_MIN_STAKE
 
 
-async def extract_miner_uids(
+async def get_active_miner_uids(
     subtensor: AsyncSubtensor, semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
 ) -> Sequence[int]:
     """Retrieves the miner UIDs from the subnet metagraph that are serving and

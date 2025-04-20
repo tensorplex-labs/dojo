@@ -17,7 +17,7 @@ import torch
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from loguru import logger
 from torch.nn import functional as F
-from validator_heartbeats import extract_miner_uids
+from validator_heartbeats import get_active_miner_uids
 from validator_tasks import send_synthetic_task
 
 import dojo
@@ -571,7 +571,7 @@ class Validator:
                     raise FatalSubtensorConnectionError(
                         "Failed to connect to async subtensor"
                     )
-                all_miner_uids = await extract_miner_uids(subtensor)
+                all_miner_uids = await get_active_miner_uids(subtensor)
                 logger.info(f"Sending heartbeats to {len(all_miner_uids)} miners")
 
                 axons: list[bt.AxonInfo] = [
@@ -1243,10 +1243,6 @@ class Validator:
         Returns:
             list[TaskResult]: List of task results or empty list if request fails
         """
-        if not self.dendrite:
-            logger.error("Dendrite not initialized")
-            return []
-
         try:
             try:
                 axon_index = self.metagraph.hotkeys.index(miner_hotkey)
