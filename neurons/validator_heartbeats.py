@@ -7,19 +7,29 @@ synthetic tasks, etc. are reachable to save bandwidth.
 import asyncio
 from typing import Sequence
 
+import bittensor as bt
 from bittensor.core.async_subtensor import AsyncSubtensor
 from bittensor.utils.btlogging import logging as logger
 
-from commons.exceptions import FatalSubtensorConnectionError
+from commons.exceptions import (
+    FatalSubtensorConnectionError,
+)
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake
-from dojo import VALIDATOR_MIN_STAKE
+from dojo import (
+    VALIDATOR_MIN_STAKE,
+)
+from dojo.chain import get_async_subtensor
+from dojo.messaging import Client
+from dojo.protocol import (
+    Heartbeat,
+)
 
 
-async def get_active_miner_uids(
-    subtensor: AsyncSubtensor, semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
+async def _get_served_axon_uids(
+    subtensor: AsyncSubtensor, semaphore: asyncio.Semaphore
 ) -> Sequence[int]:
-    """Retrieves the miner UIDs from the subnet metagraph that are serving and
+    """Retrieves the UIDs from the subnet metagraph that are serving and
     checks their stake so they're considered miners."""
     config = ObjectManager.get_config()
     if not subtensor:
@@ -50,3 +60,50 @@ async def get_active_miner_uids(
         if subnet_metagraph.axons[uid].is_serving
         and effective_stakes[uid] < VALIDATOR_MIN_STAKE
     ]
+
+
+async def send_heartbeats(
+    client: Client,
+    metagraph: bt.metagraph,
+    semaphore: asyncio.Semaphore,
+) -> list[int]:
+    """Perform a health check periodically, sending heartbeats to all miners to
+    check which miners are reachable"""
+    try:
+        subtensor = await get_async_subtensor()
+        if not subtensor:
+            logger.error("Failed to connect to async subtensor")
+            raise FatalSubtensorConnectionError("Failed to connect to async subtensor")
+
+        served_axon_uids = await _get_served_axon_uids(subtensor, semaphore)
+
+        logger.info(f"Sending heartbeats to {len(served_axon_uids)} miner uids")
+        axons: list[bt.AxonInfo] = [metagraph.axons[uid] for uid in served_axon_uids]
+
+        urls: list[str] = [
+            f"http://{axon.ip}:{axon.port}"  # pyright: ignore
+            for axon in axons  # pyright: ignore
+            if axon.ip != "0.0.0.0"  # pyright: ignore
+        ]
+        heartbeats = [Heartbeat() for _ in range(len(urls))]
+        responses = await client.batch_send(
+            urls=urls, models=heartbeats, semaphore=semaphore, timeout_sec=60
+        )
+
+        active_uids: list[int] = []
+        for miner_uid, r in enumerate(responses):
+            if isinstance(r, BaseException):
+                logger.error(
+                    f"Error sending heartbeat to miner: {miner_uid} at {urls[miner_uid]}, exception: {r}"
+                )
+            elif isinstance(r, Heartbeat):
+                if r.ack:
+                    active_uids.append(miner_uid)
+                else:
+                    logger.warning(f"Miner {miner_uid} did not acknowledge heartbeat")
+
+        return active_uids
+        logger.info(f"⬇️ Heartbeats acknowledged by miners: {sorted(active_uids)}")
+    except Exception as e:
+        logger.error(f"Error in sending heartbeats: {e}", exc_info=True)
+        return []

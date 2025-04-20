@@ -85,6 +85,7 @@ class Client:
         urls: list[str],
         models: list[PydanticModel],
         semaphore: asyncio.Semaphore | None = None,
+        **kwargs: Any,
     ) -> Sequence[
         tuple[aiohttp.ClientResponse | None, StdResponse[PydanticModel] | None]
         | BaseException
@@ -106,7 +107,7 @@ class Client:
         if semaphore is None:
             logger.info("Attempting to batch sending requests without semaphore")
             responses = await asyncio.gather(
-                *[self.send(url, model) for url, model in zip(urls, models)],
+                *[self.send(url, model, **kwargs) for url, model in zip(urls, models)],
                 return_exceptions=True,
             )
             for r in responses:
@@ -118,7 +119,7 @@ class Client:
             url: str, model: PydanticModel
         ) -> tuple[aiohttp.ClientResponse | None, StdResponse[PydanticModel] | None]:
             async with semaphore:
-                return await self.send(url, model)
+                return await self.send(url, model, **kwargs)
 
         responses = await asyncio.gather(
             *[_send_with_semaphore(url, model) for url, model in zip(urls, models)],
@@ -130,7 +131,7 @@ class Client:
         return responses
 
     async def send(
-        self, url: str, model: PydanticModel
+        self, url: str, model: PydanticModel, timeout_sec: int = 10, **kwargs: Any
     ) -> tuple[aiohttp.ClientResponse | None, StdResponse[PydanticModel] | None]:
         """Sends the following payload to the given URL.
         Expects that the endpoint is hosted at:
@@ -153,6 +154,7 @@ class Client:
             _build_url(url, model),
             data=payload,
             headers=_headers,
+            timeout=aiohttp.ClientTimeout(total=timeout_sec),
         ) as client_resp:
             logger.info(f"Received response from: {url}, status: {client_resp.status}")
             response_json = {}

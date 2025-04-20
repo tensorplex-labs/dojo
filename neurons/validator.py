@@ -17,14 +17,13 @@ import torch
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from loguru import logger
 from torch.nn import functional as F
-from validator_heartbeats import get_active_miner_uids
+from validator_heartbeats import send_heartbeats
 from validator_tasks import send_synthetic_task
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import (
     EmptyScores,
-    FatalSubtensorConnectionError,
     FatalSyntheticGenerationError,
     InvalidMinerResponse,
     NoNewExpiredTasksYet,
@@ -44,14 +43,13 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
-from dojo.chain import get_async_subtensor, parse_block_headers
+from dojo.chain import parse_block_headers
 from dojo.messaging import Client, get_client
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
     CriteriaTypeEnum,
     DendriteQueryResponse,
-    Heartbeat,
     ScoreCriteria,
     ScoringResult,
     SyntheticQA,
@@ -88,6 +86,7 @@ class Validator:
     _threshold = 0.1
     _active_miner_uids: set[int] = set()
     _forward_semaphore = asyncio.Semaphore(32)
+    _heartbeat_semaphore = asyncio.Semaphore(16)
 
     subtensor: bt.subtensor
     wallet: bt.wallet  # type: ignore
@@ -564,48 +563,11 @@ class Validator:
         while True:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
 
-            try:
-                subtensor = await get_async_subtensor()
-                if not subtensor:
-                    logger.error("Failed to connect to async subtensor")
-                    raise FatalSubtensorConnectionError(
-                        "Failed to connect to async subtensor"
-                    )
-                all_miner_uids = await get_active_miner_uids(subtensor)
-                logger.info(f"Sending heartbeats to {len(all_miner_uids)} miners")
-
-                axons: list[bt.AxonInfo] = [
-                    self.metagraph.axons[uid] for uid in all_miner_uids
-                ]
-
-                # Send heartbeats in batches
-                batch_size = 10
-                active_hotkeys: set[str] = set()
-
-                for i in range(0, len(axons), batch_size):
-                    batch = axons[i : i + batch_size]
-                    responses: List[Heartbeat] = await self.dendrite.forward(
-                        axons=batch, synapse=Heartbeat(), deserialize=False, timeout=12
-                    )
-                    # Process batch responses
-                    active_hotkeys.update(
-                        r.axon.hotkey for r in responses if r and r.ack and r.axon
-                    )
-
-                active_uids = {
-                    uid
-                    for uid, axon in enumerate(self.metagraph.axons)
-                    if axon.hotkey in active_hotkeys
-                }
-
-                async with self._uids_alock:
-                    self._active_miner_uids = active_uids
-
-                logger.info(
-                    f"⬇️ Heartbeats acknowledged by active miners: {sorted(active_uids)}"
-                )
-            except Exception as e:
-                logger.error(f"Error in sending heartbeats: {e}", exc_info=True)
+            active_uids = await send_heartbeats(
+                self.client, self.metagraph, self._heartbeat_semaphore
+            )
+            async with self._uids_alock:
+                self._active_miner_uids = active_uids
 
     async def run(self):
         logger.info(f"Validator starting at block: {str(self.block)}")
