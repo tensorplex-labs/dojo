@@ -40,7 +40,6 @@ from database.prisma.types import (
 from dojo import TASK_DEADLINE
 from dojo.protocol import (
     DendriteQueryResponse,
-    HFLEventTypeEnum,
     ScoreFeedbackEvent,
     Scores,
     TaskResult,
@@ -1166,7 +1165,7 @@ class ORM:
     async def save_sf_task(
         validator_task: TaskSynapseObject,
         miner_responses: list[TaskSynapseObject],
-        hfl_state_id: str,
+        hfl_state: HFLState,
         previous_task_id: str,
     ) -> tuple[ValidatorTask, HFLState]:
         """
@@ -1181,11 +1180,6 @@ class ORM:
             Tuple of (created task, updated HFL state)
         """
         async with prisma.tx() as tx:
-            # Verify HFL state exists
-            hfl_state = await tx.hflstate.find_unique(where={"id": hfl_state_id})
-            if not hfl_state:
-                raise ValueError(f"HFL state with ID {hfl_state_id} not found")
-
             validator_task_data = map_task_synapse_object_to_validator_task(
                 validator_task
             )
@@ -1228,20 +1222,26 @@ class ORM:
 
             # Update HFL state with current task id and status
             updated_hfl_state = await HFLManager.update_state(
-                hfl_state_id=hfl_state_id,
+                hfl_state_id=hfl_state.id,
                 updates=HFLStateUpdateInput(
                     current_task_id=created_task.id,
                     status=HFLStatusEnum.SF_PENDING,
                 ),
                 event_data=ScoreFeedbackEvent(
-                    task_id=created_task.id,
-                    type=HFLEventTypeEnum.SF_PENDING,
+                    type=HFLStatusEnum.SF_PENDING,
+                    task_id=validator_task.task_id,
+                    syn_req_id=hfl_state.current_synthetic_req_id
+                    if hfl_state.current_synthetic_req_id
+                    else "",
+                    iteration=hfl_state.current_iteration,
+                    timestamp=datetime_as_utc(datetime.now(timezone.utc)),
                 ),
                 tx=tx,
             )
+            # TODO: update the hfl completion relation
 
             if not updated_hfl_state:
-                raise ValueError(f"Failed to update HFL state with ID {hfl_state_id}")
+                raise ValueError(f"Failed to update HFL state with ID {hfl_state.id}")
 
             return created_task, updated_hfl_state
 

@@ -20,7 +20,11 @@ from database.mappers import map_validator_task_to_task_synapse_object
 from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, MinerResponse, MinerScore, ValidatorTask
-from database.prisma.types import MinerScoreWhereInput, ValidatorTaskInclude
+from database.prisma.types import (
+    HFLStateUpdateInput,
+    MinerScoreWhereInput,
+    ValidatorTaskInclude,
+)
 from dojo.protocol import (
     CriteriaType,
     DendriteQueryResponse,
@@ -524,6 +528,7 @@ class FeedbackLoop:
                         )
 
                     else:
+                        # TODO: handled edge case where we have no responses
                         # Handle task with insufficient responses at max retries
                         logger.warning(
                             f"Task {task.id} failed to get enough responses after {MAX_RETRY_ATTEMPTS} attempts. "
@@ -860,6 +865,17 @@ class FeedbackLoop:
             return None
 
     async def create_sf_tasks(self, validator: Validator):
+        """Continuously poll for completed text feedback tasks and process synthetic improvements."""
+        while True:
+            try:
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await self._create_sf_tasks(validator)
+            except Exception as e:
+                logger.error(f"Error in create_sf_tasks: {str(e)}")
+                logger.debug(f"Traceback: {traceback.format_exc()}")
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+
+    async def _create_sf_tasks(self, validator: Validator):
         """
         Poll for completed text feedback tasks and process synthetic improvements.
         Runs continuously with SF_TASK_CREATION_INTERVAL delay between iterations.
@@ -871,94 +887,94 @@ class FeedbackLoop:
             - If ready, create improved task and send to miners
             - Update state to SF_PENDING
         """
-        while True:
-            try:
-                # Get tasks with TF_COMPLETED status in batches
-                async for tf_tasks_batch, _ in ORM.get_TF_tasks_by_hfl_status(
-                    status=HFLStatusEnum.TF_COMPLETED,
-                    batch_size=10,
-                ):
-                    if not tf_tasks_batch:
-                        await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+        try:
+            # Get tasks with TF_COMPLETED status in batches
+            async for tf_tasks_batch, _ in ORM.get_TF_tasks_by_hfl_status(
+                status=HFLStatusEnum.TF_COMPLETED,
+                batch_size=10,
+            ):
+                if not tf_tasks_batch:
+                    continue
+
+                for tf_task in tf_tasks_batch:
+                    if (
+                        not tf_task.HFLState
+                        or not tf_task.HFLState.current_synthetic_req_id
+                    ):
+                        logger.debug(
+                            f"No HFLState or current_synthetic_req_id for task-id: {tf_task.id}"
+                        )
                         continue
 
-                    for tf_task in tf_tasks_batch:
-                        try:
-                            if (
-                                not tf_task.HFLState
-                                or not tf_task.HFLState.current_synthetic_req_id
-                            ):
-                                logger.debug(
-                                    f"No HFLState or current_synthetic_req_id for task-id: {tf_task.id}"
-                                )
-                                continue
+                    # Check if synthetic task is ready
+                    improved_task = await self._generate_improved_synthetic_request(
+                        tf_task.HFLState.current_synthetic_req_id
+                    )
+                    if not improved_task:
+                        logger.debug(
+                            f"No improved task found for {tf_task.HFLState.current_synthetic_req_id} yet"
+                        )
+                        continue
 
-                            # Check if synthetic task is ready
-                            improved_task = (
-                                await self._generate_improved_synthetic_request(
-                                    tf_task.HFLState.current_synthetic_req_id
-                                )
-                            )
-                            if not improved_task:
-                                logger.debug(
-                                    f"No improved task found for {tf_task.HFLState.current_synthetic_req_id} yet"
-                                )
-                                continue
+                    # Create new task for miners
+                    new_sf_task = TaskSynapseObject(
+                        task_id=get_new_uuid(),
+                        prompt=improved_task.prompt,
+                        task_type=TaskTypeEnum.SCORE_FEEDBACK,
+                        expire_at=set_expire_time(dojo.TASK_DEADLINE),
+                        completion_responses=improved_task.completion_responses,
+                    )
 
-                            # Create new task for miners
-                            new_task = TaskSynapseObject(
-                                task_id=get_new_uuid(),
-                                prompt=improved_task.prompt,
-                                task_type=TaskTypeEnum.SCORE_FEEDBACK,
-                                expire_at=set_expire_time(dojo.TASK_DEADLINE),
-                                completion_responses=improved_task.completion_responses,
-                            )
+                    # Send to miners and get responses
+                    active_miners = await self._get_active_miners_for_hfl(
+                        validator=validator,
+                    )
+                    if not active_miners:
+                        logger.error(
+                            f"No active miners found for creating SF task for {tf_task.id}"
+                        )
+                        continue
 
-                            # Send to miners and get responses
-                            sf_task = await validator.send_request(
-                                synapse=new_task,
-                                synthetic_task=True,
-                                prev_task_id=tf_task.id,
-                            )
+                    axons = [
+                        validator.metagraph.axons[miner_uid]
+                        for miner_uid in active_miners
+                    ]
 
-                            if not sf_task:
-                                logger.error(
-                                    f"Failed to send improved task to miners for {tf_task.id}"
-                                )
-                                continue
+                    miner_responses = await self.send_hfl_request(
+                        validator=validator,
+                        synapse=new_sf_task,
+                        task_type=TaskTypeEnum.SCORE_FEEDBACK,
+                        axons=axons,
+                    )
 
-                            # Update HFL state
-                            event = ScoreFeedbackEvent(
-                                type=HFLStatusEnum.SF_PENDING,
-                                task_id=tf_task.id,
-                                syn_req_id=tf_task.HFLState.current_synthetic_req_id,
-                                iteration=tf_task.HFLState.current_iteration,
-                                timestamp=datetime_as_utc(datetime.now(timezone.utc)),
-                            )
+                    if not miner_responses:
+                        logger.error(
+                            f"Failed to send improved task to miners for {tf_task.id}"
+                        )
+                        continue
 
-                            await HFLManager.update_state(
-                                tf_task.HFLState.id,
-                                {
-                                    "status": HFLStatusEnum.SF_PENDING,
-                                    "current_task_id": sf_task.id,
-                                    "current_synthetic_req_id": None,  # Clear synthetic req ID
-                                },
-                                event,
-                            )
+                    # For SF tasks, we need to get the HFL state by the previous task id
 
-                        except Exception as e:
-                            # Log error but continue processing other tasks
-                            logger.error(
-                                f"Error processing task {tf_task.id}: {str(e)}"
-                            )
-                            continue
+                    validator_task, hfl_state = await ORM.save_sf_task(
+                        validator_task=new_sf_task,
+                        miner_responses=miner_responses,
+                        hfl_state=tf_task.HFLState,
+                        previous_task_id=tf_task.id,
+                    )
 
-                    await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                    if not validator_task:
+                        logger.error(f"Failed to save SF task for {tf_task.id}")
+                        continue
 
-            except Exception as e:
-                logger.error(f"Error in synthetic polling loop: {str(e)}")
-                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                    logger.info(
+                        f"Saved SF task for {tf_task.id}, got validator_task: {validator_task.id}"
+                    )
 
+        except Exception as e:
+            logger.error(f"Error in creating SF tasks: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+
+    # TODO: Integrate this with synthetic API
     async def _generate_improved_synthetic_request(
         self, syn_req_id: str
     ) -> TaskSynapseObject | None:
@@ -1004,6 +1020,20 @@ class FeedbackLoop:
     async def update_sf_task_results(self, validator: Validator):
         """
         Update the results of Score Feedback (SF) tasks.
+        """
+        while True:
+            try:
+                # TODO: Use separate interval for SF task updates
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await self._update_sf_task_results(validator)
+            except Exception as e:
+                logger.error(f"Error in update_sf_task_results: {str(e)}")
+                logger.debug(f"Traceback: {traceback.format_exc()}")
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+
+    async def _update_sf_task_results(self, validator: Validator):
+        """
+        Update the results of Score Feedback (SF) tasks.
 
         Flow:
         1. Query SF_PENDING tasks that have expired within a time window
@@ -1013,112 +1043,96 @@ class FeedbackLoop:
             - Update task results in database
             - Update HFL state to SF_COMPLETED
         """
-        while True:
-            try:
-                # Get tasks that expired in the last 2 hours
-                expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
-                    hours=2
-                )
-                expire_to = datetime_as_utc(datetime.now(timezone.utc))
+        try:
+            # Get tasks that expired in the last 2 hours
+            expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
+                hours=2
+            )
+            expire_to = datetime_as_utc(datetime.now(timezone.utc))
 
-                logger.debug(
-                    f"Processing SF tasks with expire_from: {expire_from} and expire_to: {expire_to}"
-                )
+            logger.debug(
+                f"Processing SF tasks with expire_from: {expire_from} and expire_to: {expire_to}"
+            )
 
-                # Get SF_PENDING tasks in batches
-                async for sf_tasks_batch, _ in ORM.get_SF_tasks_by_hfl_status(
-                    status=HFLStatusEnum.SF_PENDING,
-                    expire_from=expire_from,
-                    expire_to=expire_to,
-                    batch_size=10,
-                ):
-                    if not sf_tasks_batch:
-                        await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+            # Get SF_PENDING tasks in batches
+            async for sf_tasks_batch, _ in ORM.get_SF_tasks_by_hfl_status(
+                status=HFLStatusEnum.SF_PENDING,
+                expire_from=expire_from,
+                expire_to=expire_to,
+                batch_size=10,
+            ):
+                if not sf_tasks_batch:
+                    continue
+
+                for sf_task in sf_tasks_batch:
+                    if not sf_task.miner_responses:
+                        logger.debug(f"No miner responses for task {sf_task.id}")
                         continue
 
-                    for sf_task in sf_tasks_batch:
-                        try:
-                            if not sf_task.miner_responses:
-                                logger.debug(
-                                    f"No miner responses for task {sf_task.id}"
-                                )
-                                continue
+                    if not sf_task.HFLState:
+                        logger.debug(
+                            f"No HFLState for task {sf_task.id} which should not happen"
+                        )
+                        continue
 
-                            if not sf_task.HFLState or not sf_task.HFLState.id:
-                                logger.debug(
-                                    f"No HFLState or HFLState.id for task {sf_task.id}"
-                                )
-                                continue
-
-                            # Update task results for each miner response
-                            for miner_response in sf_task.miner_responses:
-                                if (
-                                    not miner_response.hotkey
-                                    or not miner_response.dojo_task_id
-                                ):
-                                    logger.debug(
-                                        "Missing hotkey or dojo_task_id for miner response"
-                                    )
-                                    continue
-
-                                # Get task results from miner
-                                task_results = (
-                                    await validator._get_task_results_from_miner(
-                                        miner_hotkey=miner_response.hotkey,
-                                        dojo_task_id=miner_response.dojo_task_id,
-                                    )
-                                )
-
-                                if not task_results:
-                                    logger.debug(
-                                        f"No task results from miner {miner_response.hotkey}"
-                                    )
-                                    continue
-
-                                # Update task results in database
-                                success = await ORM.update_miner_task_results(
-                                    miner_hotkey=miner_response.hotkey,
-                                    dojo_task_id=miner_response.dojo_task_id,
-                                    task_results=task_results,
-                                )
-
-                                if not success:
-                                    logger.warning(
-                                        f"Failed to update task_result for miner {miner_response.hotkey}"
-                                    )
-
-                            # Update HFL state to SF_COMPLETED
-                            event = ScoreFeedbackEvent(
-                                type=HFLStatusEnum.SF_COMPLETED,
-                                task_id=sf_task.id,
-                                iteration=sf_task.HFLState.current_iteration,
-                                timestamp=datetime_as_utc(datetime.now(timezone.utc)),
-                            )
-
-                            await HFLManager.update_state(
-                                sf_task.HFLState.id,
-                                {
-                                    "status": HFLStatusEnum.SF_COMPLETED,
-                                },
-                                event,
-                            )
-
-                            logger.success(
-                                f"Successfully processed SF task {sf_task.id}"
-                            )
-
-                        except Exception as e:
-                            logger.error(
-                                f"Error processing SF task {sf_task.id}: {str(e)}"
+                    # Update task results for each miner response
+                    # TODO: refactor in separate method
+                    for miner_response in sf_task.miner_responses:
+                        if not miner_response.hotkey or not miner_response.dojo_task_id:
+                            logger.debug(
+                                "Missing hotkey or dojo_task_id for miner response"
                             )
                             continue
 
-                # Add delay between batches
-                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                        # Get task results from miner
+                        task_results = await validator._get_task_results_from_miner(
+                            miner_hotkey=miner_response.hotkey,
+                            dojo_task_id=miner_response.dojo_task_id,
+                        )
 
-            except Exception as e:
-                logger.error(f"Error in SF task processing loop: {str(e)}")
-                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                        if not task_results:
+                            logger.debug(
+                                f"No task results from miner {miner_response.hotkey}"
+                            )
+                            continue
+
+                        # Update task results in database
+                        success = await ORM.update_miner_task_results(
+                            miner_hotkey=miner_response.hotkey,
+                            dojo_task_id=miner_response.dojo_task_id,
+                            task_results=task_results,
+                        )
+
+                        if not success:
+                            logger.warning(
+                                f"Failed to update task_result for miner {miner_response.hotkey}"
+                            )
+
+                    # Update HFL state to SF_COMPLETED
+                    event = ScoreFeedbackEvent(
+                        type=HFLStatusEnum.SF_COMPLETED,
+                        task_id=sf_task.id,
+                        iteration=sf_task.HFLState.current_iteration,
+                        timestamp=datetime_as_utc(datetime.now(timezone.utc)),
+                    )
+
+                    hfl_state = await HFLManager.update_state(
+                        hfl_state_id=sf_task.HFLState.id,
+                        updates=HFLStateUpdateInput(
+                            status=HFLStatusEnum.SF_COMPLETED,
+                        ),
+                        event_data=event,
+                    )
+
+                    if not hfl_state:
+                        logger.error(f"Failed to update HFL state for {sf_task.id}")
+                        continue
+
+                    logger.success(f"Successfully processed SF task {sf_task.id}")
+
+        except Exception as e:
+            logger.error(f"Error in SF task processing loop: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
 
     async def send_hfl_request(
         self,
