@@ -231,9 +231,9 @@ class HFLManager:
         }
 
     @staticmethod
-    async def get_state_by_previous_task_id(previous_task_id: str) -> HFLState | None:
+    async def get_state_by_current_task_id(current_task_id: str) -> HFLState | None:
         return await prisma.hflstate.find_first(
-            where={"current_task_id": previous_task_id}
+            where={"current_task_id": current_task_id}
         )
 
     @staticmethod

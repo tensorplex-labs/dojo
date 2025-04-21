@@ -1263,6 +1263,99 @@ class ORM:
 
         return task
 
+    @staticmethod
+    async def save_tf_retry_responses(
+        validator_task_id: str,
+        hfl_state: HFLState,
+        miner_responses: list[TaskSynapseObject],
+    ) -> tuple[int, HFLState]:
+        """
+        Save additional miner responses for an existing validator task and update
+        the HFL state retry count in a single transaction.
+
+        Args:
+            validator_task_id: ID of the existing validator task
+            hfl_state: HFL state to update
+            miner_responses: List of additional miner responses from send_hfl_request
+
+        Returns:
+            Tuple of (number of saved responses, whether retry count was updated)
+        """
+        if not miner_responses:
+            return 0, hfl_state
+
+        saved_count = 0
+
+        try:
+            async with prisma.tx() as tx:
+                # Process each miner response
+                for response in miner_responses:
+                    if (
+                        not response.dojo_task_id
+                        or not response.miner_hotkey
+                        or not response.miner_coldkey
+                    ):
+                        logger.warning(
+                            "Missing dojo_task_id or hotkey in miner response"
+                        )
+                        continue
+
+                    try:
+                        # Check if there's already a response from this miner for this validator task
+                        existing_response = await tx.minerresponse.find_first(
+                            where={
+                                "validator_task_id": validator_task_id,
+                                "hotkey": response.miner_hotkey,
+                            }
+                        )
+
+                        if existing_response:
+                            # Update the existing response with the new dojo_task_id
+                            await tx.minerresponse.update(
+                                where={"id": existing_response.id},
+                                data={
+                                    "dojo_task_id": response.dojo_task_id,
+                                    "updated_at": datetime_as_utc(datetime.now()),
+                                },
+                            )
+                            logger.debug(
+                                f"Updated existing response for miner {response.miner_hotkey} with new dojo_task_id"
+                            )
+                        else:
+                            # Create a new response
+                            await tx.minerresponse.create(
+                                data={
+                                    "validator_task_id": validator_task_id,
+                                    "dojo_task_id": response.dojo_task_id,
+                                    "hotkey": response.miner_hotkey,
+                                    "coldkey": response.miner_coldkey,
+                                    "task_result": Json(json.dumps({})),
+                                }
+                            )
+                            logger.debug(
+                                f"Created new response for miner {response.miner_hotkey}"
+                            )
+
+                        saved_count += 1
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error saving miner response for {response.miner_hotkey}: {e}"
+                        )
+                        continue
+
+                updated_hfl_state = await HFLManager.update_state(
+                    hfl_state_id=hfl_state.id,
+                    updates=HFLStateUpdateInput(
+                        tf_retry_count=hfl_state.tf_retry_count + 1
+                    ),
+                )
+            return saved_count, updated_hfl_state
+
+        except Exception as e:
+            logger.error(f"Transaction failed to save TF retry responses: {e}")
+            return 0, hfl_state
+
 
 # ---------------------------------------------------------------------------- #
 #                          Test custom ORM functions                           #

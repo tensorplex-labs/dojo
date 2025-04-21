@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# seed_hfl_test_data.py - Script to seed test data for Human Feedback Loop testing
-
 import argparse
 import asyncio
 import json
