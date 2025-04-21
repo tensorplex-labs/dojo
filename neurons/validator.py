@@ -17,8 +17,6 @@ import torch
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from loguru import logger
 from torch.nn import functional as F
-from validator_heartbeats import send_heartbeats
-from validator_tasks import send_synthetic_task
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
@@ -61,6 +59,9 @@ from dojo.protocol import (
 from dojo.utils.config import get_config
 from dojo.utils.uids import is_miner
 from entrypoints.analytics_upload import run_analytics_upload
+
+from .validator_heartbeats import send_heartbeats
+from .validator_synthetic_tasks import send_synthetic_task
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
 
