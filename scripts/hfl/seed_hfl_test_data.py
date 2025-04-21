@@ -1,3 +1,42 @@
+#!/usr/bin/env python3
+"""
+Seed Test Data for Human Feedback Loop Testing
+
+This script creates test data for testing the Human Feedback Loop (HFL) system.
+It can create both regular CODE_GENERATION tasks with completions and scores,
+as well as TEXT_FEEDBACK tasks for testing different feedback scenarios.
+
+Usage Examples:
+--------------
+
+1. Regular HFL Testing:
+   # Create 5 CODE_GENERATION tasks with completions and miner responses
+   python scripts/hfl/seed_hfl_test_data.py
+
+2. TEXT_FEEDBACK Testing (All Scenarios):
+   # Create 1 task for each TEXT_FEEDBACK scenario (sufficient, insufficient, max_retry)
+   python scripts/hfl/seed_hfl_test_data.py --text-feedback
+
+3. Testing Specific TEXT_FEEDBACK Scenarios:
+   # Create only tasks with sufficient feedback (≥3 valid responses)
+   python scripts/hfl/seed_hfl_test_data.py --text-feedback --scenario sufficient
+
+   # Create only tasks with insufficient feedback (<3 responses, retry needed)
+   python scripts/hfl/seed_hfl_test_data.py --text-feedback --scenario insufficient
+
+   # Create only tasks with max retry count reached
+   python scripts/hfl/seed_hfl_test_data.py --text-feedback --scenario max_retry
+
+4. Cleaning Up:
+   # Clean up all test data
+   python scripts/hfl/seed_hfl_test_data.py --cleanup-only
+
+   # Clean up only TEXT_FEEDBACK test data
+   python scripts/hfl/seed_hfl_test_data.py --cleanup-only --text-feedback
+
+See --help for all available options.
+"""
+
 import argparse
 import asyncio
 import json
@@ -11,12 +50,13 @@ from bittensor.utils.btlogging import logging as logger
 from commons.utils import datetime_as_utc, get_new_uuid
 from database.client import prisma
 from database.prisma import Json
-from database.prisma.enums import CriteriaTypeEnum, TaskTypeEnum
+from database.prisma.enums import CriteriaTypeEnum, HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import MinerResponse
 from database.prisma.types import (
     CompletionCreateInput,
     CriterionCreateInput,
     MinerScoreCreateInput,
+    ValidatorTaskWhereInput,
 )
 from dojo.protocol import Result, TaskResult
 
@@ -28,6 +68,17 @@ DEFAULT_TARGET_HIGHEST_PERCENTAGE = 70  # 70% should be within the 50-90% range
 
 # Path to the completion.json file
 COMPLETION_JSON_PATH = os.path.join(os.path.dirname(__file__), "completion.json")
+
+# TEXT_FEEDBACK configuration
+DEFAULT_TF_SCENARIO_TASKS = 1
+MAX_RETRY_ATTEMPTS = 5
+
+# Real miner hotkeys from testnet
+DEFAULT_MINER_HOTKEYS = [
+    "5CBFxnF2MKYrS6LMr48wQTFhqmch2G9pS3AQkFm4RF8Jd1qe",  # miner_test
+    "5CiZRMrKCxM7zW4uuq3be39T7KAjYXC2BjB5cBqRhEEnSUd6",  # miner_test1
+    "5EbaEE3sCpNq5WezaiyKaA7jX3bvphYdwqD5b3bkzPELvxZY",  # miner_test2
+]
 
 
 async def seed_test_data(
@@ -50,7 +101,7 @@ async def seed_test_data(
 
     # Clean up any existing test data if requested
     if cleanup:
-        await cleanup_test_data()
+        await cleanup_test_data()  # No task_type parameter cleans up all tasks
 
     # Create validator tasks with completions and miner responses
     created_tasks = await create_validator_tasks(
@@ -64,11 +115,23 @@ async def seed_test_data(
     return created_tasks
 
 
-async def cleanup_test_data():
-    """Remove any existing test data created by this script."""
+async def cleanup_test_data(task_type: TaskTypeEnum | None = None):
+    """Remove any existing test data created by this script.
+
+    Args:
+        task_type: Optional TaskTypeEnum to filter tasks to be cleaned up.
+                  If None, cleans up all tasks.
+    """
     try:
-        # Find test validator tasks
-        test_tasks = await prisma.validatortask.find_many()
+        # Find test validator tasks, optionally filtered by task_type
+        where_input = None
+        if task_type:
+            where_input = ValidatorTaskWhereInput({"task_type": task_type})
+            logger.info(f"Finding {task_type} tasks to clean up")
+        else:
+            logger.info("Finding all test tasks to clean up")
+
+        test_tasks = await prisma.validatortask.find_many(where=where_input)
 
         if not test_tasks:
             logger.info("No existing test data found to clean up")
@@ -111,10 +174,14 @@ async def cleanup_test_data():
                 # Finally delete the validator task
                 await tx.validatortask.delete(where={"id": task_id})
 
-        logger.info(f"Cleaned up {len(test_tasks)} test tasks and related data")
+        task_type_msg = f"{task_type} " if task_type else ""
+        logger.info(
+            f"Cleaned up {len(test_tasks)} {task_type_msg}test tasks and related data"
+        )
 
     except Exception as e:
-        logger.error(f"Error cleaning up test data: {e}")
+        task_type_msg = f"{task_type} " if task_type else ""
+        logger.error(f"Error cleaning up {task_type_msg}test data: {e}")
         raise
 
 
@@ -276,7 +343,7 @@ async def create_miner_responses(
 
     for i in range(num_responses):
         # Create unique identifiers
-        dojo_task_id = f"test-dojo-task-{task_id}-{i}"
+        dojo_task_id = f"test-dojo-task-{i}-{task_id}"
         hotkey = f"test-miner-hotkey-{i}"
         coldkey = f"test-miner-coldkey-{i}"
         miner_result_id = get_new_uuid()
@@ -334,8 +401,8 @@ async def create_miner_responses(
                 "id": get_new_uuid(),
                 "validator_task_id": task_id,
                 "dojo_task_id": dojo_task_id,
-                "hotkey": Json(hotkey),
-                "coldkey": Json(coldkey),
+                "hotkey": hotkey,
+                "coldkey": coldkey,
                 "task_result": task_result_json,
             }
         )
@@ -451,6 +518,328 @@ async def create_scores(
     return
 
 
+async def seed_tf_test_data(
+    num_tasks: int = DEFAULT_TF_SCENARIO_TASKS,
+    cleanup: bool = True,
+    scenario: str = "all",
+    miner_hotkeys: List[str] = DEFAULT_MINER_HOTKEYS,
+):
+    """Seed test data specifically for TEXT_FEEDBACK tasks with three scenarios:
+    1. Tasks with sufficient feedback responses (>=3)
+    2. Tasks with insufficient feedback (<3)
+    3. Tasks with insufficient feedback but max retry count reached
+
+    Args:
+        num_tasks: Number of tasks to create for each scenario
+        cleanup: Whether to clean up existing TEXT_FEEDBACK test data before seeding
+        scenario: Which scenario(s) to create - 'all', 'sufficient', 'insufficient', or 'max_retry'
+        miner_hotkeys: List of real miner hotkeys to use for responses
+    """
+    logger.info(f"Starting to seed TEXT_FEEDBACK test data for scenario: {scenario}")
+    logger.info(f"Using miner hotkeys: {miner_hotkeys}")
+
+    # Clean up existing TF test data if requested
+    if cleanup:
+        await cleanup_test_data(TaskTypeEnum.TEXT_FEEDBACK)
+
+    created_tasks = {}
+
+    # Create tasks for each selected scenario
+    if scenario in ["all", "sufficient"]:
+        sufficient_tasks = await create_tf_tasks(
+            num_tasks=num_tasks,
+            num_responses=min(
+                5, len(miner_hotkeys)
+            ),  # Ensure we don't exceed available hotkeys
+            scenario="sufficient",
+            valid_feedback_count=min(
+                3, len(miner_hotkeys)
+            ),  # Ensure valid count <= available hotkeys
+            retry_count=0,
+            miner_hotkeys=miner_hotkeys,
+        )
+        created_tasks["sufficient"] = sufficient_tasks
+        logger.info(f"Created {len(sufficient_tasks)} tasks with sufficient feedback")
+
+    if scenario in ["all", "insufficient"]:
+        insufficient_tasks = await create_tf_tasks(
+            num_tasks=num_tasks,
+            num_responses=min(5, len(miner_hotkeys)),
+            scenario="insufficient",
+            valid_feedback_count=min(
+                2, len(miner_hotkeys) - 1
+            ),  # Ensure at least one invalid response
+            retry_count=2,
+            miner_hotkeys=miner_hotkeys,
+        )
+        created_tasks["insufficient"] = insufficient_tasks
+        logger.info(
+            f"Created {len(insufficient_tasks)} tasks with insufficient feedback"
+        )
+
+    if scenario in ["all", "max_retry"]:
+        max_retry_tasks = await create_tf_tasks(
+            num_tasks=num_tasks,
+            num_responses=min(5, len(miner_hotkeys)),
+            scenario="max_retry",
+            valid_feedback_count=min(2, len(miner_hotkeys) - 1),
+            retry_count=MAX_RETRY_ATTEMPTS,
+            miner_hotkeys=miner_hotkeys,
+        )
+        created_tasks["max_retry"] = max_retry_tasks
+        logger.info(
+            f"Created {len(max_retry_tasks)} tasks with max retry count reached"
+        )
+
+    return created_tasks
+
+
+async def create_tf_tasks(
+    num_tasks: int,
+    num_responses: int,
+    scenario: str,
+    valid_feedback_count: int,
+    retry_count: int = 0,
+    miner_hotkeys: List[str] = DEFAULT_MINER_HOTKEYS,
+) -> List[Any]:
+    """
+    Create TEXT_FEEDBACK tasks with varying levels of valid text feedback.
+
+    Args:
+        num_tasks: Number of tasks to create
+        num_responses: Total number of miner responses to create per task
+        scenario: Scenario identifier ("sufficient", "insufficient", or "max_retry")
+        valid_feedback_count: Number of responses that should have valid text feedback
+        retry_count: Number of retries to simulate (for max_retry scenario)
+        miner_hotkeys: List of real miner hotkeys to use (will cycle through if needed)
+
+    Returns:
+        List of created validator tasks
+    """
+    created_tasks = []
+
+    # Find or create a previous task to refer to (original task)
+    previous_task = await prisma.validatortask.find_first(
+        where={"task_type": TaskTypeEnum.CODE_GENERATION}
+    )
+
+    if not previous_task:
+        # Create a previous task if none exists
+        previous_task = await prisma.validatortask.create(
+            data={
+                "prompt": Json("This is a previous task for TEXT_FEEDBACK testing"),
+                "task_type": TaskTypeEnum.CODE_GENERATION,
+                "is_processed": True,
+                "expire_at": datetime_as_utc(
+                    datetime.now(timezone.utc) - timedelta(hours=2)
+                ),
+            }
+        )
+
+    for i in range(num_tasks):
+        # Create a task that expired recently (1 hour ago)
+        expire_at = datetime_as_utc(datetime.now(timezone.utc) - timedelta(hours=1))
+
+        # Create the TF task with reference to previous task
+        task = await prisma.validatortask.create(
+            data={
+                "prompt": Json(
+                    f"This is a TEXT_FEEDBACK test prompt for scenario: {scenario}"
+                ),
+                "task_type": TaskTypeEnum.TEXT_FEEDBACK,
+                "is_processed": False,
+                "expire_at": expire_at,
+                "previous_task_id": previous_task.id,
+            }
+        )
+
+        # Load a completion from completion.json to use
+        completion_data = await load_completion_data()
+        if not completion_data:
+            logger.error("No completion data found in completion.json")
+            continue
+
+        completion_content = completion_data[0]["completion"]
+        model = completion_data[0]["model"]
+        completion_id = get_new_uuid()
+
+        # Create a completion for this task
+        completion = await prisma.completion.create(
+            data=CompletionCreateInput(
+                completion_id=completion_id,
+                validator_task_id=task.id,
+                model=model,
+                completion=Json(completion_content),
+            )
+        )
+
+        # Create a text criterion for this completion
+        criterion = await prisma.criterion.create(
+            data=CriterionCreateInput(
+                criteria_type=CriteriaTypeEnum.TEXT,
+                config=Json(
+                    json.dumps(
+                        {
+                            "query": "What specific improvements could make this output more accurate, complete, or relevant to the prompt?"
+                        }
+                    )
+                ),
+                completion_id=completion.id,
+            )
+        )
+
+        # Create HFL state with events in the correct format
+        hfl_state = await prisma.hflstate.create(
+            data={
+                "original_task_id": previous_task.id,
+                "current_task_id": task.id,
+                "status": HFLStatusEnum.TF_PENDING,
+                "current_iteration": 1,
+                "tf_retry_count": retry_count,
+                "selected_completion_id": completion_id,
+                "events": [
+                    Json(
+                        {
+                            "type": HFLStatusEnum.TF_PENDING.value,
+                            "task_id": task.id,
+                            "timestamp": datetime_as_utc(
+                                datetime.now(timezone.utc)
+                            ).isoformat(),
+                        }
+                    )
+                ],
+            }
+        )
+
+        # Link HFL state to task - using the correct field name
+        await prisma.validatortask.update(
+            where={"id": task.id}, data={"HFLState": {"connect": {"id": hfl_state.id}}}
+        )
+
+        created_tasks.append(task)
+
+        # Create miner responses with varying levels of text feedback
+        await create_tf_miner_responses(
+            task_id=task.id,
+            num_responses=num_responses,
+            completion_id=completion_id,
+            criterion_id=criterion.id,
+            valid_feedback_count=valid_feedback_count,
+            miner_hotkeys=miner_hotkeys,
+        )
+
+        logger.info(
+            f"Created {scenario} TEXT_FEEDBACK task {i+1}/{num_tasks} with ID: {task.id}"
+        )
+
+    return created_tasks
+
+
+async def load_completion_data():
+    """Load completion data from the completion.json file."""
+    try:
+        with open(COMPLETION_JSON_PATH) as f:
+            completion_data = json.load(f)
+
+        return completion_data.get("completions", [])
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        logger.error(f"Error loading completion data: {e}")
+        return []
+
+
+async def create_tf_miner_responses(
+    task_id: str,
+    num_responses: int,
+    completion_id: str,
+    criterion_id: str,
+    valid_feedback_count: int,
+    miner_hotkeys: List[str] = DEFAULT_MINER_HOTKEYS,
+):
+    """
+    Create test miner responses for a TEXT_FEEDBACK task.
+
+    Args:
+        task_id: ID of the validator task
+        num_responses: Total number of miner responses to create
+        completion_id: ID of the completion being evaluated
+        criterion_id: ID of the text criterion
+        valid_feedback_count: Number of responses that should have valid text feedback
+        miner_hotkeys: List of real miner hotkeys to use (will cycle through if needed)
+    """
+    miner_responses = []
+
+    # Make sure we don't exceed the number of available hotkeys
+    num_responses = min(num_responses, len(miner_hotkeys))
+
+    # Shuffle the hotkeys to randomize which ones get valid feedback
+    shuffled_hotkeys = random.sample(miner_hotkeys, len(miner_hotkeys))
+
+    for i in range(num_responses):
+        # Create unique identifiers
+        dojo_task_id = f"real-tf-task-{i}-{task_id}"
+
+        # Use a real hotkey (cycle through the shuffled list)
+        hotkey = shuffled_hotkeys[i % len(shuffled_hotkeys)]
+        coldkey = (
+            f"coldkey-for-{hotkey[:8]}"  # Just use a prefix of the hotkey for coldkey
+        )
+
+        # Determine if this response should have valid text feedback
+        has_feedback = i < valid_feedback_count
+
+        # Create result_data with text feedback for the completion
+        feedback_text = (
+            f"This is test feedback from {hotkey[:8]} for improving the completion."
+            if has_feedback
+            else ""
+        )
+
+        result = Result(
+            model=completion_id,
+            criteria=[
+                {
+                    "type": "text",
+                    "query": "What specific improvements could make this output more accurate, complete, or relevant to the prompt?",
+                    "text_feedback": feedback_text,
+                }
+            ],
+        )
+
+        # Create a TaskResult object
+        task_result = TaskResult(
+            id=get_new_uuid(),
+            status="COMPLETED",
+            worker_id=get_new_uuid(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            result_data=[result],
+            dojo_task_id=dojo_task_id,
+            stake_amount=None,
+            finalised_loss=None,
+            potential_loss=None,
+            finalised_reward=None,
+            potential_reward=None,
+        )
+
+        # Create the miner response with properly serialized JSON
+        miner_response = await prisma.minerresponse.create(
+            data={
+                "id": get_new_uuid(),
+                "validator_task_id": task_id,
+                "dojo_task_id": dojo_task_id,
+                "hotkey": hotkey,
+                "coldkey": coldkey,
+                "task_result": Json([task_result.model_dump()]),
+            }
+        )
+        miner_responses.append(miner_response)
+
+    logger.info(
+        f"Created {num_responses} miner responses for task {task_id} with {valid_feedback_count} valid feedback using real hotkeys"
+    )
+    return miner_responses
+
+
 async def main():
     """Parse command line arguments and run the seeding script."""
     parser = argparse.ArgumentParser(
@@ -497,6 +886,37 @@ async def main():
         help="Only clean up existing test data without seeding new data",
     )
 
+    # TEXT_FEEDBACK testing arguments
+    parser.add_argument(
+        "--text-feedback",
+        action="store_true",
+        help="Seed data for TEXT_FEEDBACK task testing scenarios",
+    )
+
+    parser.add_argument(
+        "--tf-tasks",
+        type=int,
+        default=DEFAULT_TF_SCENARIO_TASKS,
+        help=f"Number of tasks to create for each TEXT_FEEDBACK scenario (default: {DEFAULT_TF_SCENARIO_TASKS})",
+    )
+
+    # New argument for specifying TEXT_FEEDBACK scenario
+    parser.add_argument(
+        "--scenario",
+        type=str,
+        choices=["all", "sufficient", "insufficient", "max_retry"],
+        default="all",
+        help="Which TEXT_FEEDBACK scenario to seed (default: all)",
+    )
+
+    # Add new argument for miner hotkeys
+    parser.add_argument(
+        "--hotkeys",
+        type=str,
+        default=",".join(DEFAULT_MINER_HOTKEYS),
+        help="Comma-separated list of real miner hotkeys to use for responses",
+    )
+
     args = parser.parse_args()
 
     try:
@@ -504,9 +924,27 @@ async def main():
         logger.info("Connecting to the database...")
         await prisma.connect()
 
+        # Parse miner hotkeys from command line
+        miner_hotkeys = (
+            args.hotkeys.split(",") if args.hotkeys else DEFAULT_MINER_HOTKEYS
+        )
+
         if args.cleanup_only:
-            await cleanup_test_data()
+            # Clean up only the specified task type or all tasks
+            if args.text_feedback:
+                await cleanup_test_data(TaskTypeEnum.TEXT_FEEDBACK)
+            else:
+                await cleanup_test_data()  # Clean up all task types
+        elif args.text_feedback:
+            # Run TEXT_FEEDBACK seeding with specified scenario
+            await seed_tf_test_data(
+                num_tasks=args.tf_tasks,
+                cleanup=not args.no_cleanup,
+                scenario=args.scenario,
+                miner_hotkeys=miner_hotkeys,
+            )
         else:
+            # Run regular HFL seeding
             await seed_test_data(
                 num_tasks=args.tasks,
                 num_completions=args.completions,

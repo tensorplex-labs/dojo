@@ -17,6 +17,7 @@ from commons.hfl_heplers import HFLManager
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
 from database.mappers import map_validator_task_to_task_synapse_object
+from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, MinerResponse, MinerScore, ValidatorTask
 from database.prisma.types import MinerScoreWhereInput, ValidatorTaskInclude
@@ -478,7 +479,6 @@ class FeedbackLoop:
                         # Handle task with insufficient responses needing retry
 
                         task_synapse = await self._get_task_synapse_for_retry(task.id)
-                        logger.info(f"Task synapse: {task_synapse}")
                         if not task_synapse:
                             logger.warning(f"Task {task.id} not found, skipping")
                             continue
@@ -576,6 +576,11 @@ class FeedbackLoop:
         Returns:
             Tuple of (miner_feedbacks, valid_responses)
         """
+        # Initialize result lists
+        miner_feedbacks: list[MinerFeedback] = []
+        valid_responses: list[MinerResponse] = []
+        responses_needing_fetch: list[MinerResponse] = []
+
         # Identify valid miner responses
         valid_miner_responses = [
             resp
@@ -583,35 +588,63 @@ class FeedbackLoop:
             if resp.hotkey and resp.dojo_task_id
         ]
 
-        # Create fetch tasks for all valid miner responses
+        if not valid_miner_responses:
+            logger.warning(f"No valid miner responses found for task {task.id}")
+            return [], []
+
+        # Process all responses in a single pass
+        for resp in valid_miner_responses:
+            # Extract feedback text directly from the task_result
+            feedback_text = self._extract_text_feedback_from_results(resp.task_result)
+            if feedback_text and feedback_text != "":
+                # Valid feedback already exists
+                logger.info(f"Feedback text: {feedback_text} from miner {resp.hotkey}")
+                miner_feedbacks.append(
+                    MinerFeedback(
+                        hotkey=resp.hotkey,
+                        miner_response_id=resp.id,
+                        feedback=feedback_text,
+                    )
+                )
+                valid_responses.append(resp)
+                logger.debug(f"Using existing feedback from miner {resp.hotkey}")
+            else:
+                # No valid feedback, need to fetch
+                responses_needing_fetch.append(resp)
+
+        if not responses_needing_fetch:
+            return miner_feedbacks, valid_responses
+
+        logger.info(f"Miner Feedback: {miner_feedbacks}")
+        logger.info(
+            f"Fetching results for {[(resp.hotkey, resp.task_result) for resp in responses_needing_fetch]}"
+        )
+        # Create fetch tasks for miner responses that need results
         fetch_tasks = [
             asyncio.create_task(
                 validator._get_task_results_from_miner(
-                    miner_hotkey=miner_response.hotkey,
-                    dojo_task_id=miner_response.dojo_task_id,
+                    miner_hotkey=resp.hotkey,
+                    dojo_task_id=resp.dojo_task_id,
                 )
             )
-            for miner_response in valid_miner_responses
+            for resp in responses_needing_fetch
         ]
 
         # Execute all fetch tasks concurrently
         task_results_list = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
         # Process results and update the database
-        miner_feedbacks = []
-        valid_responses = []
-
         for i, result in enumerate(task_results_list):
             if isinstance(result, BaseException):
                 logger.warning(
-                    f"Error fetching results for miner {valid_miner_responses[i].hotkey}: {result}"
+                    f"Error fetching results for miner {responses_needing_fetch[i].hotkey}: {result}"
                 )
                 continue
 
             if not result:  # Empty or None result
                 continue
 
-            miner_response = valid_miner_responses[i]
+            miner_response = responses_needing_fetch[i]
 
             # Update the database with fresh results
             success = await ORM.update_miner_task_results(
@@ -623,7 +656,7 @@ class FeedbackLoop:
             if success:
                 # Extract text feedback
                 feedback_text = self._extract_text_feedback_from_results(result)
-                if feedback_text and feedback_text != "":
+                if feedback_text:
                     miner_feedbacks.append(
                         MinerFeedback(
                             hotkey=miner_response.hotkey,
@@ -636,36 +669,76 @@ class FeedbackLoop:
         return miner_feedbacks, valid_responses
 
     def _extract_text_feedback_from_results(
-        self, task_results: List[TaskResult]
+        self, task_results: list[TaskResult] | Json
     ) -> str:
         """
-        Extract text feedback from TaskResult objects with optimized time complexity.
+        Extract text feedback from TaskResult objects or JSON data.
 
         Args:
-            task_results: List of TaskResult objects from miner
+            task_results: List of TaskResult objects from miner or JSON data from the database
 
         Returns:
             Extracted text feedback or empty string if not found
         """
-        # Use generator expression to flatten the structure and find the first match
-        criteria_generator = (
-            criterion
-            for task_result in task_results
-            for result in task_result.result_data
-            for criterion in result.criteria
-        )
+        try:
+            # Handle different input types
+            if isinstance(task_results, str):
+                # Parse JSON string
+                parsed_results = json.loads(task_results)
+            elif isinstance(task_results, list) and all(
+                isinstance(item, TaskResult) for item in task_results if item
+            ):
+                # Original code path for TaskResult objects
+                # Use generator expression to flatten the structure and find the first match
+                criteria_generator = (
+                    criterion
+                    for task_result in task_results
+                    for result in task_result.result_data
+                    for criterion in result.criteria
+                )
 
-        # Find first matching criterion with text feedback
-        text_criterion = next(
-            (
-                criterion
-                for criterion in criteria_generator
-                if criterion.get("type") == "text" and "text_feedback" in criterion
-            ),
-            None,
-        )
+                # Find first matching criterion with text feedback
+                text_criterion = next(
+                    (
+                        criterion
+                        for criterion in criteria_generator
+                        if criterion.get("type") == "text"
+                        and "text_feedback" in criterion
+                    ),
+                    None,
+                )
 
-        return text_criterion["text_feedback"] if text_criterion else ""
+                return text_criterion["text_feedback"] if text_criterion else ""
+            else:
+                # Already parsed JSON data
+                parsed_results = task_results
+
+            # Process JSON data
+            for result in parsed_results:
+                if not isinstance(result, dict) or not result.get("result_data"):
+                    continue
+
+                for result_data in result.get("result_data", []):
+                    if not isinstance(result_data, dict) or not result_data.get(
+                        "criteria"
+                    ):
+                        continue
+
+                    for criterion in result_data.get("criteria", []):
+                        if not isinstance(criterion, dict):
+                            continue
+
+                        if (
+                            criterion.get("type") == "text"
+                            and criterion.get("text_feedback")
+                            and criterion["text_feedback"].strip()
+                        ):
+                            return criterion["text_feedback"]
+
+        except Exception as e:
+            logger.debug(f"Error extracting text feedback: {e}")
+
+        return ""
 
     async def _get_task_synapse_for_retry(
         self, task_id: str
@@ -682,7 +755,6 @@ class FeedbackLoop:
         try:
             # Fetch the task from the database
             task = await ORM.get_validator_task_by_id(task_id)
-            logger.info(f"Task////////////////////////: {task}")
 
             if not task:
                 logger.warning(f"Task with ID {task_id} not found")
