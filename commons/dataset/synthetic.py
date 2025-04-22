@@ -1,3 +1,4 @@
+import json
 import os
 import traceback
 
@@ -11,10 +12,16 @@ from tenacity import (
     wait_exponential,
 )
 
+from commons.api_settings import RedisSettings
+from commons.cache import RedisCache
+from commons.dataset.types import HumanFeedbackResponse
 from commons.exceptions import FatalSyntheticGenerationError, SyntheticGenerationError
 from dojo.protocol import SyntheticQA, TextFeedbackRequest
+from dojo.utils.config import source_dotenv
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
+source_dotenv()
+redis_config = RedisSettings()
 
 
 def _map_synthetic_response(response: dict) -> SyntheticQA:
@@ -42,6 +49,7 @@ def _map_synthetic_response(response: dict) -> SyntheticQA:
 
 class SyntheticAPI:
     _session: aiohttp.ClientSession | None = None
+    _cache: RedisCache | None = None
 
     @classmethod
     async def init_session(cls):
@@ -49,51 +57,91 @@ class SyntheticAPI:
             cls._session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=120)
             )
-        return
+        if cls._cache is None:
+            cls._cache = RedisCache(redis_config)
+            await cls._cache.connect()
+            logger.info(f"Redis cache initialized successfully {cls._cache.redis_url}")
 
     @classmethod
     async def close_session(cls):
         if cls._session is not None:
             await cls._session.close()
             cls._session = None
+
+        if cls._cache is not None:
+            await cls._cache.close()
         logger.debug("Ensured SyntheticAPI session is closed.")
 
     @classmethod
-    async def send_text_feedback(cls, text_feedback_data: TextFeedbackRequest) -> str:
+    async def send_text_feedback(
+        cls, text_feedback_data: TextFeedbackRequest
+    ) -> str | None:
         """
-        Dummy function that will be replaced with actual synthetic API call.
-        Takes text feedback data with base completion and miner responses,
-        and returns a synthetic request ID.
+        Send text feedback data to the synthetic API for improvement.
 
         Args:
-            text_feedback_data (dict): Contains prompt, base_completion, and hf_completions
-                with miner feedback responses
+            text_feedback_data (TextFeedbackRequest): Contains prompt, base_completion, and miner_feedbacks
+                with feedback responses from miners
 
         Returns:
-            str: A synthetic request ID
+            str: A synthetic request ID for tracking the improvement request
+
+        Raises:
+            SyntheticGenerationError: If the API request fails or returns an error
+            ValueError: If the response format is invalid
         """
-        # Log the received data for debugging
+        await cls.init_session()
+        if cls._session is None:
+            raise FatalSyntheticGenerationError("Failed to initialize session")
+
+        path = f"{SYNTHETIC_API_BASE_URL}/api/human-feedback"
+        request_data = text_feedback_data.model_dump(mode="json")
+
         logger.info(
-            f"Creating text feedback request with prompt: {text_feedback_data.base_prompt[:50]}..."
-        )
-        logger.info(
-            f"Number of feedback completions: {len(text_feedback_data.miner_feedbacks)}"
+            f"Sending human feedback request for {len(request_data['miner_feedbacks'])} miner feedbacks"
         )
 
-        # In a real implementation, this would make an API call to the synthetic API
-        # and get back a request ID
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(6),
+                wait=wait_exponential(multiplier=1, max=30),
+                before_sleep=before_sleep_log(logger._logger, log_level=10),
+            ):
+                with attempt:
+                    async with cls._session.post(path, json=request_data) as response:
+                        response.raise_for_status()
+                        response_json = await response.json()
 
-        # For now, just generate a random request ID
-        import uuid
+                        if not response_json.get("success", True):
+                            error_msg = response_json.get(
+                                "error", "No error details provided"
+                            )
+                            logger.error(f"API returned error: {error_msg}")
+                            raise SyntheticGenerationError(error_msg)
 
-        syn_req_id = f"{uuid.uuid4()}"
+                        if "human_feedback_id" not in response_json:
+                            logger.error("Response missing human_feedback_id field")
+                            raise ValueError("Missing human_feedback_id field")
 
-        logger.info(f"Created synthetic request with ID: {syn_req_id}")
-        return syn_req_id
+                        logger.info(
+                            f"Successfully created human feedback request with ID: {response_json['human_feedback_id']}"
+                        )
+                        return response_json["human_feedback_id"]
+
+        except RetryError as e:
+            logger.error(f"Failed after all retry attempts: {str(e)}")
+            raise FatalSyntheticGenerationError(
+                f"Failed after all retry attempts: {str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"Error sending human feedback request: {str(e)}")
+            raise SyntheticGenerationError(f"Error: {str(e)}")
 
     @classmethod
     async def get_qa(cls) -> SyntheticQA | None:
         await cls.init_session()
+        if cls._session is None:
+            raise FatalSyntheticGenerationError("Failed to initialize session")
 
         path = f"{SYNTHETIC_API_BASE_URL}/api/synthetic-gen"
         logger.debug(f"Generating synthetic QA from {path}.")
@@ -141,5 +189,42 @@ class SyntheticAPI:
 
     # TODO replace with a function that generates a synthetic request with improvements
     @classmethod
-    async def get_improved_SF(cls, req_id: str) -> SyntheticQA | None:
-        pass
+    async def get_improved_task(cls, hf_id: str) -> HumanFeedbackResponse | None:
+        """
+        Retrieve human feedback data from Redis using the request ID.
+
+        Args:
+            hf_id (str): The human feedback request ID to query
+
+        Returns:
+            Optional[HumanFeedbackResponse]: The human feedback response if found, None if not found or error
+
+        Raises:
+            Exception: If there's an error accessing Redis
+        """
+        await cls.init_session()
+        if cls._cache is None:
+            raise FatalSyntheticGenerationError("Failed to initialize session")
+
+        try:
+            # The key format is "synthetic:hf:{hf_id}"
+            key = f"synthetic:hf:{hf_id}"
+
+            # Get the data from Redis
+            data = await cls._cache.get(key)
+
+            logger.info(f"Retrieved human feedback data for ID: {hf_id}, data: {data}")
+
+            if not data:
+                logger.warning(f"No human feedback data found for ID: {hf_id}")
+                return None
+
+            # Decode and parse the JSON data
+            response_data = json.loads(data.decode("utf-8"))
+
+            # Convert to HumanFeedbackResponse model
+            return HumanFeedbackResponse.model_validate(response_data)
+
+        except Exception as e:
+            logger.error(f"Error retrieving human feedback for ID {hf_id}: {str(e)}")
+            raise

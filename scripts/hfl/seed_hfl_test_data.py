@@ -789,7 +789,7 @@ async def create_tf_miner_responses(
 
         # Create result_data with text feedback for the completion
         feedback_text = (
-            f"This is test feedback from {hotkey[:8]} for improving the completion."
+            f"This is test feedback from {hotkey[:8]} for improving the completion. Consider changing the background color to purple."
             if has_feedback
             else ""
         )

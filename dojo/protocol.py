@@ -317,9 +317,8 @@ class TextFeedbackRequest(BaseModel):
     Used to generate improved responses based on human feedback.
     """
 
-    validator_task_id: str = Field(description="ID of the validator task")
     base_prompt: str = Field(description="Original prompt that was given to the LLM")
-    base_completion: str | dict = Field(
+    base_code: str | dict = Field(
         description="Original completion that was selected for feedback (can be string or JSON object)"
     )
     miner_feedbacks: List[MinerFeedback] = Field(

@@ -29,9 +29,7 @@ from dojo.protocol import (
     CriteriaType,
     DendriteQueryResponse,
     MinerFeedback,
-    ScoreCriteria,
     ScoreFeedbackEvent,
-    SyntheticQA,
     TaskResult,
     TaskSynapseObject,
     TextCriteria,
@@ -597,7 +595,7 @@ class FeedbackLoop:
             logger.warning(f"No valid miner responses found for task {task.id}")
             return [], []
 
-        # Process all responses in a single pass
+        # Filter out miner responses that have already been given feedback
         for resp in valid_miner_responses:
             # Extract feedback text directly from the task_result
             feedback_text = self._extract_text_feedback_from_results(resp.task_result)
@@ -828,9 +826,8 @@ class FeedbackLoop:
 
             # Create the TextFeedbackRequest object
             text_feedback_request = TextFeedbackRequest(
-                validator_task_id=validator_task_id,
                 base_prompt=original_task.prompt,
-                base_completion=base_completion,
+                base_code=base_completion,
                 miner_feedbacks=miner_feedback,
             )
 
@@ -907,9 +904,10 @@ class FeedbackLoop:
                         continue
 
                     # Check if synthetic task is ready
-                    improved_task = await self._generate_improved_synthetic_request(
+                    improved_task = await SyntheticAPI.get_improved_task(
                         tf_task.HFLState.current_synthetic_req_id
                     )
+
                     if not improved_task:
                         logger.debug(
                             f"No improved task found for {tf_task.HFLState.current_synthetic_req_id} yet"
@@ -974,39 +972,18 @@ class FeedbackLoop:
             logger.error(f"Error in creating SF tasks: {str(e)}")
             logger.debug(f"Traceback: {traceback.format_exc()}")
 
-    # TODO: Integrate this with synthetic API
     async def _generate_improved_synthetic_request(
         self, syn_req_id: str
     ) -> TaskSynapseObject | None:
         """Generate an improved synthetic request"""
         try:
-            SF_task: SyntheticQA | None = await SyntheticAPI.get_improved_SF(syn_req_id)
+            improved_task = await SyntheticAPI.get_improved_task(syn_req_id)
 
-            if not SF_task:
+            if not improved_task:
                 logger.error(f"No improved task found for {syn_req_id}")
                 return None
 
-            # Create criteria for each completion response
-            criteria: List[CriteriaType] = [
-                ScoreCriteria(
-                    min=1.0,
-                    max=100.0,
-                )
-            ]
-
-            # Set criteria for each completion response
-            for response in SF_task.responses:
-                response.criteria_types = criteria
-
-            synapse = TaskSynapseObject(
-                task_id=get_new_uuid(),
-                prompt=SF_task.prompt,
-                task_type=TaskTypeEnum.CODE_GENERATION,
-                expire_at=set_expire_time(dojo.TASK_DEADLINE),
-                completion_responses=SF_task.responses,
-            )
-
-            return synapse
+            return improved_task.to_task_synapse()
 
         except (RetryError, ValueError, aiohttp.ClientError) as e:
             logger.error(f"Error getting improved task for {syn_req_id}: {e}")
@@ -1201,39 +1178,6 @@ class FeedbackLoop:
         if not valid_miner_responses:
             logger.info(f"No valid responses received for {task_type} task... skipping")
             return None
-
-        # if task_type == TaskTypeEnum.TEXT_FEEDBACK:
-        #     if not selected_completion_id:
-        #         logger.error(
-        #             "Selected completion ID is required for TEXT_FEEDBACK tasks... skipping"
-        #         )
-        #         return None
-
-        #     validator_task, hfl_state = await ORM.save_tf_task(
-        #         validator_task=synapse,
-        #         miner_responses=valid_responses,
-        #         previous_task_id=previous_task_id,
-        #         original_task_id=original_task_id,
-        #         selected_completion_id=selected_completion_id,
-        #     )
-        # else:
-        #     # For SF tasks, we need to get the HFL state by the previous task id
-        #     hfl_state = await HFLManager.get_state_by_previous_task_id(previous_task_id)
-        #     if not hfl_state:
-        #         logger.error(f"No HFL state found for {previous_task_id}")
-        #         return None
-
-        #     validator_task, hfl_state = await ORM.save_sf_task(
-        #         validator_task=synapse,
-        #         miner_responses=valid_responses,
-        #         hfl_state_id=hfl_state.id,
-        #         previous_task_id=previous_task_id,
-        #     )
-
-        # if validator_task:
-        #     logger.success(f"Successfully saved {task_type} task: {synapse.task_id}")
-        # else:
-        #     logger.error(f"Failed to save {task_type} task: {synapse.task_id}")
 
         return valid_miner_responses
 
