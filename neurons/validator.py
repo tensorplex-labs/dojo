@@ -41,6 +41,7 @@ from commons.utils import (
     initialise,
     set_expire_time,
 )
+from database.prisma.models import ValidatorTask
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.chain import parse_block_headers
 from dojo.protocol import (
@@ -93,6 +94,7 @@ class Validator:
 
     def __init__(self):
         self.MAX_BLOCK_CHECK_ATTEMPTS = 3
+        self.QUALITY_WEIGHT = 0.8
         self._last_block = None
         self._block_check_attempts = 0
         self._connection_lock = asyncio.Lock()
@@ -667,6 +669,9 @@ class Validator:
         # This loop maintains the validator's operations until intentionally stopped.
         while True:
             try:
+                # Always clear the synapse history to avoid memory leak not just on success
+                self.dendrite.synapse_history.clear()
+
                 # Check if there are any active miners. If no active miners, skip the request generation.
                 if not self._active_miner_uids:
                     logger.info(
@@ -691,8 +696,6 @@ class Validator:
                     logger.info("Validator should stop...")
                     break
 
-                # Clear history after successful operations and to avoid memory leak
-                self.dendrite.synapse_history.clear()
                 self.step += 1
 
                 # Sync metagraph and potentially set weights.
@@ -704,6 +707,7 @@ class Validator:
                 return
             except FatalSyntheticGenerationError:
                 # if synthetic-API is unresponsive, shut down validator.
+                logger.error("Synthetic API is unresponsive, shutting down validator")
                 await self._cleanup()
                 raise
             # In case of unforeseen errors, the validator will log the error and continue operations.
@@ -738,7 +742,7 @@ class Validator:
                     expire_to=expire_to,
                 )
 
-                logger.success("✓ Task results updated successfully")
+                logger.success("Polling task results completed")
             except Exception:
                 logger.error("Error in updating task results")
                 traceback.print_exc()
@@ -757,13 +761,13 @@ class Validator:
             try:
                 # Get tasks that expired between 2 hours ago and 30 minutes ago
                 # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
-                now = datetime_as_utc(datetime.now(timezone.utc))
-                expire_from = now - timedelta(hours=2)
-                expire_to = now - timedelta(
-                    minutes=dojo.BUFFER_PERIOD
-                )  # 30-minute buffer
+                now = datetime.now()
+                expire_from = datetime_as_utc(now - timedelta(hours=2))
+                expire_to = datetime_as_utc(now - timedelta(seconds=dojo.BUFFER_PERIOD))
 
-                logger.info("📝 performing scoring ...")
+                logger.info(
+                    f"📝 performing scoring, context: {expire_from=}, {expire_to=}"
+                )
                 processed_request_ids = []
 
                 batch_size = 10
@@ -788,9 +792,13 @@ class Validator:
                 )
 
                 # average scores across all tasks being scored by this trigger to update_scores
-                # so miners moving average decay is lower and we incentivise quality > quantity
+                # so miners moving average decay is lower
+                # we incentivise both quality and quantity, but quality has higher weight than quantity
                 final_hotkey_to_score = {
-                    hotkey: sum(scores) / len(scores)
+                    hotkey: sum(scores) / len(scores) * self.QUALITY_WEIGHT
+                    + sum(scores)
+                    / len(processed_request_ids)
+                    * (1 - self.QUALITY_WEIGHT)
                     for hotkey, scores in hotkey_to_all_scores.items()
                     if scores
                 }
@@ -817,8 +825,9 @@ class Validator:
             logger.info("Updating Dojo task completions...")
             batch_size: int = 10
 
+            # filter_empty_result=True to avoid processing task's result that has already updated.
             async for task_batch in self._get_task_batches(
-                batch_size, expire_from, expire_to
+                batch_size, expire_from, expire_to, filter_empty_result=True
             ):
                 if not task_batch:
                     continue
@@ -942,7 +951,8 @@ class Validator:
         obfuscated_model_to_model: ObfuscatedModelMap | None = None,
         synthetic_task: bool = True,
         subset_size: int | None = None,
-    ):
+        prev_task_id: str | None = None,
+    ) -> ValidatorTask | None:
         """Send task requests to miners and process their responses.
 
         Args:
@@ -988,7 +998,31 @@ class Validator:
         miner_responses: List[TaskSynapseObject] = await self._send_requests_to_miners(
             self.dendrite, axons, synapse, synthetic_task
         )
+        valid_count = 0
+        fails = []
+        for response in miner_responses:
+            try:
+                status_code = response.dendrite.status_code
+            except Exception:
+                status_code = None
+            try:
+                logger.info(
+                    f"Miner hotkey: {response.axon.hotkey}, dojo_task_id: {response.dojo_task_id}, status_code: {status_code}"
+                )
+                if response.dojo_task_id:
+                    valid_count += 1
+                else:
+                    fails.append(
+                        (response.axon.hotkey, status_code, response.dojo_task_id)
+                    )
+            except Exception as e:
+                logger.error(f"Error logging miner response: {e}")
+                logger.info("dendrite", response.dendrite)
+                fails.append((response.axon.hotkey, status_code, response))
+                continue
 
+        logger.info(f"Fails: {fails}")
+        logger.info(f"Valid miner responses: {valid_count}")
         valid_miner_responses: List[TaskSynapseObject] = []
         for response in miner_responses:
             try:
@@ -1040,12 +1074,14 @@ class Validator:
         synapse.ground_truth = ground_truth
         synapse.dendrite.hotkey = self.vali_hotkey
 
-        logger.info("Attempting to saving dendrite response")
-        if not await ORM.save_task(
+        logger.debug("Attempting to saving dendrite response")
+        validator_task = await ORM.save_task(
             validator_task=synapse,
             miner_responses=valid_miner_responses,
             ground_truth=ground_truth or {},
-        ):
+            prev_task_id=prev_task_id,
+        )
+        if not validator_task:
             logger.error("Failed to save dendrite response")
             return
 
@@ -1053,7 +1089,13 @@ class Validator:
         logger.info(
             f"Sending request to miners & processing took {get_epoch_time() - start}"
         )
-        return
+        return validator_task
+
+    async def cleanup_resources(self):
+        while True:
+            if self.dendrite.synapse_history:
+                self.dendrite.synapse_history.clear()
+            await asyncio.sleep(300)
 
     @staticmethod
     async def _send_requests_to_miners(
@@ -1150,13 +1192,17 @@ class Validator:
         batch_size: int,
         expire_from: datetime,
         expire_to: datetime,
+        filter_empty_result: bool = False,
     ) -> AsyncGenerator[List[DendriteQueryResponse], None]:
         """Get task in batches from the database"""
         async for task_batch, has_more_batches in ORM.get_expired_tasks(
             batch_size=batch_size,
             expire_from=expire_from,
             expire_to=expire_to,
+            filter_empty_result=filter_empty_result,
             is_processed=False,
+            has_previous_task=False,
+            task_type=TaskTypeEnum.CODE_GENERATION,
         ):
             # Yield task batch first before break if no more batches
             yield task_batch
@@ -1186,9 +1232,16 @@ class Validator:
         num_batches = math.ceil(len(task.miner_responses) / batch_size)
 
         for i in range(0, len(task.miner_responses), batch_size):
-            batch = task.miner_responses[i : i + batch_size]
+            batch: list[TaskSynapseObject] = task.miner_responses[i : i + batch_size]
 
-            logger.info(f"Processing batch {i // batch_size + 1} of {num_batches}")
+            # Get the miner UIDs and create identifier tuples for logging
+            miner_uids: list[tuple[str, int]] = self._extract_miners_hotkey_uid(
+                batch, self.metagraph
+            )
+            logger.info(
+                f"Processing miner responses batch {i // batch_size + 1} of {num_batches} for validator task request: {task.validator_task.task_id} "
+                f"to miners: {miner_uids}"
+            )
 
             tasks = [
                 self._update_miner_response(miner_response, obfuscated_to_real_model_id)
@@ -1204,9 +1257,23 @@ class Validator:
                 elif isinstance(result, Exception):
                     logger.error(f"Unexpected error: {result}")
 
-        logger.success(
-            f"Completed processing {len(updated_miner_responses)} miner responses in {num_batches} batches"
-        )
+            # After processing all results, determine successful and failed miners
+            successful_identifiers, failed_identifiers = self._classify_miner_results(
+                batch, updated_miner_responses, miner_uids
+            )
+
+            # Log successful and failed miners
+            logger.info(
+                f"Successful miner responses for validator request id: {task.validator_task.task_id}: {successful_identifiers}"
+            )
+            if failed_identifiers:
+                logger.warning(
+                    f"Failed to get miner responses for validator request id: {task.validator_task.task_id}: {failed_identifiers}"
+                )
+
+            logger.success(
+                f"Completed processing {len(updated_miner_responses)} miner responses in {num_batches} batches"
+            )
         return updated_miner_responses
 
     async def _update_miner_response(
@@ -1240,7 +1307,7 @@ class Validator:
 
         if not task_results:
             logger.info(
-                f"No task results from miner: {miner_response.axon.hotkey} for validator task id: {miner_response.task_id}, platform task id: {miner_response.dojo_task_id}, skipping"
+                f"No task results from miner: {miner_response.axon.hotkey} for dojo task id: {miner_response.dojo_task_id}, skipping"
             )
             return None
 

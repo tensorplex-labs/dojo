@@ -1,4 +1,5 @@
 import asyncio
+import gc
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -37,6 +38,8 @@ def _check_fatal_errors(task: asyncio.Task):
     except FatalSyntheticGenerationError as e:
         logger.error(f"Fatal Error - shutting down validator: {e}")
         asyncio.create_task(_shutdown_validator())
+    finally:
+        gc.collect()
 
 
 async def _shutdown_validator():
@@ -80,16 +83,20 @@ async def main():
     server = uvicorn.Server(config)
     running_tasks = [
         asyncio.create_task(validator.log_validator_status()),
-        asyncio.create_task(validator.run()),
-        asyncio.create_task(validator.update_tasks_polling()),
-        asyncio.create_task(validator.score_and_send_feedback()),
+        # asyncio.create_task(validator.run()),
+        # asyncio.create_task(validator.update_tasks_polling()),
+        # asyncio.create_task(validator.score_and_send_feedback()),
         asyncio.create_task(validator.send_heartbeats()),
         asyncio.create_task(
             start_block_subscriber(
                 callbacks=[validator.block_headers_callback], max_interval_sec=60
             )
         ),
-        asyncio.create_task(feedback_loop.run(validator)),
+        asyncio.create_task(validator.cleanup_resources()),
+        asyncio.create_task(feedback_loop.start_feedback_loop(validator)),
+        asyncio.create_task(feedback_loop.update_tf_task_results(validator)),
+        asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
+        asyncio.create_task(feedback_loop.update_sf_task_results(validator)),
     ]
     # set a callback on validator.run() to check for fatal errors.
     running_tasks[1].add_done_callback(_check_fatal_errors)

@@ -12,6 +12,7 @@ from commons.exceptions import (
     NoNewExpiredTasksYet,
     NoProcessedTasksYet,
 )
+from commons.hfl_heplers import HFLManager
 from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
 from database.mappers import (
@@ -24,13 +25,11 @@ from database.mappers import (
 from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.errors import PrismaError
-from database.prisma.models import (
-    GroundTruth,
-    HFLState,
-    ValidatorTask,
-)
+from database.prisma.models import GroundTruth, HFLState, ValidatorTask
 from database.prisma.types import (
     CriterionWhereInput,
+    FindManyMinerResponseArgsFromValidatorTask,
+    HFLStateUpdateInput,
     MinerResponseCreateWithoutRelationsInput,
     MinerResponseInclude,
     MinerScoreCreateInput,
@@ -39,7 +38,13 @@ from database.prisma.types import (
     ValidatorTaskWhereInput,
 )
 from dojo import TASK_DEADLINE
-from dojo.protocol import DendriteQueryResponse, Scores, TaskResult, TaskSynapseObject
+from dojo.protocol import (
+    DendriteQueryResponse,
+    ScoreFeedbackEvent,
+    Scores,
+    TaskResult,
+    TaskSynapseObject,
+)
 
 
 class ORM:
@@ -48,7 +53,10 @@ class ORM:
         batch_size: int = 10,
         expire_from: datetime | None = None,
         expire_to: datetime | None = None,
+        filter_empty_result: bool = False,
         is_processed: bool = False,
+        has_previous_task: bool = False,
+        task_type: TaskTypeEnum | None = None,
     ) -> AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]:
         """Returns batches of expired ValidatorTask records and a boolean indicating if there are more batches.
 
@@ -57,7 +65,9 @@ class ORM:
             expire_from: (datetime | None) If provided, only tasks with expire_at after expire_from will be returned.
             expire_to: (datetime | None) If provided, only tasks with expire_at before expire_to will be returned.
             You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
+            filter_empty_results: If True, only include miner_responses with empty task_result
             is_processed: (bool, optional): If True, only processed tasks will be returned. Defaults to False.
+            has_previous_task: (bool, optional): Checks if task has a previous task. Defaults to False.
 
         Raises:
             ExpiredFromMoreThanExpireTo: If expire_from is greater than expire_to
@@ -69,12 +79,20 @@ class ORM:
             - Boolean indicating if there are more batches to process
         """
 
+        # Create miner_responses include query
+        miner_responses_include: FindManyMinerResponseArgsFromValidatorTask = {
+            "include": {"scores": True}
+        }
+
+        if filter_empty_result:
+            miner_responses_include["where"] = {"task_result": {"equals": Json("{}")}}
+
         include_query = ValidatorTaskInclude(
             {
                 "completions": {
                     "include": {"criterion": {"include": {"scores": True}}}
                 },
-                "miner_responses": {"include": {"scores": True}},
+                "miner_responses": miner_responses_include,
                 "ground_truth": True,
             }
         )
@@ -97,16 +115,21 @@ class ORM:
                 "expire_from should be less than expire_to."
             )
 
-        vali_where_query = ValidatorTaskWhereInput(
-            {
-                # only check for expire at since miner may lie
-                "expire_at": {
-                    "gt": expire_from,
-                    "lt": expire_to,
-                },
-                "is_processed": is_processed,
-            }
-        )
+        vali_where_query_dict = {
+            "expire_at": {
+                "gt": expire_from,
+                "lt": expire_to,
+            },
+            "is_processed": is_processed,
+        }
+
+        if has_previous_task:
+            vali_where_query_dict["previous_task_id"] = {"not": None}
+
+        if task_type:
+            vali_where_query_dict["task_type"] = task_type
+
+        vali_where_query = ValidatorTaskWhereInput(**vali_where_query_dict)
 
         # Get total count and first batch of validator tasks in parallel
         task_count, first_batch = await asyncio.gather(
@@ -118,7 +141,10 @@ class ORM:
                 take=batch_size,
             ),
         )
-
+        if first_batch and first_batch[0] and first_batch[0].miner_responses:
+            logger.debug(
+                f"First batch: {[miner_response.task_result for miner_response in first_batch[0].miner_responses]}"
+            )
         if is_processed:
             logger.debug(f"Count of processed validator tasks: {task_count}")
         else:
@@ -128,7 +154,6 @@ class ORM:
             raise NoNewExpiredTasksYet(
                 f"No expired validator tasks found for processing, please wait for tasks to pass the task deadline of {TASK_DEADLINE} seconds."
             )
-
         first_batch_responses = [
             DendriteQueryResponse(
                 validator_task=map_validator_task_to_task_synapse_object(task),
@@ -470,6 +495,9 @@ class ORM:
                     logger.error("Failed to map validator task")
                     return None
 
+                if prev_task_id:
+                    validator_task_data["previous_task_id"] = prev_task_id
+
                 created_task = await tx.validatortask.create(data=validator_task_data)
 
                 # Create completions separately, ValidatorTaskCreateInput does not support CompletionCreateInput
@@ -765,58 +793,487 @@ class ORM:
     @staticmethod
     async def get_TF_tasks_by_hfl_status(
         status: HFLStatusEnum,
-    ) -> list[ValidatorTask]:
-        """Get validator tasks by HFL status.
+        expire_from: datetime | None = None,
+        expire_to: datetime | None = None,
+        batch_size: int = 10,
+    ) -> AsyncGenerator[tuple[list[ValidatorTask], bool], None]:
+        """Get validator tasks by HFL status in batches.
 
         Args:
             status: HFL status to filter by
+            batch_size: Number of tasks to return in each batch
 
-        Returns:
-            List of validator tasks with the specified HFL status
+        Yields:
+            tuple[list[ValidatorTask], bool]: Each yield returns:
+            - List of validator tasks with the specified HFL status
+            - Boolean indicating if there are more batches to process
         """
         try:
-            tasks = await ValidatorTask.prisma().find_many(
-                where=ValidatorTaskWhereInput(
-                    task_type=TaskTypeEnum.TEXT_TO_COMPLETION,
-                    HFLState={
-                        "is": {
-                            "status": status,
-                        }
-                    },
-                ),
-                include={
-                    "HFLState": True,
+            where_query = ValidatorTaskWhereInput(
+                task_type=TaskTypeEnum.TEXT_FEEDBACK,
+                HFLState={
+                    "is": {
+                        "status": status,
+                    }
                 },
-                order={"created_at": "desc"},
             )
-            return tasks
+
+            # Add expire time filters if provided
+            if expire_from and expire_to:
+                where_query["expire_at"] = {
+                    "gt": expire_from,
+                    "lt": expire_to,
+                }
+            # Get total count of matching tasks
+            total_tasks = await ValidatorTask.prisma().count(where=where_query)
+
+            if total_tasks == 0:
+                yield [], False
+                return
+
+            # Process in batches
+            for skip in range(0, total_tasks, batch_size):
+                tasks = await ValidatorTask.prisma().find_many(
+                    where=where_query,
+                    include={
+                        "HFLState": True,
+                        "miner_responses": True,
+                    },
+                    order={"created_at": "desc"},
+                    take=batch_size,
+                    skip=skip,
+                )
+
+                has_more = skip + batch_size < total_tasks
+                yield tasks, has_more
+
         except Exception as e:
             logger.error(f"Error getting tasks by HFL status {status}: {e}")
-            return []
+            yield [], False
 
     @staticmethod
-    # TODO include table name in the query as needed
-    async def get_sf_tasks_by_status(
+    async def get_SF_tasks_by_hfl_status(
         status: HFLStatusEnum,
-    ) -> list[ValidatorTask]:
-        """Get Score-Feedback tasks by HFL status."""
+        expire_from: datetime | None = None,
+        expire_to: datetime | None = None,
+        batch_size: int = 10,
+    ) -> AsyncGenerator[tuple[list[ValidatorTask], bool], None]:
+        """Get Score-Feedback tasks by HFL status and expiry window in batches.
+
+        Args:
+            status: HFL status to filter by
+            expire_from: Optional datetime to filter tasks that expired after this time
+            expire_to: Optional datetime to filter tasks that expired before this time
+            batch_size: Number of tasks to return in each batch
+
+        Yields:
+            tuple[list[ValidatorTask], bool]: Each yield returns:
+            - List of validator tasks with the specified HFL status
+            - Boolean indicating if there are more batches to process
+        """
         try:
-            tasks = await ValidatorTask.prisma().find_many(
-                where=ValidatorTaskWhereInput(
-                    {
-                        "task_type": TaskTypeEnum.SCORE_FEEDBACK,
-                        "HFLState": {"is": {"status": status}},
-                    }
-                ),
-                include={
-                    "HFLState": True,
-                },
-                order={"created_at": "desc"},
+            where_query = ValidatorTaskWhereInput(
+                task_type=TaskTypeEnum.SCORE_FEEDBACK,
+                HFLState={"is": {"status": status}},
             )
-            return tasks
+
+            # Add expire time filters if provided
+            if expire_from and expire_to:
+                where_query["expire_at"] = {
+                    "gt": expire_from,
+                    "lt": expire_to,
+                }
+
+            # Get total count of matching tasks
+            total_tasks = await ValidatorTask.prisma().count(where=where_query)
+
+            if total_tasks == 0:
+                yield [], False
+                return
+
+            # Process in batches
+            for skip in range(0, total_tasks, batch_size):
+                tasks = await ValidatorTask.prisma().find_many(
+                    where=where_query,
+                    include={
+                        "HFLState": True,
+                        "miner_responses": True,
+                    },
+                    order={"created_at": "desc"},
+                    take=batch_size,
+                    skip=skip,
+                )
+
+                has_more = skip + batch_size < total_tasks
+                yield tasks, has_more
+
         except Exception as e:
             logger.error(f"Error getting SF tasks by status {status}: {e}")
-            return []
+            yield [], False
+
+    @staticmethod
+    async def get_tasks_by_hfl_status(
+        status: HFLStatusEnum,
+        task_type: TaskTypeEnum | None = None,
+        expire_from: datetime | None = None,
+        expire_to: datetime | None = None,
+        batch_size: int = 10,
+        include_options: ValidatorTaskInclude | None = None,
+    ) -> AsyncGenerator[tuple[list[ValidatorTask], bool], None]:
+        """
+        Get validator tasks by HFL status, with optional task type filtering.
+
+        Args:
+            status: HFL status to filter by
+            task_type: Optional task type to further filter results (TEXT_FEEDBACK, SCORE_FEEDBACK, etc.)
+            expire_from: Optional datetime to filter tasks that expired after this time
+            expire_to: Optional datetime to filter tasks that expired before this time
+            batch_size: Number of tasks to return in each batch
+            include_options: Optional dictionary of additional relations to include
+
+        Yields:
+            tuple[list[ValidatorTask], bool]: Each yield returns:
+            - List of validator tasks with the specified HFL status and type
+            - Boolean indicating if there are more batches to process
+        """
+        try:
+            # Build the base query
+            where_query = ValidatorTaskWhereInput(HFLState={"is": {"status": status}})
+
+            # Add task type filter if specified
+            if task_type:
+                where_query["task_type"] = task_type
+
+            # Add expire time filters if provided
+            if expire_from and expire_to:
+                where_query["expire_at"] = {
+                    "gt": expire_from,
+                    "lt": expire_to,
+                }
+
+            # Get total count of matching tasks
+            total_tasks = await ValidatorTask.prisma().count(where=where_query)
+
+            if total_tasks == 0:
+                yield [], False
+                return
+
+            # Process in batches
+            for skip in range(0, total_tasks, batch_size):
+                tasks = await ValidatorTask.prisma().find_many(
+                    where=where_query,
+                    include=include_options,
+                    order={"created_at": "desc"},
+                    take=batch_size,
+                    skip=skip,
+                )
+
+                has_more = skip + batch_size < total_tasks
+                yield tasks, has_more
+
+        except Exception as e:
+            logger.error(
+                f"Error getting tasks by HFL status {status} and type {task_type}: {e}"
+            )
+            yield [], False
+
+    @staticmethod
+    async def create_hfl_completion_relation(
+        completion_id_pairs: List[tuple[str, str]],
+    ) -> bool:
+        """Create HFLCompletionRelation records connecting TF completions to SF completions.
+
+        Args:
+            completion_id_pairs: List of tuples with (tf_completion_id, sf_completion_id) pairs
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Create a relation for each (tf_id, sf_id) pair
+            async with prisma.tx() as tx:
+                for tf_id, sf_id in completion_id_pairs:
+                    await tx.hflcompletionrelation.create(
+                        data={
+                            "miner_response_id": tf_id,
+                            "sf_completion_id": sf_id,
+                        }
+                    )
+
+            logger.success(
+                f"Created {len(completion_id_pairs)} HFLCompletionRelation records"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to create HFLCompletionRelation records: {e}")
+            return False
+
+    @staticmethod
+    async def save_tf_task(
+        validator_task: TaskSynapseObject,
+        miner_responses: list[TaskSynapseObject],
+        previous_task_id: str,
+        selected_completion_id: str,
+        original_task_id: str | None = None,
+    ) -> tuple[ValidatorTask, HFLState]:
+        """
+        Save a Text Feedback task and create a new HFL state within a single transaction.
+
+        Args:
+            validator_task: The task synapse object
+            miner_responses: List of miner responses
+            original_task_id: ID of original task that initiated the HFL
+
+        Returns:
+            Tuple of (created task, created HFL state)
+        """
+        async with prisma.tx() as tx:
+            hfl_state = await HFLManager.create_state(
+                current_task_id=validator_task.task_id,
+                previous_task_id=previous_task_id,
+                original_task_id=original_task_id,
+                status=HFLStatusEnum.TF_PENDING,
+                selected_completion_id=selected_completion_id,
+                tx=tx,
+            )
+            # Create the validator task with the HFL state ID
+            validator_task_data = map_task_synapse_object_to_validator_task(
+                validator_task
+            )
+
+            # Add the HFL state ID to the validator task data
+            validator_task_data["hfl_state_id"] = hfl_state.id
+            validator_task_data["previous_task_id"] = previous_task_id
+
+            created_task = await tx.validatortask.create(data=validator_task_data)
+
+            # Create completions separately, ValidatorTaskCreateInput does not support CompletionCreateInput
+            completions = map_task_synapse_object_to_completions(
+                validator_task, created_task.id
+            )
+
+            for completion in completions:
+                await tx.completion.create(data=completion)
+
+            # Pre-process all valid miner responses
+            valid_miner_data = []
+            for miner_response in miner_responses:
+                try:
+                    miner_data = map_task_synapse_object_to_miner_response(
+                        miner_response,
+                        created_task.id,
+                    )
+                    valid_miner_data.append(miner_data)
+                except InvalidMinerResponse as e:
+                    miner_hotkey = miner_response.miner_hotkey
+                    logger.debug(
+                        f"Miner response from hotkey: {miner_hotkey} is invalid: {e}"
+                    )
+
+            if valid_miner_data:
+                # Bulk create all miner responses
+                await tx.minerresponse.create_many(
+                    data=[
+                        MinerResponseCreateWithoutRelationsInput(**miner_data)
+                        for miner_data in valid_miner_data
+                    ]
+                )
+            return created_task, hfl_state
+
+    @staticmethod
+    async def save_sf_task(
+        validator_task: TaskSynapseObject,
+        miner_responses: list[TaskSynapseObject],
+        hfl_state: HFLState,
+        previous_task_id: str,
+    ) -> tuple[ValidatorTask, HFLState]:
+        """
+        Save a Score Feedback task and update an existing HFL state within a single transaction.
+
+        Args:
+            validator_task: The task synapse object
+            miner_responses: List of miner responses
+            hfl_state_id: ID of existing HFL state to update
+
+        Returns:
+            Tuple of (created task, updated HFL state)
+        """
+        async with prisma.tx() as tx:
+            validator_task_data = map_task_synapse_object_to_validator_task(
+                validator_task
+            )
+
+            # Add the HFL state ID to the validator task data
+            validator_task_data["hfl_state_id"] = hfl_state.id
+            validator_task_data["previous_task_id"] = previous_task_id
+
+            created_task = await tx.validatortask.create(data=validator_task_data)
+
+            completions = map_task_synapse_object_to_completions(
+                validator_task, created_task.id
+            )
+
+            for completion in completions:
+                await tx.completion.create(data=completion)
+
+            # Pre-process all valid miner responses
+            valid_miner_data = []
+            for miner_response in miner_responses:
+                try:
+                    miner_data = map_task_synapse_object_to_miner_response(
+                        miner_response,
+                        created_task.id,
+                    )
+                    valid_miner_data.append(miner_data)
+                except InvalidMinerResponse as e:
+                    miner_hotkey = miner_response.miner_hotkey
+                    logger.debug(
+                        f"Miner response from hotkey: {miner_hotkey} is invalid: {e}"
+                    )
+
+            if valid_miner_data:
+                await tx.minerresponse.create_many(
+                    data=[
+                        MinerResponseCreateWithoutRelationsInput(**miner_data)
+                        for miner_data in valid_miner_data
+                    ]
+                )
+
+            # Update HFL state with current task id and status
+            updated_hfl_state = await HFLManager.update_state(
+                hfl_state_id=hfl_state.id,
+                updates=HFLStateUpdateInput(
+                    current_task_id=created_task.id,
+                    status=HFLStatusEnum.SF_PENDING,
+                ),
+                event_data=ScoreFeedbackEvent(
+                    type=HFLStatusEnum.SF_PENDING,
+                    task_id=validator_task.task_id,
+                    syn_req_id=hfl_state.current_synthetic_req_id
+                    if hfl_state.current_synthetic_req_id
+                    else "",
+                    iteration=hfl_state.current_iteration,
+                    timestamp=datetime_as_utc(datetime.now(timezone.utc)),
+                ),
+                tx=tx,
+            )
+            # TODO: update the hfl completion relation
+
+            if not updated_hfl_state:
+                raise ValueError(f"Failed to update HFL state with ID {hfl_state.id}")
+
+            return created_task, updated_hfl_state
+
+    @staticmethod
+    async def get_validator_task_by_id(task_id: str) -> ValidatorTask | None:
+        """Get a task by its ID."""
+        task = await ValidatorTask.prisma().find_unique(
+            where={"id": task_id},
+            include=ValidatorTaskInclude(
+                completions={"include": {"criterion": {"include": {"scores": True}}}},
+                miner_responses={"include": {"scores": True}},
+                HFLState=True,
+            ),
+        )
+
+        if not task:
+            logger.error(f"Task with ID {task_id} not found")
+            return None
+
+        return task
+
+    @staticmethod
+    async def save_tf_retry_responses(
+        validator_task_id: str,
+        hfl_state: HFLState,
+        miner_responses: list[TaskSynapseObject],
+    ) -> tuple[int, HFLState]:
+        """
+        Save additional miner responses for an existing validator task and update
+        the HFL state retry count in a single transaction.
+
+        Args:
+            validator_task_id: ID of the existing validator task
+            hfl_state: HFL state to update
+            miner_responses: List of additional miner responses from send_hfl_request
+
+        Returns:
+            Tuple of (number of saved responses, whether retry count was updated)
+        """
+        if not miner_responses:
+            return 0, hfl_state
+
+        saved_count = 0
+
+        try:
+            async with prisma.tx() as tx:
+                # Process each miner response
+                for response in miner_responses:
+                    if (
+                        not response.dojo_task_id
+                        or not response.miner_hotkey
+                        or not response.miner_coldkey
+                    ):
+                        logger.warning(
+                            "Missing dojo_task_id or hotkey in miner response"
+                        )
+                        continue
+
+                    try:
+                        # Check if there's already a response from this miner for this validator task
+                        existing_response = await tx.minerresponse.find_first(
+                            where={
+                                "validator_task_id": validator_task_id,
+                                "hotkey": response.miner_hotkey,
+                            }
+                        )
+
+                        if existing_response:
+                            # Update the existing response with the new dojo_task_id
+                            await tx.minerresponse.update(
+                                where={"id": existing_response.id},
+                                data={
+                                    "dojo_task_id": response.dojo_task_id,
+                                    "updated_at": datetime_as_utc(datetime.now()),
+                                },
+                            )
+                            logger.debug(
+                                f"Updated existing response for miner {response.miner_hotkey} with new dojo_task_id"
+                            )
+                        else:
+                            # Create a new response
+                            await tx.minerresponse.create(
+                                data={
+                                    "validator_task_id": validator_task_id,
+                                    "dojo_task_id": response.dojo_task_id,
+                                    "hotkey": response.miner_hotkey,
+                                    "coldkey": response.miner_coldkey,
+                                    "task_result": Json(json.dumps({})),
+                                }
+                            )
+                            logger.debug(
+                                f"Created new response for miner {response.miner_hotkey}"
+                            )
+
+                        saved_count += 1
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error saving miner response for {response.miner_hotkey}: {e}"
+                        )
+                        continue
+
+                updated_hfl_state = await HFLManager.update_state(
+                    hfl_state_id=hfl_state.id,
+                    updates=HFLStateUpdateInput(
+                        tf_retry_count=hfl_state.tf_retry_count + 1
+                    ),
+                )
+            return saved_count, updated_hfl_state
+
+        except Exception as e:
+            logger.error(f"Transaction failed to save TF retry responses: {e}")
+            return 0, hfl_state
 
     @staticmethod
     async def get_hfl_state_by_current_task_id(task_id: str) -> HFLState | None:
@@ -873,15 +1330,6 @@ class ORM:
 
                 return prev_task
 
-        return None
-
-    @staticmethod
-    async def get_validator_task_by_id(task_id: str) -> ValidatorTask | None:
-        try:
-            task = await ValidatorTask.prisma().find_unique(where={"id": task_id})
-            return task
-        except Exception as e:
-            logger.error(f"Failed to get validator task with ID {task_id}: {e}")
         return None
 
     @staticmethod

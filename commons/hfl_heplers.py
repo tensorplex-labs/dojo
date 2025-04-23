@@ -1,46 +1,104 @@
 from datetime import datetime, timezone
 
 from commons.utils import datetime_as_utc
+from database.client import prisma
 from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum
 from database.prisma.models import HFLState
-from database.prisma.types import HFLStateUpdateInput
-from dojo.protocol import HFLEvent, TextFeedbackEvent
+from database.prisma.types import HFLStateCreateInput, HFLStateUpdateInput
+from dojo.protocol import HFLEvent, ScoreFeedbackEvent, TextFeedbackEvent
 
 
 class HFLManager:
     @staticmethod
     async def create_state(
-        original_task_id: str,
+        previous_task_id: str,
         current_task_id: str,
+        original_task_id: str | None = None,
         status: HFLStatusEnum = HFLStatusEnum.TF_PENDING,
+        selected_completion_id: str | None = None,
+        tx=None,
     ) -> HFLState:
-        """Create initial HFL state."""
-        # TODO: add data as needed
+        """
+        Create or continue an HFL state.
+
+        Args:
+            previous_task_id: ID of the previous task
+            current_task_id: ID of the current task
+            original_task_id: ID of the original task (only needed for first cycle)
+            status: Initial status of the HFL state
+            selected_completion_id: ID of the selected completion (if any)
+            tx: Optional transaction object
+
+        Returns:
+            The created HFL state
+
+        Raises:
+            ValueError: If original_task_id is not provided for a new HFL process
+        """
+
+        prisma_client = tx if tx else prisma
+
+        # Try to find an existing HFL state with the previous_task_id as current_task_id
+        existing_hfl = None
+        if not original_task_id:
+            existing_hfl = await prisma_client.hflstate.find_first(
+                where={"current_task_id": previous_task_id}
+            )
+
+            if existing_hfl:
+                # We found an existing HFL cycle, use its original_task_id
+                original_task_id = existing_hfl.original_task_id
+                current_iteration = existing_hfl.current_iteration + 1
+            else:
+                # We couldn't find an existing cycle - this is an error
+                raise ValueError(
+                    "For a new HFL process, original_task_id must be provided. "
+                    "For continuing an existing process, previous_task_id must belong to an existing HFL state."
+                )
+        else:
+            # This is the first cycle
+            current_iteration = 1
+
+        # Create the initial event with the correct iteration
         initial_event = TextFeedbackEvent(
             task_id=current_task_id,
-            iteration=1,
+            iteration=current_iteration,  # Use the determined iteration
             timestamp=datetime_as_utc(datetime.now(timezone.utc)),
         )
 
-        return await HFLState.prisma().create(
-            data={
-                "original_task_id": original_task_id,
-                "current_task_id": current_task_id,
-                "current_iteration": 1,
-                "status": status,
-                "events": [Json(initial_event.model_dump())],
-            }
+        # Prepare data for creating the HFL state
+        create_data = HFLStateCreateInput(
+            original_task_id=original_task_id,
+            current_task_id=current_task_id,
+            current_iteration=current_iteration,
+            status=status,
+            events=[Json(initial_event.model_dump())],
         )
+
+        # Add selected_completion_id if provided
+        if status == HFLStatusEnum.TF_PENDING and not selected_completion_id:
+            raise ValueError(
+                f"For a Text Feedback task, selected_completion_id must be provided: {selected_completion_id}"
+            )
+        else:
+            create_data["selected_completion_id"] = selected_completion_id
+
+        # Create and return the HFL state
+        return await prisma_client.hflstate.create(data=create_data)
 
     @staticmethod
     async def update_state(
         hfl_state_id: str,
         updates: HFLStateUpdateInput,
-        event_data: HFLEvent,
+        event_data: HFLEvent | None = None,
+        tx=None,
     ) -> HFLState:
         """Update HFL state and handle status transitions."""
-        current_state = await HFLState.prisma().find_unique(where={"id": hfl_state_id})
+        prisma_client = tx if tx else prisma
+        current_state = await prisma_client.hflstate.find_unique(
+            where={"id": hfl_state_id}
+        )
         if not current_state:
             raise ValueError(f"No HFL state found with ID {hfl_state_id}")
 
@@ -49,48 +107,55 @@ class HFLManager:
             match new_status:
                 case HFLStatusEnum.TF_COMPLETED:
                     return await HFLManager._handle_tf_completed(
-                        current_state, updates, event_data
+                        current_state, updates, event_data, tx
                     )
                 case HFLStatusEnum.TF_PENDING:
                     return await HFLManager._handle_tf_pending(
-                        current_state, updates, event_data
+                        current_state, updates, event_data, tx
                     )
                 case HFLStatusEnum.SF_PENDING:
                     return await HFLManager._handle_sf_pending(
-                        current_state, updates, event_data
+                        current_state, updates, event_data, tx
                     )
                 case HFLStatusEnum.SF_COMPLETED:
                     return await HFLManager._handle_sf_completed(
-                        current_state, updates, event_data
+                        current_state, updates, event_data, tx
                     )
                 case HFLStatusEnum.HFL_COMPLETED:
                     return await HFLManager._handle_hfl_completed(
-                        current_state, updates, event_data
+                        current_state, updates, event_data, tx
                     )
 
-        return await HFLManager._update_state(current_state, updates, event_data)
+        return await HFLManager._update_state(current_state, updates, event_data, tx)
 
     @staticmethod
     async def _handle_tf_pending(
-        state: HFLState, updates: HFLStateUpdateInput, event_data: HFLEvent
+        state: HFLState,
+        updates: HFLStateUpdateInput,
+        event_data: HFLEvent | None = None,
+        tx=None,
     ) -> HFLState:
         """Handle transition to TF_PENDING."""
         # TODO Add TF pending specific logic as needed
-        return await HFLManager._update_state(state, updates, event_data)
+        return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
     async def _handle_tf_completed(
-        state: HFLState, updates: HFLStateUpdateInput, event_data: HFLEvent
+        state: HFLState,
+        updates: HFLStateUpdateInput,
+        event_data: HFLEvent | None = None,
+        tx=None,
     ) -> HFLState:
         """Handle transition to TF_COMPLETED."""
         # TODO Add TF completion specific logic as needed
-        if not state.current_synthetic_req_id:
-            raise ValueError("Current synthetic request ID is not set")
-        return await HFLManager._update_state(state, updates, event_data)
+        return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
     async def _handle_sf_pending(
-        state: HFLState, updates: HFLStateUpdateInput, event_data: HFLEvent
+        state: HFLState,
+        updates: HFLStateUpdateInput,
+        event_data: HFLEvent | None = None,
+        tx=None,
     ) -> HFLState:
         """Handle transition to SF_PENDING."""
         # TODO Add SF pending specific logic as needed
@@ -98,36 +163,44 @@ class HFLManager:
         updates["current_synthetic_req_id"] = (
             event_data.syn_req_id
         )  # Clear the current synthetic request ID
-        return await HFLManager._update_state(state, updates, event_data)
+        return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
     async def _handle_sf_completed(
-        state: HFLState, updates: HFLStateUpdateInput, event_data: HFLEvent
+        state: HFLState,
+        updates: HFLStateUpdateInput,
+        event_data: HFLEvent | None = None,
+        tx=None,
     ) -> HFLState:
         """Handle transition to SF_COMPLETED."""
         # TODO Add SF completion specific logic as needed
-        return await HFLManager._update_state(state, updates, event_data)
+        return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
     async def _handle_hfl_completed(
-        state: HFLState, updates: HFLStateUpdateInput, event_data: HFLEvent
+        state: HFLState,
+        updates: HFLStateUpdateInput,
+        event_data: HFLEvent | None = None,
+        tx=None,
     ) -> HFLState:
         """Handle transition to HFL_COMPLETED."""
         # TODO Add HFL completion specific logic as needed
-        return await HFLManager._update_state(state, updates, event_data)
+        return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
     async def _update_state(
-        state: HFLState, updates: HFLStateUpdateInput, event_data: HFLEvent
+        state: HFLState,
+        updates: HFLStateUpdateInput,
+        event_data: HFLEvent | None = None,
+        tx=None,
     ) -> HFLState:
         """Core update logic used by all handlers."""
-        events = state.events or []
+        prisma_client = tx if tx else prisma
         if event_data:
-            new_event = event_data.model_dump()
-            events.append(Json(new_event))
-            updates["events"] = [Json(e) for e in events]
+            updates["events"] = {"push": [Json(event_data.model_dump())]}
 
-        update_state = await HFLState.prisma().update(
+        updates["updated_at"] = datetime_as_utc(datetime.now(timezone.utc))
+        update_state = await prisma_client.hflstate.update(
             where={"id": state.id}, data=updates
         )
 
@@ -139,7 +212,32 @@ class HFLManager:
     @staticmethod
     async def get_state(hfl_state_id: str) -> HFLState:
         """Get HFL state by ID."""
-        state = await HFLState.prisma().find_unique(where={"id": hfl_state_id})
+        state = await prisma.hflstate.find_unique(where={"id": hfl_state_id})
         if not state:
             raise ValueError(f"No HFL state found with ID {hfl_state_id}")
         return state
+
+    @staticmethod
+    async def get_update_state_operation(
+        state_id: str, status_updates: HFLStateUpdateInput, event: ScoreFeedbackEvent
+    ):
+        return {
+            "where": {"id": state_id},
+            "data": HFLStateUpdateInput(
+                status_updates,
+                events={"push": [Json(event.model_dump())]},
+                updated_at=datetime_as_utc(datetime.now(timezone.utc)),
+            ),
+        }
+
+    @staticmethod
+    async def get_state_by_current_task_id(current_task_id: str) -> HFLState | None:
+        return await prisma.hflstate.find_first(
+            where={"current_task_id": current_task_id}
+        )
+
+    @staticmethod
+    async def get_state_by_original_task_id(original_task_id: str) -> HFLState | None:
+        return await prisma.hflstate.find_first(
+            where={"original_task_id": original_task_id}
+        )

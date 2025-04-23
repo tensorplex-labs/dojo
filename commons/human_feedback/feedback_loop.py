@@ -1,54 +1,117 @@
+"""Main Human Feedback Loop coordinator module."""
+
 import asyncio
 import json
 import random
-from datetime import datetime, timedelta, timezone
-from typing import List, Tuple
+import traceback
+from typing import Dict, List, Tuple
 
 from bittensor.utils.btlogging import logging as logger
 
 import dojo
-from commons.orm import ORM
-from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
-from database.prisma.models import MinerScore
-from database.prisma.types import MinerScoreWhereInput
-from dojo.protocol import (
-    CriteriaType,
-    DendriteQueryResponse,
-    TaskSynapseObject,
-    TaskTypeEnum,
-    TextCriteria,
+from commons.dataset.types import MinerFeedback
+from commons.exceptions import NoNewExpiredTasksYet
+from commons.hfl_heplers import HFLManager
+from commons.human_feedback.score_feedback import (
+    create_score_feedback_task,
+    get_active_miners_for_hfl,
+    process_score_feedback_task,
+    send_hfl_request,
 )
+from commons.human_feedback.text_feedback import (
+    create_text_feedback_task,
+    fetch_miner_feedback_for_task,
+    get_task_synapse_for_retry,
+    send_text_feedback_to_synthetic_api,
+)
+from commons.human_feedback.utils import get_time_window_for_tasks
+from commons.orm import ORM
+from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
+from database.prisma.models import MinerResponse, MinerScore
+from database.prisma.types import MinerScoreWhereInput, ValidatorTaskInclude
+from dojo.protocol import DendriteQueryResponse, TaskSynapseObject
 from neurons.validator import Validator
 
 
 class FeedbackLoop:
-    async def run(self, validator: Validator):
-        """Runs the feedback loop periodically."""
-        while True:
-            # Wait for the validator update score interval
-            await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
-            try:
-                await self.start_feedback_loop(validator)
-            except Exception as e:
-                logger.error(f"Error in feedback loop: {e}")
+    """
+    Human Feedback Loop (HFL) coordinator class that manages the process of:
+    1. Selecting completed tasks for feedback
+    2. Getting text feedback from miners on responses
+    3. Using feedback to generate improved versions via synthetic API
+    4. Having miners score the improved versions
+    5. Tracking metrics on the process
+    """
 
     async def start_feedback_loop(self, validator: Validator):
-        """Starts the feedback loop."""
+        """Continuously processes new feedback loop iterations."""
+        while True:
+            try:
+                await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+                await self._start_feedback_loop(validator)
+            except Exception as e:
+                logger.error(f"Error in start_feedback_loop: {e}")
+                await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+
+    async def _start_feedback_loop(self, validator: Validator):
+        """
+        Core implementation of the feedback loop logic.
+        Selects a validator task, creates a text criteria task, and sends it to miners.
+        """
+        active_miners = await get_active_miners_for_hfl(
+            validator=validator,
+            subset_size=7,
+        )
+        if not active_miners:
+            logger.warning(
+                f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+            )
+            return
+
         result = await self.select_validator_task()
         if result:
             selected_task, selected_completion = result
-            text_criteria_task = await self.generate_text_criteria_task(
+            text_criteria_task = await create_text_feedback_task(
                 selected_task, selected_completion
             )
-            if text_criteria_task:
-                # Call send_request with the text criteria task
-                await validator.send_request(
-                    synapse=text_criteria_task,
-                    ground_truth=None,
-                    obfuscated_model_to_model=None,
-                    synthetic_task=False,
-                    subset_size=7,
+            if not text_criteria_task:
+                logger.error(
+                    f"Failed to generate text criteria task for task {selected_task.task_id}"
                 )
+                return
+
+            miner_responses = await send_hfl_request(
+                validator=validator,
+                synapse=text_criteria_task,
+                task_type=TaskTypeEnum.TEXT_FEEDBACK,
+                axons=[
+                    validator.metagraph.axons[axon_uid] for axon_uid in active_miners
+                ],
+            )
+
+            if not miner_responses:
+                logger.error(
+                    f"Failed to send HFL request for task {text_criteria_task.task_id}"
+                )
+                return
+
+            validator_task, hfl_state = await ORM.save_tf_task(
+                validator_task=text_criteria_task,
+                miner_responses=miner_responses,
+                previous_task_id=selected_task.task_id,
+                original_task_id=selected_task.task_id,
+                selected_completion_id=selected_completion,
+            )
+
+            if not validator_task:
+                logger.error(
+                    f"Failed to save text criteria task for task {text_criteria_task.task_id}"
+                )
+                return
+
+            logger.info(
+                f"Started HFL with state ID: {hfl_state.id}, original task: {selected_task.task_id}, TF task: {validator_task.id}"
+            )
 
     async def select_validator_task(self) -> Tuple[TaskSynapseObject, str] | None:
         """
@@ -63,22 +126,27 @@ class FeedbackLoop:
         Returns:
             Tuple[TaskSynapseObject, str] | None: A tuple of (validator task, completion_id) if criteria are met;
         """
-        expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(hours=48)
-        # TODO: Change back to 1 hour
-        expire_to = datetime_as_utc(datetime.now(timezone.utc))
+        expire_from, expire_to = get_time_window_for_tasks(
+            hours_ago_start=48, hours_ago_end=0
+        )  # TODO: change back to 1 hour
 
         eligible_tasks = []
         try:
-            async for tasks_batch, has_more in ORM.get_expired_tasks(
+            async for tasks_batch, _ in ORM.get_expired_tasks(
                 batch_size=10,
                 expire_from=expire_from,
                 expire_to=expire_to,
                 is_processed=True,
+                has_previous_task=False,
+                task_type=TaskTypeEnum.CODE_GENERATION,
             ):
                 for dendrite_response in tasks_batch:
                     eligible_task = await self._evaluate_task(dendrite_response)
                     if eligible_task:
                         eligible_tasks.append(eligible_task)
+        except NoNewExpiredTasksYet as e:
+            logger.info(f"No expired CODE_GENERATION tasks found for processing: {e}")
+            return None
         except Exception as e:
             logger.error(f"Error retrieving expired tasks: {e}")
             return None
@@ -116,6 +184,14 @@ class FeedbackLoop:
             return None
 
         try:
+            hfl_state = await HFLManager.get_state_by_original_task_id(
+                validator_task.task_id
+            )
+            if hfl_state:
+                logger.debug(
+                    f"HFL state found for task {validator_task.task_id}, means we already processed this task, skipping"
+                )
+                return None
             # Get all miner scores for this validator task
             miner_scores = await MinerScore.prisma().find_many(
                 where=MinerScoreWhereInput(
@@ -167,6 +243,7 @@ class FeedbackLoop:
                     (miner_response_id, miner_raw_score)
                 )
 
+            logger.info(f"Completion scores: {completion_scores}")
             # Find highest scored completion for each miner
             for completion_id, scores in completion_scores.items():
                 for miner_response_id, score in scores:
@@ -181,6 +258,7 @@ class FeedbackLoop:
             if total_miners == 0:
                 return None
 
+            logger.info(f"Miner best completions: {miner_best_completions}")
             # Count how many miners scored each completion as best
             completion_counts = {}
             for best_completion in miner_best_completions.values():
@@ -191,8 +269,8 @@ class FeedbackLoop:
             # Check percentages for each completion
             for completion_id, count in completion_counts.items():
                 percentage = (count / total_miners) * 100
-                # TODO: Change back to < 90
-                if 50 < percentage < 101:
+                # Consider completions with >50% and <90% agreement
+                if 50 < percentage < 90:
                     logger.info(
                         f"Found eligible completion {completion_id} with {percentage:.1f}% "
                         f"of miners ({count}/{total_miners}) scoring it highest"
@@ -205,68 +283,347 @@ class FeedbackLoop:
             logger.error(f"Error evaluating task {validator_task.task_id}: {e}")
             return None
 
-    async def generate_text_criteria_task(
-        self, validator_task: TaskSynapseObject, completion_id: str
-    ) -> TaskSynapseObject | None:
+    async def update_tf_task_results(self, validator: Validator):
         """
-        Generates a text criteria task based on a selected validator task and completion.
-        This task will be used to evaluate the quality of miners' scoring.
+        Continuously monitors and processes TEXT_FEEDBACK tasks.
+        """
+        while True:
+            try:
+                await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+                selected_responses_by_task = await self._update_tf_task_results(
+                    validator
+                )
+                for task_id, responses in selected_responses_by_task.items():
+                    miner_info = [
+                        (r.hotkey, r.id)
+                        for r in responses
+                        if hasattr(r, "hotkey") and hasattr(r, "id")
+                    ]
+                    logger.info(f"Task {task_id}: Selected miners {miner_info}")
+            except Exception as e:
+                logger.error(f"Error in update_text_feedback_results: {e}")
+                await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+
+    async def _update_tf_task_results(
+        self, validator: Validator
+    ) -> Dict[str, List[MinerResponse]]:
+        """
+        Optimized implementation for processing TEXT_FEEDBACK tasks that efficiently
+        fetches miner responses and processes them for HFL workflow.
 
         Args:
-            validator_task (TaskSynapseObject): The original validator task
-            completion_id (str): ID of the selected completion to be evaluated
+            validator: The Validator instance for network access
 
         Returns:
-            TaskSynapseObject | None: A new task for text-based evaluation, or None if generation fails
+            Dictionary mapping task IDs to selected miner responses
         """
+        if not validator._active_miner_uids:
+            logger.warning(
+                f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+            )
+            return {}
+
+        # Dictionary to store selected responses by task ID
+        selected_responses_by_task = {}
+
         try:
-            # Find the selected completion from the original task
-            selected_completion = next(
-                (
-                    c
-                    for c in (validator_task.completion_responses or [])
-                    if c.completion_id == completion_id
+            logger.info("Updating text feedback task results...")
+
+            # Set time window for expired tasks
+            expire_from, expire_to = get_time_window_for_tasks(
+                hours_ago_start=2, hours_ago_end=0
+            )
+
+            # Process TF_PENDING tasks in batches
+            async for tf_tasks_batch, _ in ORM.get_tasks_by_hfl_status(
+                status=HFLStatusEnum.TF_PENDING,
+                task_type=TaskTypeEnum.TEXT_FEEDBACK,
+                expire_from=expire_from,
+                expire_to=expire_to,
+                batch_size=10,
+                include_options=ValidatorTaskInclude(
+                    {"HFLState": True, "miner_responses": True}
                 ),
-                None,
-            )
-            if not selected_completion:
-                logger.error(
-                    f"Completion {completion_id} not found in task {validator_task.task_id}"
-                )
-                return None
+            ):
+                if not tf_tasks_batch:
+                    continue
 
-            # Set text criteria for completion
-            text_criteria: List[CriteriaType] = [
-                TextCriteria(
-                    query="What specific improvements could make this output more accurate, complete, or relevant to the prompt?",
-                    text_feedback="",
-                ),
-            ]
-            selected_completion.criteria_types = text_criteria
+                sufficient_response_task_ids: list[str] = []
 
-            prompt = f"""Please analyze this output and suggest specific improvements:
-            Prompt: {validator_task.prompt}
-            """
-            # Create a new task with the same prompt but different criteria type
-            new_tf_task = TaskSynapseObject(
-                task_id=get_new_uuid(),
-                previous_task_id=validator_task.task_id,
-                prompt=prompt,
-                task_type=TaskTypeEnum.TEXT_TO_COMPLETION,
-                expire_at=set_expire_time(
-                    int(dojo.TASK_DEADLINE / 2)
-                ),  # Half the deadline for TF
-                completion_responses=[
-                    selected_completion
-                ],  # Only include the selected completion
-            )
+                # Process each task in the batch
+                for task in tf_tasks_batch:
+                    hotkeys_with_feedback: list[str] = []
 
-            logger.info(
-                f"Generated text criteria task with ID: {new_tf_task.task_id} "
-                f"based on task: {validator_task.task_id}"
-            )
-            return new_tf_task
+                    # Fetch and process miner feedback
+                    (
+                        miner_feedbacks,
+                        valid_responses,
+                    ) = await fetch_miner_feedback_for_task(validator, task)
+
+                    hotkeys_with_feedback.extend(
+                        [miner_feedback.hotkey for miner_feedback in miner_feedbacks]
+                    )
+
+                    # Check if we have sufficient responses
+                    response_count = len(miner_feedbacks)
+
+                    # Verify HFL state exists
+                    if not task.HFLState:
+                        logger.error(
+                            f"No HFLState found for task {task.id} which should not happen"
+                        )
+                        continue
+
+                    # Get retry count from HFL state
+                    retry_count = task.HFLState.tf_retry_count or 0
+                    MAX_RETRY_ATTEMPTS = 5
+
+                    if response_count >= 3:
+                        # Process task with sufficient responses
+                        logger.info(
+                            f"Task {task.id} has {response_count} valid responses, processing"
+                        )
+                        sufficient_response_task_ids.append(task.id)
+
+                        # Create a list of tuples (feedback, response) to keep them paired
+                        feedback_response_pairs: list[
+                            tuple[MinerFeedback, MinerResponse]
+                        ] = list(zip(miner_feedbacks, valid_responses))
+
+                        # Select 3 random responses
+                        selected_pairs: list[tuple[MinerFeedback, MinerResponse]] = (
+                            random.sample(
+                                feedback_response_pairs, min(3, response_count)
+                            )
+                        )
+
+                        # Unzip the pairs when needed
+                        selected_feedbacks, selected_responses = (
+                            zip(*selected_pairs) if selected_pairs else ([], [])
+                        )
+
+                        # Send to synthetic API
+                        await send_text_feedback_to_synthetic_api(
+                            validator_task_id=task.id,
+                            hfl_state=task.HFLState,
+                            miner_feedback=selected_feedbacks,
+                        )
+
+                        # Store selected responses
+                        selected_responses_by_task[task.id] = selected_responses
+
+                    elif retry_count < MAX_RETRY_ATTEMPTS:
+                        # Handle task with insufficient responses needing retry
+                        task_synapse = await get_task_synapse_for_retry(task.id)
+                        if not task_synapse:
+                            logger.warning(f"Task {task.id} not found, skipping")
+                            continue
+
+                        active_miners = await get_active_miners_for_hfl(validator, 7)
+
+                        if not active_miners:
+                            logger.warning(
+                                f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                            )
+                            continue
+
+                        # filter hotkey that have already been give feedback
+                        axons = [
+                            validator.metagraph.axons[uid]
+                            for uid in active_miners
+                            if validator.metagraph.axons[uid].hotkey
+                            not in hotkeys_with_feedback
+                        ]
+
+                        miner_responses = await send_hfl_request(
+                            validator=validator,
+                            synapse=task_synapse,
+                            task_type=TaskTypeEnum.TEXT_FEEDBACK,
+                            axons=axons,
+                        )
+                        if not miner_responses:
+                            logger.warning(
+                                f"No miner responses found for task {task.id}"
+                            )
+                            continue
+
+                        count, updated_hfl_state = await ORM.save_tf_retry_responses(
+                            validator_task_id=task.id,
+                            hfl_state=task.HFLState,
+                            miner_responses=miner_responses,
+                        )
+
+                        logger.info(
+                            f"Saved {count} miner responses for task {task.id}, retry count: {updated_hfl_state.tf_retry_count}"
+                        )
+
+                    else:
+                        # TODO: handled edge case where we have no responses
+                        # Handle task with insufficient responses at max retries
+                        logger.warning(
+                            f"Task {task.id} failed to get enough responses after {MAX_RETRY_ATTEMPTS} attempts. "
+                            f"Using available {response_count} responses."
+                        )
+
+                        if response_count > 0:
+                            # Use all available responses (up to 3)
+                            available_feedbacks = miner_feedbacks[
+                                : min(3, response_count)
+                            ]
+                            available_responses = valid_responses[
+                                : min(3, response_count)
+                            ]
+
+                            # Process with available responses
+                            await send_text_feedback_to_synthetic_api(
+                                validator_task_id=task.id,
+                                hfl_state=task.HFLState,
+                                miner_feedback=available_feedbacks,
+                            )
+
+                            # Mark as processed and store responses
+                            sufficient_response_task_ids.append(task.id)
+                            selected_responses_by_task[task.id] = available_responses
+
+                # Mark tasks with sufficient responses as processed
+                if sufficient_response_task_ids:
+                    await ORM.mark_validator_task_as_processed(
+                        sufficient_response_task_ids
+                    )
+
+            return selected_responses_by_task
 
         except Exception as e:
-            logger.error(f"Error generating text criteria task: {e}")
-            return None
+            logger.error(f"Error during text feedback task monitoring: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+            return {}
+
+    async def create_sf_tasks(self, validator: Validator):
+        """Continuously poll for completed text feedback tasks and process synthetic improvements."""
+        while True:
+            try:
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await self._create_sf_tasks(validator)
+            except Exception as e:
+                logger.error(f"Error in create_sf_tasks: {str(e)}")
+                logger.debug(f"Traceback: {traceback.format_exc()}")
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+
+    async def _create_sf_tasks(self, validator: Validator):
+        """
+        Poll for completed text feedback tasks and process synthetic improvements.
+        Runs continuously with SF_TASK_CREATION_INTERVAL delay between iterations.
+
+        Flow:
+        1. Query TF_COMPLETED states in batches
+        2. For each batch:
+            - Check synthetic task status
+            - If ready, create improved task and send to miners
+            - Update state to SF_PENDING
+        """
+        try:
+            # Get tasks with TF_COMPLETED status in batches
+            async for tf_tasks_batch, _ in ORM.get_TF_tasks_by_hfl_status(
+                status=HFLStatusEnum.TF_COMPLETED,
+                batch_size=10,
+            ):
+                if not tf_tasks_batch:
+                    continue
+
+                for tf_task in tf_tasks_batch:
+                    if (
+                        not tf_task.HFLState
+                        or not tf_task.HFLState.current_synthetic_req_id
+                    ):
+                        logger.debug(
+                            f"No HFLState or current_synthetic_req_id for task-id: {tf_task.id}"
+                        )
+                        continue
+
+                    # Create SF task for miners
+                    validator_task = await create_score_feedback_task(
+                        validator=validator,
+                        tf_task_id=tf_task.id,
+                        hfl_state=tf_task.HFLState,
+                    )
+
+                    if not validator_task:
+                        logger.error(f"Failed to create SF task for {tf_task.id}")
+                        continue
+
+                    logger.info(
+                        f"Created SF task with validator task: {validator_task.id} for {tf_task.id}"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error in creating SF tasks: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+
+    async def update_sf_task_results(self, validator: Validator):
+        """
+        Update the results of Score Feedback (SF) tasks.
+        """
+        while True:
+            try:
+                # TODO: Use separate interval for SF task updates
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await self._update_sf_task_results(validator)
+            except Exception as e:
+                logger.error(f"Error in update_sf_task_results: {str(e)}")
+                logger.debug(f"Traceback: {traceback.format_exc()}")
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+
+    async def _update_sf_task_results(self, validator: Validator):
+        """
+        Update the results of Score Feedback (SF) tasks.
+
+        Flow:
+        1. Query SF_PENDING tasks that have expired within a time window
+        2. For each task:
+            - Get all miner responses
+            - Query each miner for task results using their dojo_task_id
+            - Update task results in database
+            - Update HFL state to SF_COMPLETED
+        """
+        try:
+            # Get tasks that expired in the last 2 hours
+            expire_from, expire_to = get_time_window_for_tasks(
+                hours_ago_start=2, hours_ago_end=0
+            )
+
+            logger.debug(
+                f"Processing SF tasks with expire_from: {expire_from} and expire_to: {expire_to}"
+            )
+
+            # Get SF_PENDING tasks in batches
+            async for sf_tasks_batch, _ in ORM.get_SF_tasks_by_hfl_status(
+                status=HFLStatusEnum.SF_PENDING,
+                expire_from=expire_from,
+                expire_to=expire_to,
+                batch_size=10,
+            ):
+                if not sf_tasks_batch:
+                    continue
+
+                for sf_task in sf_tasks_batch:
+                    if not sf_task.HFLState:
+                        logger.debug(
+                            f"No HFLState for task {sf_task.id} which should not happen"
+                        )
+                        continue
+
+                    # Process the SF task
+                    success = await process_score_feedback_task(
+                        validator=validator,
+                        sf_task=sf_task,
+                        hfl_state=sf_task.HFLState,
+                    )
+
+                    if success:
+                        logger.success(f"Successfully processed SF task {sf_task.id}")
+                    else:
+                        logger.error(f"Failed to process SF task {sf_task.id}")
+
+        except Exception as e:
+            logger.error(f"Error in SF task processing loop: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
