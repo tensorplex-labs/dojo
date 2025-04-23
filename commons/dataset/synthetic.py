@@ -187,7 +187,6 @@ class SyntheticAPI:
         except Exception:
             raise
 
-    # TODO replace with a function that generates a synthetic request with improvements
     @classmethod
     async def get_improved_task(cls, hf_id: str) -> HumanFeedbackResponse | None:
         """
@@ -227,4 +226,47 @@ class SyntheticAPI:
 
         except Exception as e:
             logger.error(f"Error retrieving human feedback for ID {hf_id}: {str(e)}")
+            raise
+
+    @classmethod
+    async def get_improved_task_raw(cls, hf_id: str) -> dict | None:
+        """
+        Retrieve human feedback data from Redis using the request ID, returning raw dictionary.
+
+        Unlike get_improved_task, this method returns the raw dictionary without model validation,
+        preserving additional fields like 'success' and 'hf_id'.
+
+        Args:
+            hf_id (str): The human feedback request ID to query
+
+        Returns:
+            Optional[dict]: The raw dictionary response if found, None if not found
+
+        Raises:
+            Exception: If there's an error accessing Redis
+        """
+        await cls.init_session()
+        if cls._cache is None:
+            raise FatalSyntheticGenerationError("Failed to initialize session")
+
+        try:
+            # The key format is "synthetic:hf:{hf_id}"
+            key = f"synthetic:hf:{hf_id}"
+
+            # Get the data from Redis
+            data = await cls._cache.get(key)
+
+            logger.info(f"Retrieved raw human feedback data for ID: {hf_id}")
+
+            if not data:
+                logger.warning(f"No human feedback data found for ID: {hf_id}")
+                return None
+
+            # Decode and parse the JSON data (return as raw dict)
+            return json.loads(data.decode("utf-8"))
+
+        except Exception as e:
+            logger.error(
+                f"Error retrieving raw human feedback for ID {hf_id}: {str(e)}"
+            )
             raise

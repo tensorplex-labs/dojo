@@ -2,14 +2,12 @@
 
 import traceback
 from datetime import datetime, timezone
-from typing import List
 
 from bittensor.core.chain_data.axon_info import AxonInfo
 from bittensor.utils.btlogging import logging as logger
 from tenacity import RetryError
 
 from commons.dataset.synthetic import SyntheticAPI
-from commons.dataset.types import HumanFeedbackResponse
 from commons.dataset.utils import map_human_feedback_to_task_synapse
 from commons.hfl_heplers import HFLManager
 from commons.human_feedback.exceptions import SyntheticAPIError
@@ -24,22 +22,35 @@ from neurons.validator import Validator
 
 async def get_improved_task_from_synthetic_api(
     syn_req_id: str,
-) -> HumanFeedbackResponse | None:
+) -> dict[str, str] | None:
     """
     Get improved task from synthetic API based on request ID.
+
+    This function handles the raw response from Redis without converting it to our
+    HumanFeedbackResponse model, preserving additional fields like success and hf_id.
 
     Args:
         syn_req_id: Synthetic API request ID
 
     Returns:
-        Improved task or None if not found/error
+        Raw response data dictionary or None if not found/error
     """
     try:
-        improved_task = await SyntheticAPI.get_improved_task(syn_req_id)
-        if not improved_task:
+        # Call the SyntheticAPI to get the raw response
+        raw_response = await SyntheticAPI.get_improved_task_raw(syn_req_id)
+
+        if not raw_response:
             logger.error(f"No improved task found for {syn_req_id}")
             return None
-        return improved_task
+
+        # Check if the response indicates an error
+        if not raw_response.get("success", True):
+            error_message = raw_response.get("message", "Unknown error")
+            logger.error(f"Error in synthetic API response: {error_message}")
+            raise SyntheticAPIError(f"API error: {error_message}")
+
+        return raw_response
+
     except (RetryError, ValueError) as e:
         logger.error(f"Error getting improved task for {syn_req_id}: {e}")
         raise SyntheticAPIError(f"Failed to get improved task: {str(e)}")
@@ -70,16 +81,20 @@ async def create_score_feedback_task(
             logger.error(f"No synthetic request ID for HFL state {hfl_state.id}")
             return None
 
-        # Get improved task from synthetic API
-        improved_task = await get_improved_task_from_synthetic_api(
+        # Get improved task from synthetic API (raw response)
+        improved_task_data = await get_improved_task_from_synthetic_api(
             hfl_state.current_synthetic_req_id
         )
 
-        if not improved_task:
+        if not improved_task_data:
             return None
 
-        # Create new SF task
-        task_synapse = map_human_feedback_to_task_synapse(improved_task)
+        # Map the raw response to a TaskSynapseObject
+        task_synapse = map_human_feedback_to_task_synapse(improved_task_data)
+
+        if not task_synapse:
+            logger.error("Failed to map improved task data to TaskSynapseObject")
+            return None
 
         # Get active miners for SF task
         active_miners = await get_active_miners_for_hfl(validator)
@@ -201,7 +216,7 @@ async def get_active_miners_for_hfl(
     validator,
     subset_size: int | None = None,
     min_miners: int = 3,
-) -> List[int] | None:
+) -> list[int] | None:
     """
     Get a subset of active miners suitable for HFL tasks.
 

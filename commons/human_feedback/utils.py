@@ -1,15 +1,21 @@
 """Utility functions for the Human Feedback Loop module."""
 
 import json
-import random
 from datetime import datetime, timedelta, timezone
-from typing import List
+from typing import Any
 
 from bittensor.utils.btlogging import logging as logger
 
-from commons.utils import datetime_as_utc
+from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
 from database.prisma import Json
-from dojo.protocol import TaskResult
+from dojo import TASK_DEADLINE
+from dojo.protocol import (
+    CompletionResponse,
+    ScoreCriteria,
+    TaskResult,
+    TaskSynapseObject,
+    TaskTypeEnum,
+)
 
 
 def extract_text_feedback_from_results(task_results: list[TaskResult] | Json) -> str:
@@ -97,20 +103,79 @@ def get_time_window_for_tasks(hours_ago_start: int = 48, hours_ago_end: int = 0)
     return expire_from, expire_to
 
 
-def sample_miners(miners: List, subset_size: int, min_count: int = 3) -> List | None:
+def map_human_feedback_to_task_synapse(
+    response_data: dict[str, Any],
+) -> TaskSynapseObject | None:
     """
-    Safely sample a subset of miners.
+    Map the HumanFeedbackResponse from Redis to a TaskSynapseObject.
+
+    This function handles the Redis response format which includes additional fields
+    like success and hf_id that aren't part of our data model.
 
     Args:
-        miners: List of miners to sample from
-        subset_size: Number of miners to return
-        min_count: Minimum required miners
+        response_data: The response data from Redis
 
     Returns:
-        List of sampled miners or None if not enough miners
+        A TaskSynapseObject ready to be sent to miners, or None if conversion fails
     """
-    if not miners or len(miners) < min_count:
-        return None
+    try:
+        # First, check if the response was successful
+        if isinstance(response_data, dict) and not response_data.get("success", True):
+            error_message = response_data.get("message", "Unknown error")
+            logger.error(f"Error in human feedback response: {error_message}")
+            return None
 
-    actual_size = min(subset_size, len(miners))
-    return random.sample(miners, actual_size)
+        # Create a new synthetic task for scoring
+        task_synapse = TaskSynapseObject(
+            task_id=get_new_uuid(),
+            prompt=response_data.get("base_prompt", ""),
+            task_type=TaskTypeEnum.SCORE_FEEDBACK,
+            expire_at=set_expire_time(TASK_DEADLINE),
+        )
+
+        # Map the completion responses - create proper CompletionResponse objects
+        completion_responses: list[CompletionResponse] = []
+
+        # First add the original (base) code as a completion for reference
+        completion_responses.append(
+            CompletionResponse(
+                model="base_code",
+                completion=response_data.get("base_code", ""),
+                completion_id=get_new_uuid(),
+                criteria_types=[
+                    ScoreCriteria(
+                        min=1.0,
+                        max=100.0,
+                    )
+                ],
+            )
+        )
+
+        # Add each generated version from feedback
+        for feedback_task in response_data.get("human_feedback_tasks", []):
+            if (
+                "generated_code" in feedback_task
+                and "code" in feedback_task["generated_code"]
+            ):
+                completion_responses.append(
+                    CompletionResponse(
+                        model=feedback_task.get("model", "unknown"),
+                        completion=feedback_task["generated_code"]["code"],
+                        completion_id=get_new_uuid(),
+                        criteria_types=[
+                            ScoreCriteria(
+                                min=1.0,
+                                max=100.0,
+                            )
+                        ],
+                    )
+                )
+
+        # Set the completion responses on the task
+        task_synapse.completion_responses = completion_responses
+
+        return task_synapse
+
+    except Exception as e:
+        logger.error(f"Error mapping human feedback to task synapse: {e}")
+        return None
