@@ -771,20 +771,19 @@ async def create_tf_miner_responses(
     # Make sure we don't exceed the number of available hotkeys
     num_responses = min(num_responses, len(miner_hotkeys))
 
-    # Shuffle the hotkeys to randomize which ones get valid feedback
-    shuffled_hotkeys = random.sample(miner_hotkeys, len(miner_hotkeys))
+    reversed_hotkeys = miner_hotkeys[::-1]
 
     for i in range(num_responses):
         # Create unique identifiers
         dojo_task_id = f"real-tf-task-{i}-{task_id}"
 
-        # Use a real hotkey (cycle through the shuffled list)
-        hotkey = shuffled_hotkeys[i % len(shuffled_hotkeys)]
+        hotkey = reversed_hotkeys[i % len(reversed_hotkeys)]
         coldkey = (
             f"coldkey-for-{hotkey[:8]}"  # Just use a prefix of the hotkey for coldkey
         )
 
-        # Determine if this response should have valid text feedback
+        # Special case: first hotkey always has no feedback
+        # Other hotkeys follow the valid_feedback_count rule
         has_feedback = i < valid_feedback_count
 
         # Create result_data with text feedback for the completion

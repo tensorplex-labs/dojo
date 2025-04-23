@@ -8,9 +8,9 @@ from bittensor.utils.btlogging import logging as logger
 from tenacity import RetryError
 
 from commons.dataset.synthetic import SyntheticAPI
-from commons.dataset.utils import map_human_feedback_to_task_synapse
 from commons.hfl_heplers import HFLManager
-from commons.human_feedback.exceptions import SyntheticAPIError
+from commons.human_feedback.exceptions import FeedbackImprovementError
+from commons.human_feedback.utils import map_human_feedback_to_task_synapse
 from commons.orm import ORM
 from commons.utils import datetime_as_utc
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
@@ -36,8 +36,10 @@ async def get_improved_task_from_synthetic_api(
         Raw response data dictionary or None if not found/error
     """
     try:
+        # TODO: Handle case that synthetic API failure
         # Call the SyntheticAPI to get the raw response
         raw_response = await SyntheticAPI.get_improved_task_raw(syn_req_id)
+        logger.info(f"Raw response: {raw_response}")
 
         if not raw_response:
             logger.error(f"No improved task found for {syn_req_id}")
@@ -47,17 +49,19 @@ async def get_improved_task_from_synthetic_api(
         if not raw_response.get("success", True):
             error_message = raw_response.get("message", "Unknown error")
             logger.error(f"Error in synthetic API response: {error_message}")
-            raise SyntheticAPIError(f"API error: {error_message}")
+            raise FeedbackImprovementError(f"API error: {error_message}")
 
         return raw_response
-
+    except FeedbackImprovementError as e:
+        logger.error(f"Error getting improved task for {syn_req_id}: {e}")
+        return None
     except (RetryError, ValueError) as e:
         logger.error(f"Error getting improved task for {syn_req_id}: {e}")
-        raise SyntheticAPIError(f"Failed to get improved task: {str(e)}")
+        return None
     except Exception as e:
         logger.error(f"Unexpected error during synthetic data retrieval: {e}")
         logger.debug(f"Traceback: {traceback.format_exc()}")
-        raise SyntheticAPIError(f"Unexpected error: {str(e)}")
+        return None
 
 
 async def create_score_feedback_task(
@@ -87,6 +91,10 @@ async def create_score_feedback_task(
         )
 
         if not improved_task_data:
+            logger.info(
+                f"No improved task data available yet for {hfl_state.current_synthetic_req_id}. "
+                f"Will try again in next cycle."
+            )
             return None
 
         # Map the raw response to a TaskSynapseObject

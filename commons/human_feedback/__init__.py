@@ -8,7 +8,6 @@ from commons.human_feedback.exceptions import (
     SyntheticAPIError,
 )
 from commons.human_feedback.feedback_loop import FeedbackLoop
-from commons.human_feedback.types import FeedbackTaskResult, HFLMetrics
 
 __all__ = [
     "FeedbackLoop",
@@ -17,6 +16,4 @@ __all__ = [
     "SyntheticAPIError",
     "HFLError",
     "InsufficientResponsesError",
-    "FeedbackTaskResult",
-    "HFLMetrics",
 ]
