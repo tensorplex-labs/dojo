@@ -14,9 +14,9 @@ from tenacity import (
 
 from commons.api_settings import RedisSettings
 from commons.cache import RedisCache
-from commons.dataset.types import HumanFeedbackResponse
+from commons.dataset.types import HumanFeedbackResponse, TextFeedbackRequest
 from commons.exceptions import FatalSyntheticGenerationError, SyntheticGenerationError
-from dojo.protocol import SyntheticQA, TextFeedbackRequest
+from dojo.protocol import SyntheticQA
 from dojo.utils.config import source_dotenv
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
