@@ -17,7 +17,8 @@ import torch
 from bittensor.core.metagraph import AsyncMetagraph
 from bittensor.utils.btlogging import logging as logger
 from Crypto.Hash import keccak
-from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
+from tenacity import (RetryError, Retrying, stop_after_attempt,
+                      wait_exponential_jitter)
 
 from commons.objects import ObjectManager
 
@@ -70,12 +71,13 @@ def get_effective_stake(hotkey: str, subtensor: bt.subtensor) -> float:
     return effective_stake
 
 
-async def aget_effective_stake(
-    hotkey: str, root_metagraph: AsyncMetagraph, subnet_metagraph: AsyncMetagraph
-) -> float:
+async def aget_effective_stake(hotkey: str, subnet_metagraph: AsyncMetagraph) -> float:
+    # With runtime api, you do not need to query root metagraph, you can just get it from the subnet itself.
+    idx = subnet_metagraph.get("hotkeys", []).index(hotkey)
+
     root_stake = 0
     try:
-        root_stake = root_metagraph.S[root_metagraph.hotkeys.index(hotkey)].item()
+        root_stake = subnet_metagraph.get("taoStake", [])[idx]
     except (ValueError, IndexError):
         logger.trace(
             f"Hotkey {hotkey} not found in root metagraph, defaulting to 0 root_stake"
@@ -83,8 +85,7 @@ async def aget_effective_stake(
 
     alpha_stake = 0
     try:
-        idx = subnet_metagraph.hotkeys.index(hotkey)
-        alpha_stake = subnet_metagraph.alpha_stake[idx]
+        alpha_stake = subnet_metagraph.get("alphaStake", [])[idx]
     except (ValueError, IndexError):
         logger.trace(
             f"Hotkey {hotkey} not found in subnet metagraph for netuid: {subnet_metagraph.netuid}, defaulting to 0 alpha_stake"
