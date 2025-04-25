@@ -13,13 +13,19 @@ from bittensor.utils.networking import ip_to_int, ip_version
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject, get_epoch_time
+
 #                            serve_axon)
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import get_async_subtensor, parse_block_headers
 from dojo.kami.kami import Kami
 from dojo.kami.types import ServeAxonPayload
-from dojo.protocol import (Heartbeat, ScoringResult, TaskResult,
-                           TaskResultRequest, TaskSynapseObject)
+from dojo.protocol import (
+    Heartbeat,
+    ScoringResult,
+    TaskResult,
+    TaskResultRequest,
+    TaskSynapseObject,
+)
 from dojo.utils.config import get_config
 
 
@@ -480,6 +486,13 @@ class Miner(aobject):
         current_axon_port = self.subnet_metagraph.get("axons", [])[uid].get(
             "port", None
         )
+
+        if not current_axon_ip:
+            logger.info(
+                f"Axon not served for hotkey {hotkey} on netuid {self.config.netuid}"
+            )
+            return False
+
         if (
             ip_to_int(current_axon_ip) == axon_payload.ip
             and axon_payload.port == current_axon_port
