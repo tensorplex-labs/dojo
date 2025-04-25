@@ -382,7 +382,9 @@ class Miner(aobject):
             f"Incoming {request_tag} request from IP: {ip_addr} with hotkey: {caller_hotkey}"
         )
 
-        if not caller_hotkey or caller_hotkey not in self.subnet_metagraph.hotkeys:
+        if not caller_hotkey or caller_hotkey not in self.subnet_metagraph.get(
+            "hotkeys", []
+        ):
             logger.warning(f"Blacklisting unrecognized hotkey {caller_hotkey}")
             return True, "Unrecognized hotkey"
 
@@ -400,7 +402,7 @@ class Miner(aobject):
             )
 
         effective_stake = await aget_effective_stake(
-            caller_hotkey, self.root_metagraph, self.subnet_metagraph
+            caller_hotkey, self.subnet_metagraph
         )
         if effective_stake < float(VALIDATOR_MIN_STAKE):
             message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"

@@ -23,25 +23,46 @@ from torch.nn import functional as F
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
-from commons.exceptions import (EmptyScores, FatalSyntheticGenerationError,
-                                InvalidMinerResponse, NoNewExpiredTasksYet,
-                                SetWeightsFailed, SyntheticGenerationError)
+from commons.exceptions import (
+    EmptyScores,
+    FatalSyntheticGenerationError,
+    InvalidMinerResponse,
+    NoNewExpiredTasksYet,
+    SetWeightsFailed,
+    SyntheticGenerationError,
+)
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.score_storage import ScoreStorage
 from commons.scoring import Scoring
-from commons.utils import (_terminal_plot, aobject, datetime_as_utc,
-                           get_epoch_time, get_new_uuid, initialise,
-                           set_expire_time)
+from commons.utils import (
+    _terminal_plot,
+    aobject,
+    datetime_as_utc,
+    get_epoch_time,
+    get_new_uuid,
+    initialise,
+    set_expire_time,
+)
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.chain import parse_block_headers
 from dojo.kami.kami import Kami
 from dojo.kami.types import SubnetMetagraph
-from dojo.protocol import (CompletionResponse, CriteriaType, CriteriaTypeEnum,
-                           DendriteQueryResponse, Heartbeat, ScoreCriteria,
-                           ScoringResult, SyntheticQA, TaskResult,
-                           TaskResultRequest, TaskSynapseObject, TaskTypeEnum)
+from dojo.protocol import (
+    CompletionResponse,
+    CriteriaType,
+    CriteriaTypeEnum,
+    DendriteQueryResponse,
+    Heartbeat,
+    ScoreCriteria,
+    ScoringResult,
+    SyntheticQA,
+    TaskResult,
+    TaskResultRequest,
+    TaskSynapseObject,
+    TaskTypeEnum,
+)
 from dojo.utils.config import get_config
 from dojo.utils.uids import extract_miner_uids, is_miner
 from entrypoints.analytics_upload import run_analytics_upload
@@ -592,7 +613,6 @@ class Validator(aobject):
                     responses: List[Heartbeat] = await self.dendrite.forward(
                         axons=batch, synapse=Heartbeat(), deserialize=False, timeout=12
                     )
-                    print(responses)
                     # Process batch responses
                     active_hotkeys.update(
                         r.axon.hotkey for r in responses if r and r.ack and r.axon
