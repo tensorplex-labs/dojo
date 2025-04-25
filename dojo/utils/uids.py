@@ -9,8 +9,10 @@ from bittensor.utils.btlogging import logging as logger
 
 from commons.exceptions import FatalSubtensorConnectionError
 from commons.objects import ObjectManager
-from commons.utils import aget_effective_stake, get_effective_stake, keccak256_hash
+from commons.utils import (aget_effective_stake, get_effective_stake,
+                           keccak256_hash)
 from dojo.chain import get_async_subtensor
+from dojo.kami.kami import Kami
 
 
 def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
@@ -30,19 +32,11 @@ def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
     return effective_stake < VALIDATOR_MIN_STAKE
 
 
-async def extract_miner_uids() -> List[int]:
+async def extract_miner_uids(kami: Kami) -> List[int]:
     config = ObjectManager.get_config()
-    subtensor = await get_async_subtensor()
-    if not subtensor:
-        message = (
-            "Failed to connect to async subtensor during attempt to extract miner uids"
-        )
-        logger.error(message)
-        raise FatalSubtensorConnectionError(message)
 
-    block = await subtensor.get_current_block()
-    subnet_metagraph = await subtensor.metagraph(config.netuid, block=block)
-    root_metagraph = await subtensor.metagraph(0, block=block)
+    # block = await kami.get_current_block()
+    subnet_metagraph = await kami.get_metagraph(config.netuid)
 
     from dojo import VALIDATOR_MIN_STAKE
 
@@ -50,12 +44,14 @@ async def extract_miner_uids() -> List[int]:
 
     async def _semaphore_get_stake(hotkey):
         async with semaphore:
-            return await aget_effective_stake(hotkey, root_metagraph, subnet_metagraph)
+            return await aget_effective_stake(hotkey, subnet_metagraph)
 
     # Create tasks for all hotkeys
-    num_neurons = int(subnet_metagraph.n.item())
+    num_neurons = int(len(subnet_metagraph.get("axons", [])))
     tasks = [
-        asyncio.create_task(_semaphore_get_stake(subnet_metagraph.hotkeys[i]))
+        asyncio.create_task(
+            _semaphore_get_stake(subnet_metagraph.get("hotkeys", [])[i])
+        )
         for i in range(num_neurons)
     ]
 
@@ -66,8 +62,9 @@ async def extract_miner_uids() -> List[int]:
     return [
         uid
         for uid in range(num_neurons)
-        if subnet_metagraph.axons[uid].is_serving
-        and eff_stakes[uid] < VALIDATOR_MIN_STAKE
+        if subnet_metagraph.get("axons", [])[uid].get("ip", "")
+        # and eff_stakes[uid] < VALIDATOR_MIN_STAKE
+        and eff_stakes[uid] < 100
     ]
 
 

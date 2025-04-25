@@ -18,7 +18,7 @@ from dojo.utils.config import source_dotenv
 
 source_dotenv()
 
-validator = ObjectManager.get_validator()
+validator = None
 
 
 @asynccontextmanager
@@ -70,6 +70,7 @@ app.add_middleware(LimitContentLengthMiddleware)
 
 
 async def main():
+    validator = await ObjectManager.get_validator()
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",

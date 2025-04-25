@@ -3,7 +3,6 @@ import os
 from typing import Any, Dict, Optional
 
 import aiohttp
-import netaddr
 
 from dojo.kami.types import ServeAxonPayload, SubnetMetagraph
 
@@ -15,11 +14,15 @@ class Kami:
 
     def __init__(self, url: str = "http://kami:3000"):
         self.url = os.getenv("KAMI_API_URL", url)
-        self.session = aiohttp.ClientSession()
+        self.session = None
         self.headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+
+    async def _ensure_session(self):
+        if self.session is None:
+            self.session = aiohttp.ClientSession()
 
     async def close(self):
         """
@@ -41,6 +44,9 @@ class Kami:
             Dict[str, Any]: The JSON response from the API.
         """
         try:
+            await self._ensure_session()
+            if self.session is None:
+                raise ValueError("Session is not initialized.")
             url = f"{self.url}/{endpoint}"
             async with self.session.get(
                 url, headers=self.headers, params=params
@@ -63,6 +69,9 @@ class Kami:
             Dict[str, Any]: The JSON response from the API.
         """
         try:
+            await self._ensure_session()
+            if self.session is None:
+                raise ValueError("Session is not initialized.")
             url = f"{self.url}/{endpoint}"
             async with self.session.post(
                 url, headers=self.headers, json=data

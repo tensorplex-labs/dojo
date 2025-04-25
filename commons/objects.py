@@ -22,7 +22,7 @@ class ObjectManager:
         return cls._miner
 
     @classmethod
-    def get_validator(cls):
+    async def get_validator(cls):
         if get_config().simulation:
             from simulator.validator import ValidatorSim
 
@@ -32,7 +32,7 @@ class ObjectManager:
             from neurons.validator import Validator
 
             if cls._validator is None:
-                cls._validator = Validator()
+                cls._validator = await Validator()
         return cls._validator
 
     @classmethod

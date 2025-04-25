@@ -21,6 +21,8 @@ from tenacity import (RetryError, Retrying, stop_after_attempt,
                       wait_exponential_jitter)
 
 from commons.objects import ObjectManager
+from dojo.kami.kami import Kami
+from dojo.kami.types import SubnetMetagraph
 
 ROOT_WEIGHT = 0.18
 ROOT_NETUID = 0
@@ -221,9 +223,11 @@ async def serve_axon(
     return False
 
 
-def initialise(
+async def initialise(
     config: bt.config,
-) -> Tuple[bt.wallet, bt.subtensor, bt.metagraph, bt.axon]:
+    kami: Kami,
+    # ) -> Tuple[bt.wallet, bt.subtensor, bt.metagraph, bt.axon]:
+) -> Tuple[bt.wallet, SubnetMetagraph, bt.axon]:
     # Build Bittensor objects
     # These are core Bittensor classes to interact with the network.
     logger.info("Setting up bittensor objects....")
@@ -231,15 +235,12 @@ def initialise(
     wallet = bt.wallet(config=config)
     logger.info(f"Wallet: {wallet}")
     # The subtensor is our connection to the Bittensor blockchain.
-    subtensor = bt.subtensor(config=config)
-    logger.info(f"Subtensor: {subtensor}")
-    # The metagraph holds the state of the network, letting us know about other validators and miners.
-    metagraph = subtensor.metagraph(config.netuid)
-    logger.info(f"Metagraph: {metagraph}")
+    metagraph = await kami.get_metagraph(config.netuid)
+
     # The axon handles request processing, allowing validators to send this miner requests.
     axon = bt.axon(wallet=wallet, port=config.axon.port)
     logger.info(f"Axon: {axon}")
-    return wallet, subtensor, metagraph, axon
+    return wallet, metagraph, axon
 
 
 def check_registered(subtensor, wallet, config):
