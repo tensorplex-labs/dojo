@@ -18,7 +18,6 @@ import torch
 from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.networking import ip_to_int
 from bittensor.utils.weight_utils import process_weights_for_netuid
-from substrateinterface import Keypair
 from torch.nn import functional as F
 
 import dojo
