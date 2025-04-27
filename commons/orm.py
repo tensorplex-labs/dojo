@@ -48,6 +48,7 @@ from dojo.protocol import (
 
 
 class ORM:
+    # TODO: deprecate this function
     @staticmethod
     async def get_expired_tasks(
         batch_size: int = 10,
@@ -56,7 +57,7 @@ class ORM:
         filter_empty_result: bool = False,
         is_processed: bool = False,
         has_previous_task: bool = False,
-        task_type: TaskTypeEnum | None = None,
+        task_types: List[TaskTypeEnum] = [TaskTypeEnum.CODE_GENERATION],
     ) -> AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]:
         """Returns batches of expired ValidatorTask records and a boolean indicating if there are more batches.
 
@@ -126,8 +127,8 @@ class ORM:
         if has_previous_task:
             vali_where_query_dict["previous_task_id"] = {"not": None}
 
-        if task_type:
-            vali_where_query_dict["task_type"] = task_type
+        if task_types:
+            vali_where_query_dict["task_type"] = {"in": task_types}
 
         vali_where_query = ValidatorTaskWhereInput(**vali_where_query_dict)
 
@@ -471,7 +472,6 @@ class ORM:
         validator_task: TaskSynapseObject,
         miner_responses: List[TaskSynapseObject],
         ground_truth: dict[str, int],
-        prev_task_id: str | None = None,
     ) -> ValidatorTask | None:
         """Saves a task, which consists of both the validator's request and the miners' responses.
 
@@ -494,9 +494,6 @@ class ORM:
                 if not validator_task_data:
                     logger.error("Failed to map validator task")
                     return None
-
-                if prev_task_id:
-                    validator_task_data["previous_task_id"] = prev_task_id
 
                 created_task = await tx.validatortask.create(data=validator_task_data)
 
@@ -851,6 +848,7 @@ class ORM:
             logger.error(f"Error getting tasks by HFL status {status}: {e}")
             yield [], False
 
+    # TODO: removed this function
     @staticmethod
     async def get_SF_tasks_by_hfl_status(
         status: HFLStatusEnum,
@@ -1046,6 +1044,10 @@ class ORM:
             validator_task_data["previous_task_id"] = previous_task_id
 
             created_task = await tx.validatortask.create(data=validator_task_data)
+            await tx.validatortask.update(
+                where={"id": previous_task_id},
+                data={"next_task": {"connect": {"id": created_task.id}}},
+            )
 
             # Create completions separately, ValidatorTaskCreateInput does not support CompletionCreateInput
             completions = map_task_synapse_object_to_completions(
@@ -1108,6 +1110,10 @@ class ORM:
             validator_task_data["previous_task_id"] = previous_task_id
 
             created_task = await tx.validatortask.create(data=validator_task_data)
+            await tx.validatortask.update(
+                where={"id": previous_task_id},
+                data={"next_task": {"connect": {"id": created_task.id}}},
+            )
 
             completions = map_task_synapse_object_to_completions(
                 validator_task, created_task.id
@@ -1286,51 +1292,131 @@ class ORM:
             logger.error(f"Failed to get HFL State with current task id: {task_id}")
         return None
 
+    # @staticmethod
+    # async def get_original_or_parent_sf_task(sf_task_id: str):
+    #     """
+    #     Get the original or parent task for scoring purposes.
+
+    #     ┌─────────────┐       ┌──────┐       ┌──────┐      ┌──────┐     ┌──────┐
+    #     │Original Task│──────▶│ TF_1 │──────▶│ SF_1 │─────▶│ TF_2 │────▶│ SF_2 │
+    #     └─────────────┘       └──────┘       └──────┘      └──────┘     └──────┘
+    #     """
+    #     hfl_state = await HFLState.prisma().find_first(
+    #         where={"status": HFLStatusEnum.SF_COMPLETED, "current_task_id": sf_task_id},
+    #         include={"ValidatorTask": True},
+    #     )
+    #     if not hfl_state:
+    #         return None
+    #     if hfl_state.current_iteration == 1:
+    #         original_task = await ValidatorTask.prisma().find_first(
+    #             where={"id": hfl_state.original_task_id}
+    #         )
+    #         if not original_task:
+    #             logger.error(f"Original task not found for SF task {sf_task_id}")
+    #         return original_task
+
+    #     # iterate through states to get original task
+    #     events = hfl_state.events[::-1]
+    #     for idx, event in enumerate(events):
+    #         iteration_num = event["iteration_num"]
+    #         if iteration_num != hfl_state.current_iteration:
+    #             continue
+    #         if event["event_type"] == HFLStatusEnum.SF_COMPLETED:
+    #             # find the previous task by index
+    #             # TODO: possible indecerror? add error handling
+    #             prev_event = events[idx - 2]
+    #             prev_event_dict = json.loads(prev_event)
+    #             assert prev_event_dict.get("status") == HFLStatusEnum.TF_COMPLETED
+
+    #             prev_task = await ValidatorTask.prisma().find_first(
+    #                 where={"id": prev_event_dict.get("task_id")}
+    #             )
+    #             if not prev_task:
+    #                 logger.error(f"Original task not found for SF task {sf_task_id}")
+
+    #             return prev_task
+
+    #     return None
+
     @staticmethod
-    async def get_original_or_parent_sf_task(sf_task_id: str):
+    async def get_original_or_parent_sf_task(sf_task_id: str) -> ValidatorTask | None:
         """
         Get the original or parent task for scoring purposes.
-
         ┌─────────────┐       ┌──────┐       ┌──────┐      ┌──────┐     ┌──────┐
         │Original Task│──────▶│ TF_1 │──────▶│ SF_1 │─────▶│ TF_2 │────▶│ SF_2 │
         └─────────────┘       └──────┘       └──────┘      └──────┘     └──────┘
+        For iteration 1, returns the original CODE_GENERATION task.
+        For iteration > 1, returns the previous SF task by finding the task
+        whose next_task_id points to the current task's previous_task_id.
+
+        Args:
+            sf_task_id: ID of the current SF task
+
+        Returns:
+            Original task or previous SF task, or None if not found
         """
-        hfl_state = await HFLState.prisma().find_first(
-            where={"status": HFLStatusEnum.SF_COMPLETED, "current_task_id": sf_task_id},
-            include={"ValidatorTask": True},
-        )
-        if not hfl_state:
-            return None
-        if hfl_state.current_iteration == 1:
-            original_task = await ValidatorTask.prisma().find_first(
-                where={"id": hfl_state.original_task_id}
+        try:
+            # First, get the current SF task with HFL state
+            current_sf_task = await ValidatorTask.prisma().find_unique(
+                where={"id": sf_task_id}, include={"HFLState": True, "prev_task": True}
             )
-            if not original_task:
-                logger.error(f"Original task not found for SF task {sf_task_id}")
-            return original_task
 
-        # iterate through states to get original task
-        events = hfl_state.events[::-1]
-        for idx, event in enumerate(events):
-            iteration_num = event["iteration_num"]
-            if iteration_num != hfl_state.current_iteration:
-                continue
-            if event["event_type"] == HFLStatusEnum.SF_COMPLETED:
-                # find the previous task by index
-                # TODO: possible indecerror? add error handling
-                prev_event = events[idx - 2]
-                prev_event_dict = json.loads(prev_event)
-                assert prev_event_dict.get("status") == HFLStatusEnum.TF_COMPLETED
+            if not current_sf_task:
+                logger.error(f"SF task {sf_task_id} not found")
+                return None
 
-                prev_task = await ValidatorTask.prisma().find_first(
-                    where={"id": prev_event_dict.get("task_id")}
+            if not current_sf_task.HFLState:
+                logger.error(f"SF task {sf_task_id} has no HFL state")
+                return None
+
+            if current_sf_task.HFLState.status != HFLStatusEnum.SF_COMPLETED:
+                logger.error(
+                    f"SF task {sf_task_id} is not completed yet {current_sf_task.HFLState.status}"
                 )
-                if not prev_task:
-                    logger.error(f"Original task not found for SF task {sf_task_id}")
+                return None
 
-                return prev_task
+            # Get the current iteration from HFL state
+            current_iteration = current_sf_task.HFLState.current_iteration
 
-        return None
+            if current_iteration == 1:
+                # For first iteration, get the original task directly from HFL state
+                original_task_id = current_sf_task.HFLState.original_task_id
+                original_task = await ValidatorTask.prisma().find_unique(
+                    where={"id": original_task_id}
+                )
+
+                logger.info(
+                    f"Retrieved original task {original_task_id} for first iteration SF task {sf_task_id}"
+                )
+                return original_task
+            else:
+                # We have a TF task that is the previous task of our current SF task
+                tf_task_id = current_sf_task.previous_task_id
+
+                if not tf_task_id:
+                    logger.error(f"SF task {sf_task_id} has no previous task ID")
+                    return None
+
+                # Find the task whose next_task_id points to our TF task
+                # This is our previous SF task
+                previous_sf_task = await ValidatorTask.prisma().find_first(
+                    where={"next_task_id": tf_task_id}
+                )
+
+                if previous_sf_task:
+                    logger.info(
+                        f"Retrieved previous SF task {previous_sf_task.id} using next_task_id relation"
+                    )
+                    return previous_sf_task
+                else:
+                    logger.error(
+                        f"Could not find previous SF task for TF task {tf_task_id}"
+                    )
+                    return None
+
+        except Exception as e:
+            logger.error(f"Error getting original or parent SF task: {e}")
+            return None
 
     @staticmethod
     async def get_task_by_id(task_id: str) -> ValidatorTask | None:
@@ -1342,6 +1428,221 @@ class ORM:
         except Exception as e:
             logger.error(f"Failed to get validator task with ID {task_id}: {e}")
         return None
+
+    @staticmethod
+    async def update_scores_from_task_result(
+        sf_task_id: str,
+        miner_hotkey: str,
+        task_results: List[TaskResult],
+    ) -> bool:
+        """Updates scores for a miner based on task results.
+
+        Args:
+            sf_task_id: The validator task ID
+            miner_hotkey: The hotkey of the miner
+            task_results: List of task results to extract scores from
+
+        Returns:
+            bool: True if update was successful, False otherwise
+        """
+        try:
+            # Get miner response with scores
+            db_miner_response = await prisma.minerresponse.find_first(
+                where={
+                    "validator_task_id": sf_task_id,
+                    "hotkey": miner_hotkey,
+                },
+                include=MinerResponseInclude(
+                    {
+                        "scores": {
+                            "include": {
+                                "criterion_relation": {
+                                    "include": {"completion_relation": True}
+                                }
+                            }
+                        }
+                    }
+                ),
+            )
+
+            if not db_miner_response:
+                logger.error(f"No miner response found for {miner_hotkey}")
+                return False
+
+            if not db_miner_response.scores:
+                logger.warning(f"No scores found for miner {miner_hotkey}")
+                return False
+
+            # Process in a single transaction
+            async with prisma.tx() as tx:
+                update_count = 0
+                for score_record in db_miner_response.scores:
+                    if (
+                        not score_record.criterion_relation
+                        or not score_record.criterion_relation.completion_relation
+                    ):
+                        continue
+
+                    completion = score_record.criterion_relation.completion_relation
+                    model_name = completion.model  # Use model name for matching
+
+                    # Find matching score in task results - using model name
+                    raw_score = None
+                    for task_result in task_results:
+                        for result in task_result.result_data:
+                            # Match by model name
+                            if result.model == model_name:
+                                # Get the score from the criteria list where type is "score"
+                                for criterion in result.criteria:
+                                    if (
+                                        criterion.get("type") == "score"
+                                        and "value" in criterion
+                                    ):
+                                        raw_score = criterion.get("value")
+                                        break
+                                if raw_score is not None:
+                                    break
+
+                    if raw_score is None:
+                        continue
+
+                    # Update the score record with the raw score
+                    existing_scores = json.loads(score_record.scores)
+                    existing_scores["raw_score"] = raw_score
+
+                    await tx.minerscore.update(
+                        where={
+                            "criterion_id_miner_response_id": {
+                                "criterion_id": score_record.criterion_id,
+                                "miner_response_id": db_miner_response.id,
+                            }
+                        },
+                        data={"scores": Json(json.dumps(existing_scores))},
+                    )
+                    update_count += 1
+
+            if update_count > 0:
+                logger.success(
+                    f"Updated {update_count} scores for miner {miner_hotkey}"
+                )
+                return True
+            else:
+                logger.warning(f"No scores were updated for miner {miner_hotkey}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error updating scores from task results: {e}")
+            return False
+
+    @staticmethod
+    async def update_hfl_scores(
+        sf_task_id: str,
+        hotkey_to_scores: dict[str, float],
+        batch_size: int = 10,
+        max_retries: int = 3,
+    ) -> tuple[bool, list[str]]:
+        """Update HFL scores for miners in the MinerScore table.
+
+        Args:
+            sf_task_id: The validator task ID for the SF task
+            hotkey_to_scores: Dictionary mapping miner hotkeys to their calculated HFL scores
+            batch_size: Number of scores to process in each batch
+            max_retries: Maximum number of retry attempts for failed updates
+
+        Returns:
+            Tuple containing:
+            - Boolean indicating if all updates were successful
+            - List of hotkeys that failed to update
+        """
+        failed_hotkeys = []
+
+        try:
+            # Get all miner responses for this task
+            db_miner_responses = await prisma.minerresponse.find_many(
+                where={
+                    "validator_task_id": sf_task_id,
+                    "hotkey": {"in": list(hotkey_to_scores.keys())},
+                },
+                include=MinerResponseInclude(
+                    {
+                        "scores": {
+                            "include": {
+                                "criterion_relation": {
+                                    "include": {"completion_relation": True}
+                                }
+                            }
+                        }
+                    }
+                ),
+            )
+
+            # Process miner responses in batches
+            for i in range(0, len(db_miner_responses), batch_size):
+                batch = db_miner_responses[i : i + batch_size]
+
+                for attempt in range(max_retries):
+                    try:
+                        async with prisma.tx() as tx:
+                            for db_miner_response in batch:
+                                hotkey = db_miner_response.hotkey
+                                if hotkey not in hotkey_to_scores:
+                                    continue
+
+                                hfl_score = hotkey_to_scores[hotkey]
+
+                                # Update each MinerScore record for this miner response
+                                for score_record in db_miner_response.scores or []:
+                                    # Only update one record per miner with the HFL score
+                                    # Consider using a specific criterion or just the first one
+                                    if (
+                                        score_record.criterion_relation
+                                        and score_record.criterion_relation.completion_relation
+                                    ):
+                                        # Parse the existing scores
+                                        existing_scores = json.loads(
+                                            score_record.scores
+                                        )
+
+                                        # Add the HFL scores (tf_score field)
+                                        existing_scores["tf_score"] = hfl_score
+
+                                        await tx.minerscore.update(
+                                            where={
+                                                "criterion_id_miner_response_id": {
+                                                    "criterion_id": score_record.criterion_id,
+                                                    "miner_response_id": db_miner_response.id,
+                                                }
+                                            },
+                                            data={
+                                                "scores": Json(
+                                                    json.dumps(existing_scores)
+                                                )
+                                            },
+                                        )
+
+                                        # Only update one score record per miner
+                                        break
+
+                        # Break out of retry loop if successful
+                        break
+
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            logger.error(
+                                f"Failed to update HFL scores after {max_retries} attempts: {e}"
+                            )
+                            failed_hotkeys.extend([mr.hotkey for mr in batch])
+                        else:
+                            await asyncio.sleep(2**attempt)
+
+            return (
+                len(failed_hotkeys) == 0,
+                failed_hotkeys,
+            )
+
+        except Exception as e:
+            logger.error(f"Error updating HFL scores: {e}")
+            return False, list(hotkey_to_scores.keys())
 
 
 # ---------------------------------------------------------------------------- #

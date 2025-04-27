@@ -1,7 +1,6 @@
 """Main Human Feedback Loop coordinator module."""
 
 import asyncio
-import json
 import random
 import traceback
 from typing import Dict, List, Tuple
@@ -24,11 +23,14 @@ from commons.human_feedback.text_feedback import (
     get_task_synapse_for_retry,
     send_text_feedback_to_synthetic_api,
 )
-from commons.human_feedback.utils import get_time_window_for_tasks
+from commons.human_feedback.utils import (
+    evaluate_miner_consensus,
+    get_time_window_for_tasks,
+)
 from commons.orm import ORM
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
-from database.prisma.models import MinerResponse, MinerScore
-from database.prisma.types import MinerScoreWhereInput, ValidatorTaskInclude
+from database.prisma.models import MinerResponse
+from database.prisma.types import ValidatorTaskInclude
 from dojo.protocol import DendriteQueryResponse, TaskSynapseObject
 from neurons.validator import Validator
 
@@ -192,90 +194,15 @@ class FeedbackLoop:
                     f"HFL state found for task {validator_task.task_id}, means we already processed this task, skipping"
                 )
                 return None
-            # Get all miner scores for this validator task
-            miner_scores = await MinerScore.prisma().find_many(
-                where=MinerScoreWhereInput(
-                    {
-                        "miner_response_relation": {
-                            "is": {"validator_task_id": validator_task.task_id}
-                        }
-                    }
-                ),
-                include={
-                    "criterion_relation": {"include": {"completion_relation": True}},
-                    "miner_response_relation": True,
-                },
+
+            _, eligible_completion, _ = await evaluate_miner_consensus(
+                task_id=validator_task.task_id,
+                min_threshold=50,
+                max_threshold=90,
             )
 
-            if not miner_scores:
-                logger.debug(f"No miner scores found for task {validator_task.task_id}")
-                return None
-
-            # Group scores by miner response ID and completion ID
-            # map of miner_response_id -> completion_id
-            miner_best_completions = {}
-            # map of completion_id -> list of miners and their raw scores
-            completion_scores = {}
-
-            for score in miner_scores:
-                if (
-                    not score.scores
-                    or not score.criterion_relation
-                    or not score.criterion_relation.completion_relation
-                ):
-                    continue
-
-                # Parse the scores JSON
-                scores_dict = json.loads(score.scores)
-                miner_raw_score = scores_dict.get("raw_score")
-                if miner_raw_score is None:
-                    continue
-
-                completion_id = (
-                    score.criterion_relation.completion_relation.completion_id
-                )
-                miner_response_id = score.miner_response_id
-
-                # Store score for this completion
-                if completion_id not in completion_scores:
-                    completion_scores[completion_id] = []
-                completion_scores[completion_id].append(
-                    (miner_response_id, miner_raw_score)
-                )
-
-            logger.info(f"Completion scores: {completion_scores}")
-            # Find highest scored completion for each miner
-            for completion_id, scores in completion_scores.items():
-                for miner_response_id, score in scores:
-                    current_best = miner_best_completions.get(miner_response_id)
-                    if (
-                        current_best is None
-                        or score > completion_scores[current_best][0][1]
-                    ):
-                        miner_best_completions[miner_response_id] = completion_id
-
-            total_miners = len(set(miner_best_completions.keys()))
-            if total_miners == 0:
-                return None
-
-            logger.info(f"Miner best completions: {miner_best_completions}")
-            # Count how many miners scored each completion as best
-            completion_counts = {}
-            for best_completion in miner_best_completions.values():
-                completion_counts[best_completion] = (
-                    completion_counts.get(best_completion, 0) + 1
-                )
-
-            # Check percentages for each completion
-            for completion_id, count in completion_counts.items():
-                percentage = (count / total_miners) * 100
-                # Consider completions with >50% and <90% agreement
-                if 50 < percentage < 90:
-                    logger.info(
-                        f"Found eligible completion {completion_id} with {percentage:.1f}% "
-                        f"of miners ({count}/{total_miners}) scoring it highest"
-                    )
-                    return validator_task, completion_id
+            if eligible_completion:
+                return validator_task, eligible_completion
 
             return None
 
@@ -626,4 +553,145 @@ class FeedbackLoop:
 
         except Exception as e:
             logger.error(f"Error in SF task processing loop: {str(e)}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+
+    async def create_next_tf_tasks(self, validator: Validator):
+        """Continuously poll for HFL states that should continue to the next iteration."""
+        while True:
+            try:
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await self._create_next_tf_tasks(validator)
+            except Exception as e:
+                logger.error(f"Error in create_next_tf_tasks: {str(e)}")
+                logger.debug(f"Traceback: {traceback.format_exc()}")
+                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+
+    async def _create_next_tf_tasks(self, validator: Validator):
+        """
+        Poll for tasks with HFL states in TF_SCHEDULED status and create the next text feedback task.
+
+        Flow:
+        1. Query tasks with TF_SCHEDULED HFL states
+        2. For each task:
+            - Map the SF task to a TaskSynapseObject
+            - Create the next TF task based on the best completion
+            - Update HFL state to TF_PENDING
+        """
+        try:
+            # Get tasks with TF_SCHEDULED status in batches
+            async for scheduled_tasks_batch, _ in ORM.get_tasks_by_hfl_status(
+                status=HFLStatusEnum.TF_SCHEDULED,
+                batch_size=10,
+                include_options=ValidatorTaskInclude(
+                    {"HFLState": True, "completions": True}
+                ),
+            ):
+                if not scheduled_tasks_batch:
+                    continue
+
+                for sf_task in scheduled_tasks_batch:
+                    if not sf_task.HFLState:
+                        logger.error(f"No HFL state found for task {sf_task.id}")
+                        continue
+
+                    hfl_state = sf_task.HFLState
+
+                    # Find the best completion from the SF task using evaluate_miner_consensus
+                    completion_percentages, _, _ = await evaluate_miner_consensus(
+                        task_id=sf_task.id,
+                    )
+
+                    if not completion_percentages:
+                        logger.error(
+                            f"No completion percentages found for SF task {sf_task.id}"
+                        )
+                        continue
+
+                    # Get the completion with the highest consensus
+                    best_completion_id = (
+                        max(completion_percentages.items(), key=lambda x: x[1])[0]
+                        if completion_percentages
+                        else None
+                    )
+
+                    if not best_completion_id:
+                        logger.error(
+                            f"No best completion found for SF task {sf_task.id}"
+                        )
+                        continue
+
+                    # Directly map the sf_task to a TaskSynapseObject
+                    from database.mappers import (
+                        map_validator_task_to_task_synapse_object,
+                    )
+
+                    improved_task = map_validator_task_to_task_synapse_object(sf_task)
+                    if not improved_task:
+                        logger.error(
+                            f"Failed to map task {sf_task.id} to TaskSynapseObject"
+                        )
+                        continue
+
+                    # Create a text feedback task for the best completion
+                    text_criteria_task = await create_text_feedback_task(
+                        improved_task, best_completion_id
+                    )
+
+                    if not text_criteria_task:
+                        logger.error(
+                            f"Failed to generate text criteria task for task {improved_task.task_id}"
+                        )
+                        continue
+
+                    # Get active miners for the new TF task
+                    active_miners = await get_active_miners_for_hfl(
+                        validator=validator,
+                        subset_size=7,
+                    )
+
+                    if not active_miners:
+                        logger.warning(
+                            f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                        )
+                        continue
+
+                    # Send the task to miners
+                    miner_responses = await send_hfl_request(
+                        validator=validator,
+                        synapse=text_criteria_task,
+                        task_type=TaskTypeEnum.TEXT_FEEDBACK,
+                        axons=[
+                            validator.metagraph.axons[axon_uid]
+                            for axon_uid in active_miners
+                        ],
+                    )
+
+                    if not miner_responses:
+                        logger.error(
+                            f"Failed to send HFL request for task {text_criteria_task.task_id}"
+                        )
+                        continue
+
+                    # Save the new TF task and update the HFL state
+                    validator_task, updated_hfl_state = await ORM.save_tf_task(
+                        validator_task=text_criteria_task,
+                        miner_responses=miner_responses,
+                        previous_task_id=sf_task.id,
+                        original_task_id=hfl_state.original_task_id,
+                        selected_completion_id=best_completion_id,
+                    )
+
+                    if not validator_task:
+                        logger.error(
+                            f"Failed to save text criteria task for task {text_criteria_task.task_id}"
+                        )
+                        continue
+
+                    logger.info(
+                        f"Created next TF task {validator_task.id} for iteration {updated_hfl_state.current_iteration} "
+                        f"of HFL process {hfl_state.id}"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error creating next TF tasks: {str(e)}")
             logger.debug(f"Traceback: {traceback.format_exc()}")

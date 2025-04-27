@@ -100,9 +100,17 @@ async def create_score_feedback_task(
         # Map the raw response to a TaskSynapseObject
         task_synapse = map_human_feedback_to_task_synapse(improved_task_data)
 
-        if not task_synapse:
-            logger.error("Failed to map improved task data to TaskSynapseObject")
+        if not task_synapse or not task_synapse.completion_responses:
+            logger.error(
+                "Failed to map improved task data to TaskSynapseObject or no completion responses"
+            )
             return None
+
+        obfuscated_model_to_model, completion_responses = (
+            validator.obfuscate_model_names(task_synapse.completion_responses)
+        )
+
+        task_synapse.completion_responses = completion_responses
 
         # Get active miners for SF task
         active_miners = await get_active_miners_for_hfl(validator)
@@ -123,6 +131,19 @@ async def create_score_feedback_task(
         if not miner_responses:
             logger.error(f"Failed to send improved task to miners for {tf_task_id}")
             return None
+
+        # Remove responses that don't have a dojo_task_id
+        miner_responses = [
+            response for response in miner_responses if response.dojo_task_id
+        ]
+
+        # deobfuscate model names
+        for response in miner_responses:
+            if response.completion_responses:
+                for completion in response.completion_responses:
+                    completion.model = obfuscated_model_to_model.get(
+                        completion.model, completion.model
+                    )
 
         # Save SF task and update HFL state
         validator_task, updated_hfl_state = await ORM.save_sf_task(
@@ -188,7 +209,20 @@ async def process_score_feedback_task(
                 task_results=task_results,
             )
 
-            if success:
+            if not success:
+                logger.warning(
+                    f"Failed to store task results for miner {miner_response.hotkey}"
+                )
+                continue
+
+            # Then update the scores using the provided task results
+            score_update_success = await ORM.update_scores_from_task_result(
+                sf_task_id=sf_task.id,
+                miner_hotkey=miner_response.hotkey,
+                task_results=task_results,
+            )
+
+            if score_update_success:
                 success_count += 1
 
         # Update HFL state to SF_COMPLETED

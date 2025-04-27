@@ -5,37 +5,44 @@ from bittensor.utils.btlogging import logging as logger
 
 from commons.orm import ORM
 from commons.stats import calculate_icc
-from database.client import prisma
 from database.prisma.enums import HFLStatusEnum
-from database.prisma.models import Completion, HFLState, MinerScore, ValidatorTask
+from database.prisma.models import (
+    HFLCompletionRelation,
+    HFLState,
+    MinerResponse,
+    MinerScore,
+    ValidatorTask,
+)
 from dojo.protocol import Scores
 
+TF_WEIGHTS = 0.7
+SF_WEIGHT = 0.3
 
-async def score_hfl_tasks() -> dict[str, float]:
+
+# TODO: apply this on validator
+async def score_hfl_tasks(task: ValidatorTask) -> dict[str, float]:
     """MAIN DRIVER FUNCTION TO SCORE HFL TASKS"""
-    sf_tasks = await ORM.get_sf_tasks_by_status(status=HFLStatusEnum.SF_COMPLETED)
 
     # average across a few?
     hotkey_to_score: dict[str, float] = defaultdict(float)
-    TF_WEIGHTS = 0.7
-    SF_WEIGHT = 0.3
-    for task in sf_tasks:
-        # NOTE: we can only determine the score for a TF_TASK after SF_TASK is
-        # completed by comparing the increment/decrement in the ratings from miners
-        hotkey_to_tf_score = await _calc_tf_score(task)
-        if not hotkey_to_tf_score:
-            raise ValueError(f"Failed to calculate TF score for task {task.id}")
 
-        hotkey_to_sf_score = await _calc_sf_score(task)
+    # NOTE: we can only determine the score for a TF_TASK after SF_TASK is
+    # completed by comparing the increment/decrement in the ratings from miners
+    hotkey_to_tf_score = await _calc_tf_score(task)
+    if not hotkey_to_tf_score:
+        raise ValueError(f"Failed to calculate TF score for task {task.id}")
 
-        for hotkey, tf_score in hotkey_to_tf_score.items():
-            hotkey_to_score[hotkey] = (
-                TF_WEIGHTS * tf_score + SF_WEIGHT * hotkey_to_sf_score.get(hotkey, 0.0)
-            )
+    hotkey_to_sf_score = await _calc_sf_score(task)
+
+    for hotkey, tf_score in hotkey_to_tf_score.items():
+        hotkey_to_score[hotkey] = (
+            TF_WEIGHTS * tf_score + SF_WEIGHT * hotkey_to_sf_score.get(hotkey, 0.0)
+        )
 
     return dict(hotkey_to_score)
 
 
+@staticmethod
 async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
     """Calculate SF Score, which is used when we don't have ground truth for the score feedback task.
 
@@ -92,9 +99,61 @@ def _validate_task(task: ValidatorTask, hfl_state: HFLState) -> None:
         )
 
 
-async def _calc_change_in_scores(
-    sf_task: ValidatorTask,
-) -> tuple[dict[str, float], dict[str, Completion]]:
+@staticmethod
+async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
+    """Calculate TF_TASK score based on how much each miner's feedback improved the completion.
+
+    Args:
+        sf_task (ValidatorTask): SF task with completions to evaluate
+
+    Returns:
+        dict[str, float]: Mapping of miner hotkeys to their TF scores
+    """
+    sf_task_id = sf_task.id
+    try:
+        # Get and validate HFL state
+        hfl_state = await ORM.get_hfl_state_by_current_task_id(sf_task_id)
+        if not hfl_state:
+            logger.error(f"No HFL state found for SF task {sf_task_id}")
+            return {}
+
+        _validate_task(sf_task, hfl_state)
+    except Exception as e:
+        logger.error(f"Error validating task: {e}")
+        return {}
+
+    # Calculate score changes for each completion
+    sf_cid_to_scores_delta = await _calc_score_deltas(sf_task)
+
+    # Get direct mapping from SF completions to the single miner response that created it
+    sf_cid_to_miner_response = await _get_sf_completion_to_miner_response(sf_task)
+
+    hotkey_to_tf_score: dict[str, float] = defaultdict(float)
+
+    # Process each completion in the SF task
+    for completion in sf_task.completions or []:
+        completion_id = completion.id
+
+        # Get the specific miner response that led to this completion
+        miner_response = sf_cid_to_miner_response.get(completion_id)
+        if not miner_response:
+            logger.debug(f"No miner response found for SF completion {completion_id}")
+            continue
+
+        # Get score delta for this completion
+        score_delta = sf_cid_to_scores_delta.get(completion_id, 0)
+
+        # Award score to the specific miner who contributed to this completion
+        hotkey = miner_response.hotkey
+        hotkey_to_tf_score[hotkey] += score_delta
+        logger.info(
+            f"Miner {hotkey} feedback led to completion {completion_id} with score delta: {score_delta}"
+        )
+
+    return dict(hotkey_to_tf_score)
+
+
+async def _calc_score_deltas(sf_task: ValidatorTask) -> dict[str, float]:
     """Calculate the change in scores between an SF_TASK and its parent TF_TASK.
     Or an SF_TASK and its original task.
 
@@ -103,137 +162,107 @@ async def _calc_change_in_scores(
     │Original Task│──────▶│ TF_1 │──────▶│ SF_1 │─────▶│ TF_2 │────▶│ SF_2 │
     │             │       │      │       │      │      │      │     │      │
     └─────────────┘       └──────┘       └──────┘      └──────┘     └──────┘
-
-    Args:
-        sf_task (ValidatorTask): sf_task
-
-    Returns:
-        tuple[dict[str, float], dict[str, Completion]]: Returns the change in scores for each completion id of the SF Task.
-            Also returns the mapping of SF completion id to TF completion.
     """
-    parent_task = await ORM.get_original_or_parent_sf_task(sf_task.id)
-    if parent_task is None:
-        raise ValueError("Parent task not found")
-
-    # Create a mapping of completion IDs to their order in task.completions
-    parent_cid_to_scores = await _calc_avg_score_by_completion_id(parent_task)
-    # NOTE: this is not for sf_scoring itself, but for comparing the increments
-    sf_task_scores = await _calc_avg_score_by_completion_id(sf_task)
-
-    # NOTE: calculate increase/decrease per completion id
-    # we require the mapping of sf_cid to tf_cid here!
-    sf_cid_to_scores_delta: dict[str, float] = {}
-    tf_task_id = sf_task.previous_task_id
-    if not tf_task_id:
-        raise ValueError(
-            f"Previous task id should be filled for SF_TASK, task id: {sf_task.id}, previous task id: {tf_task_id}"
-        )
-    sf_cid_to_tf_completion = await get_tf_to_sf_completion_mapping(sf_task)
-    for sf_cid, sf_score in sf_task_scores.items():
-        tf_completion = sf_cid_to_tf_completion[sf_cid]
-        # NOTE: here we allow for negative scores, so that bad feedback will be penalised too
-        # positive means improvement, negative means regression
-        diff = sf_score - parent_cid_to_scores[tf_completion.completion_id]
-        sf_cid_to_scores_delta[sf_cid] = float(diff)
-
-    return sf_cid_to_scores_delta, sf_cid_to_tf_completion
-
-
-async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
-    """Calculate TF_TASK score, which happens after the corresponding SF_TASK is completed.
-
-    Args:
-        sf_task (ValidatorTask): sf_task
-
-    Returns:
-        dict[str, float]: Mapping of hotkey to score
-            or empty dict if validation fails or HFL State is not ready.
-    """
-    sf_task_id = sf_task.id
-    try:
-        if (
-            hfl_state := await ORM.get_hfl_state_by_current_task_id(sf_task_id)
-        ) is not None:
-            _validate_task(sf_task, hfl_state)
-    except Exception as e:
-        logger.error(f"Error validating task: {e}")
+    # Get previous task (original or parent SF)
+    previous_task = await ORM.get_original_or_parent_sf_task(sf_task.id)
+    if not previous_task:
+        logger.error(f"Previous task not found for SF task {sf_task.id}")
         return {}
 
-    sf_cid_to_scores_delta, sf_cid_to_tf_completion = await _calc_change_in_scores(
-        sf_task
+    # Calculate average scores for each completion in the previous task
+    prev_completion_scores = await _calc_avg_score_by_completion_id(previous_task)
+
+    # Calculate average scores for each completion in the current SF task
+    sf_completion_scores = await _calc_avg_score_by_completion_id(sf_task)
+
+    # Get HFL state to get the selected completion ID
+    hfl_state = await ORM.get_hfl_state_by_current_task_id(sf_task.id)
+    if not hfl_state or not hfl_state.selected_completion_id:
+        logger.error(f"No selected completion ID in HFL state for task {sf_task.id}")
+        return {}
+
+    # Find the previous score based on the selected completion ID
+    selected_completion_id = hfl_state.selected_completion_id
+    prev_score = 0
+
+    # Find the completion in the previous task that matches the selected ID
+    for comp in previous_task.completions or []:
+        if comp.completion_id == selected_completion_id:
+            prev_score = prev_completion_scores.get(comp.completion_id, 0)
+            logger.info(
+                f"Found selected completion {selected_completion_id} with score {prev_score}"
+            )
+            break
+
+    if prev_score == 0:
+        logger.warning(
+            f"Could not find score for selected completion {selected_completion_id}"
+        )
+
+    # Calculate deltas for each SF completion
+    sf_cid_to_scores_delta = {}
+    for sf_completion in sf_task.completions or []:
+        sf_cid = sf_completion.completion_id
+
+        # Skip if we don't have a score for this completion
+        if sf_cid not in sf_completion_scores:
+            logger.warning(f"No score found for SF completion {sf_cid}")
+            continue
+
+        # Get the SF completion's score
+        sf_score = sf_completion_scores[sf_cid]
+
+        # Calculate delta against the previous score
+        delta = sf_score - prev_score
+        sf_cid_to_scores_delta[sf_cid] = delta
+
+        logger.info(
+            f"Completion {sf_cid} score: {sf_score}, previous: {prev_score}, delta: {delta}"
+        )
+
+    return sf_cid_to_scores_delta
+
+
+async def _get_sf_completion_to_miner_response(
+    sf_task: ValidatorTask,
+) -> dict[str, MinerResponse]:
+    """Get mapping from SF completions to the single miner response that influenced each.
+
+    Args:
+        sf_task: SF task with completions
+
+    Returns:
+        Dictionary mapping SF completion IDs to their corresponding miner response
+    """
+    sf_completion_ids = [comp.completion_id for comp in sf_task.completions or []]
+    if not sf_completion_ids:
+        return {}
+
+    # Find all relationships for these SF completions
+    relations = await HFLCompletionRelation.prisma().find_many(
+        where={"sf_completion_id": {"in": sf_completion_ids}}
     )
 
-    hotkey_to_tf_score: dict[str, float] = defaultdict(float)
+    # Get all miner response IDs
+    miner_response_ids = [relation.miner_response_id for relation in relations]
 
-    # 1. for each originalsf task completion, get the corresponding TF completion
-    # 2. based on the tf completion, grab the task
-    # 3. for that TF task, grab the miner's hotkey
-    # 4. assign score based on increment/decrement
-    for completion in sf_task.completions or []:
-        # get tf completion
-        tf_completion = sf_cid_to_tf_completion.get(completion.completion_id)
-        if not tf_completion:
-            logger.error(
-                f"TF completion not found for SF completion {completion.completion_id}"
-            )
-            continue
+    # Fetch all miner responses in a single query
+    miner_responses = (
+        await MinerResponse.prisma().find_many(where={"id": {"in": miner_response_ids}})
+        if miner_response_ids
+        else []
+    )
 
-        if not tf_completion.validator_task_relation:
-            logger.error(
-                f"TF completion {tf_completion.id} has no validator task relation"
-            )
-            continue
+    # Create a mapping from miner response ID to miner response object
+    id_to_miner_response = {mr.id: mr for mr in miner_responses}
 
-        miner_hotkeys = [
-            mr.hotkey
-            for mr in tf_completion.validator_task_relation.miner_responses or []
-        ]
+    # Create a direct one-to-one mapping
+    result = {}
+    for relation in relations:
+        if miner_response := id_to_miner_response.get(relation.miner_response_id):
+            result[relation.sf_completion_id] = miner_response
 
-        for hotkey in miner_hotkeys:
-            # NOTE: for each miner hotkey, we take their score to be the sum of all increments/decrements
-            hotkey_to_tf_score[hotkey] += sf_cid_to_scores_delta[
-                completion.completion_id
-            ]
-            logger.info(f"Hotkey: {hotkey}, got TF score: {hotkey_to_tf_score[hotkey]}")
-
-    #### CALCULATE TF SCORES BASED ON SF
-    return dict(hotkey_to_tf_score)
-
-
-async def get_tf_to_sf_completion_mapping(
-    sf_task: ValidatorTask,
-) -> dict[str, Completion]:
-    """Get the mapping of SF completion id to TF completion.
-    We map to Completion object instead of use dict[str,str] so that we don't
-    need to fetch from DB again later.
-    """
-    if (sf_completion_ids := [comp.id for comp in sf_task.completions or []]) == []:
-        logger.error(
-            "No SF completions found, therefore unable to map TF to SF task completions"
-        )
-        return {}
-
-    # NOTE: this is based on the initial design that each TF_TASK only has 1 output (a.k.a. completion)
-    sf_cid_to_tf_completion: dict[str, Completion] = {}
-    try:
-        completion_relation = await prisma.hflcompletionrelation.find_many(
-            where={"sf_completion_id": {"in": sf_completion_ids}}
-        )
-        tf_completions = await prisma.completion.find_many(
-            where={
-                "id": {"in": [comp.tf_completion_id for comp in completion_relation]}
-            }
-        )
-        # map sf completion id to tf completion
-        for comp in tf_completions:
-            sf_cid_to_tf_completion[comp.id] = comp
-
-        return sf_cid_to_tf_completion
-    except Exception as e:
-        logger.error(f"Error getting TF to SF completion mapping: {e}")
-        pass
-
-    return {}
+    return result
 
 
 def ensure_miner_response_order(validator_task: ValidatorTask) -> ValidatorTask:

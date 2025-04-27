@@ -30,12 +30,14 @@ enum HFLStatusEnum {
     TF_COMPLETED // TF task completed, and TASK_RESULT are updated, waiting for synthetic request
     SF_PENDING // SF created, waiting for scores from miners
     SF_COMPLETED // SF task results received from miners
+    TF_SCHEDULED // Ready for next HFL iteration
     HFL_COMPLETED // HFL loop finished
 }
 
 model ValidatorTask {
     id               String       @id @unique @default(uuid())
     previous_task_id String?
+    next_task_id     String?      @unique
     prompt           String
     task_type        TaskTypeEnum
     is_processed     Boolean      @default(false)
@@ -46,8 +48,11 @@ model ValidatorTask {
     hfl_state_id     String?
 
     // Relationships
-    parent_task     ValidatorTask?  @relation("PreviousTask", fields: [previous_task_id], references: [id])
-    child_tasks     ValidatorTask[] @relation("PreviousTask")
+    parent_task ValidatorTask?  @relation("PreviousTask", fields: [previous_task_id], references: [id])
+    child_tasks ValidatorTask[] @relation("PreviousTask")
+
+    next_task       ValidatorTask?  @relation("NextTask", fields: [next_task_id], references: [id])
+    prev_task       ValidatorTask?  @relation("NextTask")
     completions     Completion[]
     miner_responses MinerResponse[]
     ground_truth    GroundTruth[]

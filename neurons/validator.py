@@ -28,11 +28,12 @@ from commons.exceptions import (
     SetWeightsFailed,
     SyntheticGenerationError,
 )
+from commons.hfl_heplers import HFLManager
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.score_storage import ScoreStorage
-from commons.scoring import Scoring
+from commons.scoring import Scoring, hfl
 from commons.utils import (
     _terminal_plot,
     datetime_as_utc,
@@ -41,6 +42,7 @@ from commons.utils import (
     initialise,
     set_expire_time,
 )
+from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import ValidatorTask
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.chain import parse_block_headers
@@ -56,7 +58,6 @@ from dojo.protocol import (
     TaskResult,
     TaskResultRequest,
     TaskSynapseObject,
-    TaskTypeEnum,
 )
 from dojo.utils.config import get_config
 from dojo.utils.uids import extract_miner_uids, is_miner
@@ -132,15 +133,6 @@ class Validator:
             len(self.metagraph.hotkeys), dtype=torch.float32
         )
         self.check_registered()
-
-        # Run score migration before loading state
-        migration_success = self.loop.run_until_complete(ScoreStorage.migrate_from_db())
-        if not migration_success:
-            logger.error(
-                "Score migration failed - cannot continue without valid scores"
-            )
-            raise RuntimeError("Score migration failed - validator cannot start")
-
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.load_state()
 
@@ -158,7 +150,7 @@ class Validator:
 
     def obfuscate_model_names(
         self, completion_responses: list[CompletionResponse]
-    ) -> dict[str, str]:
+    ) -> tuple[dict[str, str], list[CompletionResponse]]:
         """Obfuscate model names for both external requests and synthetic requests to prevent miners from knowing the true model names."""
         obfuscated_model_to_model: dict[str, str] = {}
         for completion in completion_responses:
@@ -167,7 +159,7 @@ class Validator:
             original_model = completion.model
             completion.model = completion.completion_id
             obfuscated_model_to_model[completion.completion_id] = original_model
-        return obfuscated_model_to_model
+        return obfuscated_model_to_model, completion_responses
 
     @staticmethod
     async def _obfuscate_completion_files(
@@ -416,7 +408,8 @@ class Validator:
         return existing_incentives, new_incentives
 
     async def update_scores(self, hotkey_to_scores: dict[str, float]):
-        """Performs exponential moving average on the scores based on the rewards received from the miners,
+        """
+        Performs exponential moving average on the scores based on the rewards received from the miners,
         after setting the self.scores variable here, `set_weights` will be called to set the weights on chain.
         """
         if not hotkey_to_scores:
@@ -475,6 +468,7 @@ class Validator:
             if np.count_nonzero(self.scores) == 0:
                 logger.warning("Scores are all zeros, but saving anyway!")
 
+            # TODO: should combine_scores be saved instead?
             await ScoreStorage.save(self.scores)
             logger.success(f"📦 Saved validator state with scores: {self.scores}")
         except EmptyScores as e:
@@ -758,6 +752,8 @@ class Validator:
             await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)  # 60 minutes
             # for each hotkey, a list of scores from all tasks being scored
             hotkey_to_all_scores = defaultdict(list)
+
+            hotkey_to_hfl_scores = defaultdict(list)
             try:
                 # Get tasks that expired between 2 hours ago and 30 minutes ago
                 # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
@@ -772,17 +768,62 @@ class Validator:
 
                 batch_size = 10
                 async for task_batch in self._get_task_batches(
-                    batch_size, expire_from, expire_to
+                    batch_size,
+                    expire_from,
+                    expire_to,
+                    task_types=[
+                        TaskTypeEnum.CODE_GENERATION,
+                        TaskTypeEnum.SCORE_FEEDBACK,
+                    ],
                 ):
                     if not task_batch:
                         continue
 
                     for task in task_batch:
-                        processed_id, hotkey_to_score = await self._score_task(task)
-                        if processed_id:
-                            processed_request_ids.append(processed_id)
-                        for hotkey, score in hotkey_to_score.items():
-                            hotkey_to_all_scores[hotkey].append(score)
+                        # Check if this is a regular task or an HFL task
+                        validator_task: TaskSynapseObject = task.validator_task
+
+                        if validator_task.task_type == TaskTypeEnum.CODE_GENERATION:
+                            # Regular task flow
+                            processed_id, hotkey_to_score = await self._score_task(task)
+                            if processed_id:
+                                processed_request_ids.append(processed_id)
+                            for hotkey, score in hotkey_to_score.items():
+                                hotkey_to_all_scores[hotkey].append(score)
+
+                        elif validator_task.task_type == TaskTypeEnum.SCORE_FEEDBACK:
+                            # SF task flow - need to check if it's ready for scoring
+                            task = await ORM.get_validator_task_by_id(
+                                validator_task.task_id
+                            )
+                            if not task:
+                                logger.warning(
+                                    f"Task {validator_task.task_id} not found"
+                                )
+                                continue
+
+                            hfl_state = await HFLManager.get_state_by_current_task_id(
+                                validator_task.task_id
+                            )
+                            if not hfl_state:
+                                logger.warning(
+                                    f"HFL state for task {validator_task.task_id} not found"
+                                )
+                                continue
+
+                            if hfl_state.status == HFLStatusEnum.SF_COMPLETED:
+                                # Calculate TF scores
+                                hotkey_to_hfl_scores = await hfl.score_hfl_tasks(task)
+
+                                # Mark as processed
+                                processed_request_ids.append(task.id)
+                                for hotkey, score in hotkey_to_hfl_scores.items():
+                                    hotkey_to_all_scores[hotkey].append(score)
+
+                                # TODO: update miner scores in database
+                                logger.info(
+                                    f"Scored HFL task {task.id}, hotkey to score: {hotkey_to_hfl_scores}"
+                                )
 
                 if processed_request_ids:
                     await ORM.mark_validator_task_as_processed(processed_request_ids)
@@ -916,13 +957,15 @@ class Validator:
             for response in data.responses:
                 response.criteria_types = criteria
 
-            obfuscated_model_to_model = self.obfuscate_model_names(data.responses)
+            obfuscated_model_to_model, completion_responses = (
+                self.obfuscate_model_names(data.responses)
+            )
             synapse = TaskSynapseObject(
                 task_id=task_id,
                 prompt=data.prompt,
                 task_type=str(TaskTypeEnum.CODE_GENERATION),
                 expire_at=set_expire_time(dojo.TASK_DEADLINE),
-                completion_responses=data.responses,
+                completion_responses=completion_responses,
             )
 
             return synapse, data.ground_truth, obfuscated_model_to_model
@@ -949,9 +992,7 @@ class Validator:
         synapse: TaskSynapseObject | None = None,
         ground_truth: dict[str, int] | None = None,
         obfuscated_model_to_model: ObfuscatedModelMap | None = None,
-        synthetic_task: bool = True,
         subset_size: int | None = None,
-        prev_task_id: str | None = None,
     ) -> ValidatorTask | None:
         """Send task requests to miners and process their responses.
 
@@ -996,7 +1037,7 @@ class Validator:
         )
 
         miner_responses: List[TaskSynapseObject] = await self._send_requests_to_miners(
-            self.dendrite, axons, synapse, synthetic_task
+            self.dendrite, axons, synapse, True
         )
         valid_count = 0
         fails = []
@@ -1079,7 +1120,6 @@ class Validator:
             validator_task=synapse,
             miner_responses=valid_miner_responses,
             ground_truth=ground_truth or {},
-            prev_task_id=prev_task_id,
         )
         if not validator_task:
             logger.error("Failed to save dendrite response")
@@ -1193,6 +1233,7 @@ class Validator:
         expire_from: datetime,
         expire_to: datetime,
         filter_empty_result: bool = False,
+        task_types: List[TaskTypeEnum] = [TaskTypeEnum.CODE_GENERATION],
     ) -> AsyncGenerator[List[DendriteQueryResponse], None]:
         """Get task in batches from the database"""
         async for task_batch, has_more_batches in ORM.get_expired_tasks(
@@ -1202,7 +1243,7 @@ class Validator:
             filter_empty_result=filter_empty_result,
             is_processed=False,
             has_previous_task=False,
-            task_type=TaskTypeEnum.CODE_GENERATION,
+            task_types=task_types,
         ):
             # Yield task batch first before break if no more batches
             yield task_batch
@@ -1384,6 +1425,7 @@ class Validator:
             logger.error(f"Error fetching from miner {miner_hotkey}: {str(e)}")
             return []
 
+    # TODO: review this logic again
     @staticmethod
     def _calculate_averages(
         task_results: list[TaskResult], obfuscated_to_real_model_id
