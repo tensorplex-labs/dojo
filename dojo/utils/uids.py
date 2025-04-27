@@ -9,8 +9,7 @@ from bittensor.utils.btlogging import logging as logger
 
 from commons.exceptions import FatalSubtensorConnectionError
 from commons.objects import ObjectManager
-from commons.utils import (aget_effective_stake, get_effective_stake,
-                           keccak256_hash)
+from commons.utils import aget_effective_stake, get_effective_stake, keccak256_hash
 from dojo.chain import get_async_subtensor
 from dojo.kami.kami import Kami
 

@@ -14,6 +14,19 @@ class ServeAxonPayload(BaseModel):
     placeholder2: int = 0
 
 
+class SetWeightsPayload(BaseModel):
+    netuid: int
+    dests: List[int]
+    weights: List[int]  # Normalized weights
+    version_key: int
+
+
+class CommitRevealPayload(BaseModel):
+    netuid: int
+    commit: int | bytes
+    reveal_round: int
+
+
 class MovingPrice(BaseModel):
     bits: int
 

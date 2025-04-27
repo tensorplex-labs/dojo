@@ -16,10 +16,12 @@ import bittensor as bt
 import numpy as np
 import torch
 from bittensor.utils.btlogging import logging as logger
-from bittensor.utils.networking import ip_to_int
-from bittensor.utils.weight_utils import process_weights_for_netuid
+from dojo.utils.weight_utils import (
+    aprocess_weights_for_netuid,
+    convert_weights_and_uids_for_emit,
+)
 from torch.nn import functional as F
-
+from bittensor_commit_reveal import get_encrypted_commit
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import (
@@ -47,7 +49,7 @@ from commons.utils import (
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.chain import parse_block_headers
 from dojo.kami.kami import Kami
-from dojo.kami.types import SubnetMetagraph
+from dojo.kami.types import SetWeightsPayload, SubnetMetagraph
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -240,11 +242,11 @@ class Validator(aobject):
         (
             final_uids,
             final_weights,
-        ) = process_weights_for_netuid(  # type: ignore
+        ) = await aprocess_weights_for_netuid(  # type: ignore
             uids=uids.numpy(),
             weights=safe_normalized_weights.numpy(),
             netuid=self.config.netuid,  # type: ignore
-            subtensor=self.subtensor,
+            kami=self.kami,
             metagraph=self.metagraph,
         )
 
@@ -271,14 +273,14 @@ class Validator(aobject):
 
         # dependent on underlying `set_weights` call
         try:
-            result, message = await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 self._set_weights(final_uids, final_weights), timeout=90
             )
             if not result:
-                logger.error(f"Failed to set weights: {message}")
+                logger.error(f"Failed to set weights: {result}")
                 return
-
-            logger.success(f"Set weights successfully: {message}")
+            if result.get("success", False):
+                logger.success(f"Set weights successfully with hash {result}")
         except asyncio.TimeoutError:
             logger.error("Setting weights timed out after 90 seconds")
             return
@@ -315,25 +317,37 @@ class Validator(aobject):
                 # except asyncio.TimeoutError:
                 #     pass
 
-                result, message = self.subtensor.set_weights(
-                    wallet=self.wallet,
-                    netuid=self.config.netuid,  # type: ignore
-                    uids=uids.tolist(),
-                    weights=weights.tolist(),
-                    wait_for_finalization=False,
-                    wait_for_inclusion=False,
-                    version_key=self.spec_version,
-                    max_retries=1,
+                logger.info(f"Converting weights and uids for emit: {uids}, {weights}")
+
+                weights[2] = 0.88
+
+                uids, weights = convert_weights_and_uids_for_emit(
+                    uids=uids,
+                    weights=weights,
                 )
-                if result:
+
+                print(f"Converted uids: {uids}")
+                print(f"Converted weights: {weights}")
+
+                payload = SetWeightsPayload(
+                    netuid=self.config.netuid,  # type: ignore
+                    dests=uids,
+                    weights=weights,
+                    version_key=self.spec_version,
+                )
+
+                print(f"Setting weights payload: {payload}")
+
+                result = await self.kami.set_weights(payload)
+                if result.get("success", False):
                     logger.success(f"Set weights successfully: {message}")
-                    return result, message
+                    return result
 
                 raise SetWeightsFailed(f"Failed to set weights with message:{message}")
 
-            except Exception:
+            except Exception as e:
                 logger.warning(
-                    f"Failed to set weights with attempt {attempt + 1}/{max_attempts} due to: {message}"
+                    f"Failed to set weights with attempt {attempt + 1}/{max_attempts} due to: {e}"
                 )
 
                 if attempt == max_attempts:
@@ -524,7 +538,7 @@ class Validator(aobject):
 
         # Define appropriate logic for when set weights.
         return (
-            self.block - self.metagraph.last_update[self.uid]
+            self.block - self.metagraph.get("lastUpdate", 0)[self.uid]
         ) > self.config.neuron.epoch_length
 
     async def sync(self):
@@ -1007,10 +1021,12 @@ class Validator(aobject):
                 # Get coldkey from metagraph using hotkey index
                 if response.axon and response.axon.hotkey:
                     try:
-                        hotkey_index = self.metagraph.hotkeys.index(
+                        hotkey_index = self.metagraph.get("hotkeys", []).index(
                             response.axon.hotkey
                         )
-                        response.miner_coldkey = self.metagraph.coldkeys[hotkey_index]
+                        response.miner_coldkey = self.metagraph.get("coldkeys", [])[
+                            hotkey_index
+                        ]
                     except ValueError:
                         response.miner_coldkey = None
                 else:
@@ -1196,7 +1212,7 @@ class Validator(aobject):
             batch: list[TaskSynapseObject] = task.miner_responses[i : i + batch_size]
 
             # Get the miner UIDs and create identifier tuples for logging
-            miner_uids: list[tuple[str, int]] = self._extract_miners_hotkey_uid(
+            miner_uids: list[tuple[str, int]] = await self._extract_miners_hotkey_uid(
                 batch, self.metagraph
             )
             logger.info(

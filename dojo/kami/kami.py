@@ -1,10 +1,17 @@
 import asyncio
+import json
 import os
 from typing import Any, Dict, Optional
 
 import aiohttp
 
-from dojo.kami.types import ServeAxonPayload, SubnetMetagraph
+from dojo.kami.types import (
+    CommitRevealPayload,
+    ServeAxonPayload,
+    SetWeightsPayload,
+    SubnetMetagraph,
+)
+from bittensor_commit_reveal import get_encrypted_commit
 
 
 class Kami:
@@ -28,7 +35,8 @@ class Kami:
         """
         Close the aiohttp session.
         """
-        await self.session.close()
+        if self.session is not None:
+            await self.session.close()
 
     async def get(
         self, endpoint: str, params: Optional[Dict[str, Any]] = None
@@ -153,6 +161,20 @@ class Kami:
         latest_block = result.get("data", {}).get("blockNumber", "")
         return latest_block
 
+    async def get_subnet_hyperparameters(self, netuid: int) -> Dict[str, Any]:
+        """
+        Get the subnet hyperparameters for a given netuid.
+
+        Args:
+            netuid (int): The netuid to get the hyperparameters for.
+
+        Returns:
+            Dict[str, Any]: The JSON response from the API.
+        """
+        result = await self.get(f"chain/subnet-hyperparameters/{netuid}")
+        hyperparameters = result.get("data", {})
+        return hyperparameters
+
     async def is_hotkey_registered(
         self, netuid: int, hotkey: str, block: int | None = None
     ) -> bool:
@@ -189,6 +211,53 @@ class Kami:
             Dict[str, Any]: The JSON response from the API.
         """
         return await self.post("chain/serve-axon", data=payload.model_dump())
+
+    async def set_weights(self, payload: SetWeightsPayload) -> Dict[str, Any]:
+        """
+        Set weights for a given payload.
+
+        Args:
+            payload (SetWeightsPayload): The payload to set weights for.
+
+        Returns:
+            Dict[str, Any]: The JSON response from the API.
+        """
+        get_hpams = await self.get_subnet_hyperparameters(payload.netuid)
+        if get_hpams.get("commitRevealWeightsEnabled", False):
+            tempo = get_hpams.get("tempo", 0)
+            reveal_period = get_hpams.get("commitRevealPeriod", 0)
+            if tempo == 0 or reveal_period == 0:
+                raise ValueError(
+                    "Tempo and reveal round must be greater than 0 for commit reveal weights."
+                )
+
+            print(
+                f"Commit reveal weights enabled: tempo: {tempo}, reveal_period: {reveal_period}"
+            )
+
+            # Encrypt `commit_hash` with t-lock and `get reveal_round`
+            commit_for_reveal, reveal_round = get_encrypted_commit(
+                uids=payload.dests,
+                weights=payload.weights,
+                version_key=payload.version_key,
+                tempo=tempo,
+                current_block=await self.get_current_block(),
+                netuid=payload.netuid,
+                subnet_reveal_period_epochs=reveal_period,
+            )
+
+            print(f"Commit for reveal: {commit_for_reveal}")
+            print(f"Reveal round: {reveal_round}")
+
+            cr_payload = {
+                "netuid": payload.netuid,
+                "commit": commit_for_reveal.hex(),
+                "reveal_round": reveal_round,
+            }
+
+            return await self.post("chain/set-commit-reveal-weights", data=cr_payload)
+
+        return await self.post("chain/set-weights", data=payload.model_dump())
 
 
 async def aget_effective_stake(hotkey: str, subnet_metagraph: SubnetMetagraph) -> float:
