@@ -86,11 +86,12 @@ async def main():
         asyncio.create_task(validator.update_tasks_polling()),
         asyncio.create_task(validator.score_and_send_feedback()),
         asyncio.create_task(validator.send_heartbeats()),
-        asyncio.create_task(
-            start_block_subscriber(
-                callbacks=[validator.block_headers_callback], max_interval_sec=60
-            )
-        ),
+        # asyncio.create_task(
+        #     start_block_subscriber(
+        #         callbacks=[validator.block_headers_callback], max_interval_sec=60
+        #     )
+        # ),
+        asyncio.create_task(validator.update_block()),
         asyncio.create_task(validator.cleanup_resources()),
     ]
     # set a callback on validator.run() to check for fatal errors.

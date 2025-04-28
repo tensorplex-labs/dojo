@@ -326,17 +326,12 @@ class Validator(aobject):
                     weights=weights,
                 )
 
-                print(f"Converted uids: {uids}")
-                print(f"Converted weights: {weights}")
-
                 payload = SetWeightsPayload(
                     netuid=self.config.netuid,  # type: ignore
                     dests=uids,
                     weights=weights,
                     version_key=self.spec_version,
                 )
-
-                print(f"Setting weights payload: {payload}")
 
                 result = await self.kami.set_weights(payload)
                 if result.get("success", False):
@@ -1566,11 +1561,27 @@ class Validator(aobject):
                 )
         return hotkey_to_dojo_task_scores_and_gt
 
-    async def block_headers_callback(self, block: dict):
-        logger.trace(f"Received block headers {block}")
-        block_header = parse_block_headers(block)
-        block_number = block_header.number.to_int()
-        self._last_block = block_number
+    # async def block_headers_callback(self, block: dict):
+    #     logger.trace(f"Received block headers {block}")
+    #     block_header = parse_block_headers(block)
+    #     block_number = block_header.number.to_int()
+    #     self._last_block = block_number
+
+    async def update_block(self):
+        while True:
+            block = await self.kami.get_current_block()
+            if block and block != self.block:
+                self._last_block = block
+                logger.debug(f"Updated block to {self._last_block}")
+
+            if os.getenv("FAST_MODE"):
+                continue
+
+            logger.info(
+                f"Updated block to {self._last_block}"
+            )  # log new block if non fast_mode
+
+            await asyncio.sleep(12)
 
     async def _extract_miners_hotkey_uid(
         self, batch: list[TaskSynapseObject], metagraph: SubnetMetagraph

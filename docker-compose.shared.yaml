@@ -71,6 +71,15 @@ services:
       retries: 5
     logging: *default-logging
 
+  kami:
+    container_name: kami
+    image: ghcr.io/tensorplex-labs/dojo-chain-api:main
+    env_file:
+      - .env
+    expose:
+      - $KAMI_API_PORT
+    logging: *default-logging
+
   watchtower:
     container_name: watchtower
     image: containrrr/watchtower
