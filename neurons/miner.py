@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 import traceback
 from datetime import datetime
@@ -520,6 +521,14 @@ class Miner(aobject):
         while True:
             block = await self.kami.get_current_block()
             if block and block != self.block:
-                self.block = block
-                logger.info(f"Updated block to {self.block}")
+                self._last_block = block
+                logger.debug(f"Updated block to {self._last_block}")
+
+            if os.getenv("FAST_MODE"):
+                continue
+
+            logger.info(
+                f"Updated block to {self._last_block}"
+            )  # log new block if non fast_mode
+
             await asyncio.sleep(12)

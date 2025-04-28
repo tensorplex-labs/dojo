@@ -1567,7 +1567,7 @@ class Validator(aobject):
     #     block_number = block_header.number.to_int()
     #     self._last_block = block_number
 
-    async def update_block(self):
+    async def block_updater(self):
         while True:
             block = await self.kami.get_current_block()
             if block and block != self.block:
