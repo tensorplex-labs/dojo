@@ -91,7 +91,7 @@ async def main():
         #         callbacks=[validator.block_headers_callback], max_interval_sec=60
         #     )
         # ),
-        asyncio.create_task(validator.update_block()),
+        asyncio.create_task(validator.block_updater()),
         asyncio.create_task(validator.cleanup_resources()),
     ]
     # set a callback on validator.run() to check for fatal errors.
