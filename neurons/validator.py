@@ -279,8 +279,8 @@ class Validator(aobject):
             if not result:
                 logger.error(f"Failed to set weights: {result}")
                 return
-            if result.get("success", False):
-                logger.success(f"Set weights successfully with hash {result}")
+            if result.get("statusCode", None) == 200:
+                logger.success(f"Set weights successfully with hash {result.get('data')}")
         except asyncio.TimeoutError:
             logger.error("Setting weights timed out after 90 seconds")
             return
@@ -302,7 +302,7 @@ class Validator(aobject):
         max_attempts = 5
         attempt = 0
         result = False
-        while attempt < max_attempts and not result:
+        while attempt < max_attempts and (not result or result.get("statusCode", None) != 200):
             message: str = ""
             try:
                 logger.info(
@@ -319,7 +319,6 @@ class Validator(aobject):
 
                 logger.info(f"Converting weights and uids for emit: {uids}, {weights}")
 
-                weights[2] = 0.88
 
                 uids, weights = convert_weights_and_uids_for_emit(
                     uids=uids,
@@ -334,8 +333,8 @@ class Validator(aobject):
                 )
 
                 result = await self.kami.set_weights(payload)
-                if result.get("success", False):
-                    logger.success(f"Set weights successfully: {message}")
+                if result.get("statusCode", None) == 200:
+                    logger.success(f"Set weights successfully: {result.get('data')}")
                     return result
 
                 raise SetWeightsFailed(f"Failed to set weights with message:{message}")
@@ -344,16 +343,16 @@ class Validator(aobject):
                 logger.warning(
                     f"Failed to set weights with attempt {attempt + 1}/{max_attempts} due to: {e}"
                 )
-
+                
                 if attempt == max_attempts:
                     logger.error("Max attempts reached. Could not set weights.")
-                    return False, "Max attempts reached"
-
+                    return {'success': False, 'data': 'Max attempts reached'}
+                
                 await asyncio.sleep(12)
             finally:
                 attempt += 1
 
-        return False, "Max attempts reached"
+        return {'success': False, 'data': 'Max attempts reached'}
 
     async def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
