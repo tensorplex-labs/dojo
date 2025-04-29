@@ -4,6 +4,7 @@ import traceback
 
 import aiohttp
 from bittensor.utils.btlogging import logging as logger
+from pydantic import ValidationError
 from tenacity import (
     AsyncRetrying,
     RetryError,
@@ -14,8 +15,17 @@ from tenacity import (
 
 from commons.api_settings import RedisSettings
 from commons.cache import RedisCache
-from commons.dataset.types import HumanFeedbackResponse, TextFeedbackRequest
-from commons.exceptions import FatalSyntheticGenerationError, SyntheticGenerationError
+from commons.dataset.types import (
+    HumanFeedbackResponse,
+    HumanFeedbackTask,
+    TextFeedbackRequest,
+)
+from commons.exceptions import (
+    FatalSyntheticGenerationError,
+    FeedbackImprovementError,
+    SyntheticGenerationError,
+)
+from commons.utils import get_new_uuid
 from dojo.protocol import SyntheticQA
 from dojo.utils.config import source_dotenv
 
@@ -229,21 +239,17 @@ class SyntheticAPI:
             raise
 
     @classmethod
-    async def get_improved_task_raw(cls, hf_id: str) -> dict | None:
+    async def get_improved_task_raw(cls, hf_id: str) -> HumanFeedbackResponse | None:
         """
-        Retrieve human feedback data from Redis using the request ID, returning raw dictionary.
-
-        Unlike get_improved_task, this method returns the raw dictionary without model validation,
-        preserving additional fields like 'success' and 'hf_id'.
+        Retrieve human feedback data from Redis and map to HumanFeedbackResponse with correct handling
+        of completion_id field.
 
         Args:
             hf_id (str): The human feedback request ID to query
 
         Returns:
-            Optional[dict]: The raw dictionary response if found, None if not found
-
-        Raises:
-            Exception: If there's an error accessing Redis
+            Optional[HumanFeedbackResponse]: The human feedback response if found and valid,
+                                            None if not found or error occurred
         """
         await cls.init_session()
         if cls._cache is None:
@@ -262,11 +268,53 @@ class SyntheticAPI:
                 logger.warning(f"No human feedback data found for ID: {hf_id}")
                 return None
 
-            # Decode and parse the JSON data (return as raw dict)
-            return json.loads(data.decode("utf-8"))
+            # Decode and parse the JSON data
+            raw_response = json.loads(data.decode("utf-8"))
 
+            # Check if the response indicates an error
+            if not raw_response.get("success", True):
+                error_message = raw_response.get("message", "Unknown error")
+                logger.error(f"Error in synthetic API response: {error_message}")
+                raise FeedbackImprovementError(f"API error: {error_message}")
+
+            # Manually construct the HumanFeedbackResponse object
+            try:
+                # Prepare human feedback tasks with completion_id handling
+                human_feedback_tasks = []
+
+                for task_data in raw_response.get("human_feedback_tasks", []):
+                    # Create the task with all required fields
+                    # If completion_id is missing, it will use the default_factory
+                    task = HumanFeedbackTask(
+                        miner_hotkey=task_data.get("miner_hotkey", ""),
+                        miner_response_id=task_data.get("miner_response_id", ""),
+                        feedback=task_data.get("feedback", ""),
+                        model=task_data.get("model", "unknown"),
+                        completion_id=get_new_uuid(),
+                        generated_code=task_data.get("generated_code", None),
+                    )
+                    human_feedback_tasks.append(task)
+
+                # Create and return the complete response object
+                return HumanFeedbackResponse(
+                    base_prompt=raw_response.get("base_prompt", ""),
+                    base_code=raw_response.get("base_code", ""),
+                    human_feedback_tasks=human_feedback_tasks,
+                )
+
+            except ValidationError as e:
+                logger.error(f"Failed to validate response data: {e}")
+                raise FeedbackImprovementError(f"Validation error: {e}")
+
+        except FeedbackImprovementError as e:
+            logger.error(f"Error getting improved task for ID {hf_id}: {e}")
+            return None
+        except (RetryError, ValueError) as e:
+            logger.error(f"Error getting improved task for ID {hf_id}: {e}")
+            return None
         except Exception as e:
             logger.error(
                 f"Error retrieving raw human feedback for ID {hf_id}: {str(e)}"
             )
-            raise
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+            return None

@@ -15,11 +15,11 @@ def build_redis_url(config: RedisSettings) -> str:
     username = config.REDIS_USERNAME
     password = config.REDIS_PASSWORD
     if username and password:
-        return f"rediss://{username}:{password}@{host}:{port}"
+        return f"redis://{username}:{password}@{host}:{port}"
     elif password:
-        return f"rediss://:{password}@{host}:{port}"
+        return f"redis://:{password}@{host}:{port}"
     else:
-        return f"rediss://{host}:{port}"
+        return f"redis://{host}:{port}"
 
 
 class RedisCache:

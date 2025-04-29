@@ -113,6 +113,10 @@ class HFLManager:
                     return await HFLManager._handle_tf_pending(
                         current_state, updates, event_data, tx
                     )
+                case HFLStatusEnum.TF_FAILED:
+                    return await HFLManager._handle_tf_failed(
+                        current_state, updates, event_data, tx
+                    )
                 case HFLStatusEnum.SF_PENDING:
                     return await HFLManager._handle_sf_pending(
                         current_state, updates, event_data, tx
@@ -151,6 +155,17 @@ class HFLManager:
         return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
+    async def _handle_tf_failed(
+        state: HFLState,
+        updates: HFLStateUpdateInput,
+        event_data: HFLEvent | None = None,
+        tx=None,
+    ) -> HFLState:
+        """Handle transition to TF_FAILED."""
+        # TODO Add TF failed specific logic as needed
+        return await HFLManager._update_state(state, updates, event_data, tx)
+
+    @staticmethod
     async def _handle_sf_pending(
         state: HFLState,
         updates: HFLStateUpdateInput,
@@ -160,9 +175,10 @@ class HFLManager:
         """Handle transition to SF_PENDING."""
         # TODO Add SF pending specific logic as needed
 
-        updates["current_synthetic_req_id"] = (
-            event_data.syn_req_id
-        )  # Clear the current synthetic request ID
+        if event_data:
+            updates["current_synthetic_req_id"] = (
+                event_data.syn_req_id
+            )  # Clear the current synthetic request ID
         return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod

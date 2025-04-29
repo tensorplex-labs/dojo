@@ -28,9 +28,11 @@ enum CriteriaTypeEnum {
 enum HFLStatusEnum {
     TF_PENDING // TF created, waiting for feedback, no TASK_RESULT yet
     TF_COMPLETED // TF task completed, and TASK_RESULT are updated, waiting for synthetic request
+    TF_FAILED // TF task failed for some reason
+    TF_SCHEDULED // Ready for next HFL iteration
     SF_PENDING // SF created, waiting for scores from miners
     SF_COMPLETED // SF task results received from miners
-    TF_SCHEDULED // Ready for next HFL iteration
+    SF_FAILED // SF task failed for some reason
     HFL_COMPLETED // HFL loop finished
 }
 

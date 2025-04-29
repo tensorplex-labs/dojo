@@ -5,12 +5,14 @@ from datetime import datetime, timezone
 
 from bittensor.core.chain_data.axon_info import AxonInfo
 from bittensor.utils.btlogging import logging as logger
-from tenacity import RetryError
 
 from commons.dataset.synthetic import SyntheticAPI
+from commons.dataset.types import HumanFeedbackResponse
 from commons.hfl_heplers import HFLManager
-from commons.human_feedback.exceptions import FeedbackImprovementError
-from commons.human_feedback.utils import map_human_feedback_to_task_synapse
+from commons.human_feedback.utils import (
+    create_initial_miner_scores,
+    map_human_feedback_to_task_synapse,
+)
 from commons.orm import ORM
 from commons.utils import datetime_as_utc
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
@@ -22,46 +24,19 @@ from neurons.validator import Validator
 
 async def get_improved_task_from_synthetic_api(
     syn_req_id: str,
-) -> dict[str, str] | None:
+) -> HumanFeedbackResponse | None:
     """
-    Get improved task from synthetic API based on request ID.
-
-    This function handles the raw response from Redis without converting it to our
-    HumanFeedbackResponse model, preserving additional fields like success and hf_id.
+    Get improved task from synthetic API based on request ID as a HumanFeedbackResponse.
 
     Args:
         syn_req_id: Synthetic API request ID
 
     Returns:
-        Raw response data dictionary or None if not found/error
+        HumanFeedbackResponse object or None if not found/error
     """
-    try:
-        # TODO: Handle case that synthetic API failure
-        # Call the SyntheticAPI to get the raw response
-        raw_response = await SyntheticAPI.get_improved_task_raw(syn_req_id)
-        logger.info(f"Raw response: {raw_response}")
-
-        if not raw_response:
-            logger.error(f"No improved task found for {syn_req_id}")
-            return None
-
-        # Check if the response indicates an error
-        if not raw_response.get("success", True):
-            error_message = raw_response.get("message", "Unknown error")
-            logger.error(f"Error in synthetic API response: {error_message}")
-            raise FeedbackImprovementError(f"API error: {error_message}")
-
-        return raw_response
-    except FeedbackImprovementError as e:
-        logger.error(f"Error getting improved task for {syn_req_id}: {e}")
-        return None
-    except (RetryError, ValueError) as e:
-        logger.error(f"Error getting improved task for {syn_req_id}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error during synthetic data retrieval: {e}")
-        logger.debug(f"Traceback: {traceback.format_exc()}")
-        return None
+    response = await SyntheticAPI.get_improved_task_raw(syn_req_id)
+    logger.info(f"Response: {response}")
+    return response
 
 
 async def create_score_feedback_task(
@@ -151,6 +126,7 @@ async def create_score_feedback_task(
             miner_responses=miner_responses,
             hfl_state=hfl_state,
             previous_task_id=tf_task_id,
+            human_feedback_response=improved_task_data,
         )
 
         if not validator_task:
@@ -215,9 +191,9 @@ async def process_score_feedback_task(
                 )
                 continue
 
-            # Then update the scores using the provided task results
-            score_update_success = await ORM.update_scores_from_task_result(
-                sf_task_id=sf_task.id,
+            # Create initial miner scores with their relations
+            score_update_success = await create_initial_miner_scores(
+                validator_task_id=sf_task.id,
                 miner_hotkey=miner_response.hotkey,
                 task_results=task_results,
             )

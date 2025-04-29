@@ -6,6 +6,7 @@ from typing import AsyncGenerator, List
 
 from bittensor.utils.btlogging import logging as logger
 
+from commons.dataset.types import HumanFeedbackResponse
 from commons.exceptions import (
     ExpiredFromMoreThanExpireTo,
     InvalidMinerResponse,
@@ -29,6 +30,7 @@ from database.prisma.models import GroundTruth, HFLState, ValidatorTask
 from database.prisma.types import (
     CriterionWhereInput,
     FindManyMinerResponseArgsFromValidatorTask,
+    HFLCompletionRelationCreateWithoutRelationsInput,
     HFLStateUpdateInput,
     MinerResponseCreateWithoutRelationsInput,
     MinerResponseInclude,
@@ -48,7 +50,7 @@ from dojo.protocol import (
 
 
 class ORM:
-    # TODO: deprecate this function
+    # TODO: refactor this function
     @staticmethod
     async def get_expired_tasks(
         batch_size: int = 10,
@@ -848,67 +850,6 @@ class ORM:
             logger.error(f"Error getting tasks by HFL status {status}: {e}")
             yield [], False
 
-    # TODO: removed this function
-    @staticmethod
-    async def get_SF_tasks_by_hfl_status(
-        status: HFLStatusEnum,
-        expire_from: datetime | None = None,
-        expire_to: datetime | None = None,
-        batch_size: int = 10,
-    ) -> AsyncGenerator[tuple[list[ValidatorTask], bool], None]:
-        """Get Score-Feedback tasks by HFL status and expiry window in batches.
-
-        Args:
-            status: HFL status to filter by
-            expire_from: Optional datetime to filter tasks that expired after this time
-            expire_to: Optional datetime to filter tasks that expired before this time
-            batch_size: Number of tasks to return in each batch
-
-        Yields:
-            tuple[list[ValidatorTask], bool]: Each yield returns:
-            - List of validator tasks with the specified HFL status
-            - Boolean indicating if there are more batches to process
-        """
-        try:
-            where_query = ValidatorTaskWhereInput(
-                task_type=TaskTypeEnum.SCORE_FEEDBACK,
-                HFLState={"is": {"status": status}},
-            )
-
-            # Add expire time filters if provided
-            if expire_from and expire_to:
-                where_query["expire_at"] = {
-                    "gt": expire_from,
-                    "lt": expire_to,
-                }
-
-            # Get total count of matching tasks
-            total_tasks = await ValidatorTask.prisma().count(where=where_query)
-
-            if total_tasks == 0:
-                yield [], False
-                return
-
-            # Process in batches
-            for skip in range(0, total_tasks, batch_size):
-                tasks = await ValidatorTask.prisma().find_many(
-                    where=where_query,
-                    include={
-                        "HFLState": True,
-                        "miner_responses": True,
-                    },
-                    order={"created_at": "desc"},
-                    take=batch_size,
-                    skip=skip,
-                )
-
-                has_more = skip + batch_size < total_tasks
-                yield tasks, has_more
-
-        except Exception as e:
-            logger.error(f"Error getting SF tasks by status {status}: {e}")
-            yield [], False
-
     @staticmethod
     async def get_tasks_by_hfl_status(
         status: HFLStatusEnum,
@@ -1088,6 +1029,7 @@ class ORM:
         miner_responses: list[TaskSynapseObject],
         hfl_state: HFLState,
         previous_task_id: str,
+        human_feedback_response: HumanFeedbackResponse,
     ) -> tuple[ValidatorTask, HFLState]:
         """
         Save a Score Feedback task and update an existing HFL state within a single transaction.
@@ -1163,10 +1105,27 @@ class ORM:
                 ),
                 tx=tx,
             )
-            # TODO: update the hfl completion relation
-
             if not updated_hfl_state:
                 raise ValueError(f"Failed to update HFL state with ID {hfl_state.id}")
+
+            completion_relations = [
+                {
+                    "miner_response_id": feedback_task.miner_response_id,
+                    "completion_id": feedback_task.completion_id,
+                }
+                for feedback_task in human_feedback_response.human_feedback_tasks
+            ]
+
+            await tx.hflcompletionrelation.create_many(
+                data=[
+                    HFLCompletionRelationCreateWithoutRelationsInput(
+                        **relation,
+                        created_at=datetime_as_utc(datetime.now()),
+                        updated_at=datetime_as_utc(datetime.now()),
+                    )
+                    for relation in completion_relations
+                ]
+            )
 
             return created_task, updated_hfl_state
 
@@ -1428,111 +1387,6 @@ class ORM:
         except Exception as e:
             logger.error(f"Failed to get validator task with ID {task_id}: {e}")
         return None
-
-    @staticmethod
-    async def update_scores_from_task_result(
-        sf_task_id: str,
-        miner_hotkey: str,
-        task_results: List[TaskResult],
-    ) -> bool:
-        """Updates scores for a miner based on task results.
-
-        Args:
-            sf_task_id: The validator task ID
-            miner_hotkey: The hotkey of the miner
-            task_results: List of task results to extract scores from
-
-        Returns:
-            bool: True if update was successful, False otherwise
-        """
-        try:
-            # Get miner response with scores
-            db_miner_response = await prisma.minerresponse.find_first(
-                where={
-                    "validator_task_id": sf_task_id,
-                    "hotkey": miner_hotkey,
-                },
-                include=MinerResponseInclude(
-                    {
-                        "scores": {
-                            "include": {
-                                "criterion_relation": {
-                                    "include": {"completion_relation": True}
-                                }
-                            }
-                        }
-                    }
-                ),
-            )
-
-            if not db_miner_response:
-                logger.error(f"No miner response found for {miner_hotkey}")
-                return False
-
-            if not db_miner_response.scores:
-                logger.warning(f"No scores found for miner {miner_hotkey}")
-                return False
-
-            # Process in a single transaction
-            async with prisma.tx() as tx:
-                update_count = 0
-                for score_record in db_miner_response.scores:
-                    if (
-                        not score_record.criterion_relation
-                        or not score_record.criterion_relation.completion_relation
-                    ):
-                        continue
-
-                    completion = score_record.criterion_relation.completion_relation
-                    model_name = completion.model  # Use model name for matching
-
-                    # Find matching score in task results - using model name
-                    raw_score = None
-                    for task_result in task_results:
-                        for result in task_result.result_data:
-                            # Match by model name
-                            if result.model == model_name:
-                                # Get the score from the criteria list where type is "score"
-                                for criterion in result.criteria:
-                                    if (
-                                        criterion.get("type") == "score"
-                                        and "value" in criterion
-                                    ):
-                                        raw_score = criterion.get("value")
-                                        break
-                                if raw_score is not None:
-                                    break
-
-                    if raw_score is None:
-                        continue
-
-                    # Update the score record with the raw score
-                    existing_scores = json.loads(score_record.scores)
-                    existing_scores["raw_score"] = raw_score
-
-                    await tx.minerscore.update(
-                        where={
-                            "criterion_id_miner_response_id": {
-                                "criterion_id": score_record.criterion_id,
-                                "miner_response_id": db_miner_response.id,
-                            }
-                        },
-                        data={"scores": Json(json.dumps(existing_scores))},
-                    )
-                    update_count += 1
-
-            if update_count > 0:
-                logger.success(
-                    f"Updated {update_count} scores for miner {miner_hotkey}"
-                )
-                return True
-            else:
-                logger.warning(f"No scores were updated for miner {miner_hotkey}")
-                return False
-
-        except Exception as e:
-            logger.error(f"Error updating scores from task results: {e}")
-            return False
 
     @staticmethod
     async def update_hfl_scores(

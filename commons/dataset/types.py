@@ -2,6 +2,7 @@ from typing import List
 
 from pydantic import BaseModel, Field
 
+from commons.utils import get_new_uuid
 from dojo.protocol import CodeAnswer
 
 
@@ -9,6 +10,10 @@ class HumanFeedbackTask(BaseModel):
     miner_hotkey: str
     miner_response_id: str
     feedback: str
+    model: str
+    completion_id: str = Field(
+        description="ID of the completion", default_factory=get_new_uuid
+    )
     generated_code: CodeAnswer
 
 

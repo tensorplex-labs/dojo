@@ -11,7 +11,10 @@ import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dataset.types import MinerFeedback, TextFeedbackRequest
 from commons.hfl_heplers import HFLManager
-from commons.human_feedback.utils import extract_text_feedback_from_results
+from commons.human_feedback.utils import (
+    create_initial_miner_scores,
+    extract_text_feedback_from_results,
+)
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
@@ -22,6 +25,7 @@ from dojo.protocol import (
     TextCriteria,
     TextFeedbackEvent,
 )
+from neurons.validator import Validator
 
 
 async def create_text_feedback_task(
@@ -92,7 +96,7 @@ async def create_text_feedback_task(
 
 
 async def fetch_miner_feedback_for_task(
-    validator, task: ValidatorTask
+    validator: Validator, task: ValidatorTask
 ) -> tuple[list[MinerFeedback], list[MinerResponse]]:
     """
     Fetch and process miner feedback for a task.
@@ -159,7 +163,7 @@ async def fetch_miner_feedback_for_task(
     # Execute all fetch tasks concurrently
     task_results_list = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
-    # Process results and update the database
+    # A list of miner responses that have been updated with the new results
     for i, result in enumerate(task_results_list):
         if isinstance(result, BaseException):
             logger.warning(
@@ -179,18 +183,35 @@ async def fetch_miner_feedback_for_task(
             task_results=result,
         )
 
-        if success:
-            # Extract text feedback
-            feedback_text = extract_text_feedback_from_results(result)
-            if feedback_text:
-                miner_feedbacks.append(
-                    MinerFeedback(
-                        hotkey=miner_response.hotkey,
-                        miner_response_id=miner_response.id,
-                        feedback=feedback_text,
-                    )
+        if not success:
+            logger.error(
+                f"Error updating miner task results for miner {miner_response.hotkey}"
+            )
+            continue
+
+        # Create initial miner scores with their relations
+        success = await create_initial_miner_scores(
+            validator_task_id=task.id,
+            miner_hotkey=miner_response.hotkey,
+            task_results=result,
+        )
+
+        if not success:
+            logger.error(
+                f"Error creating initial miner scores for miner {miner_response.hotkey}"
+            )
+
+        # Extract text feedback
+        feedback_text = extract_text_feedback_from_results(result)
+        if feedback_text:
+            miner_feedbacks.append(
+                MinerFeedback(
+                    hotkey=miner_response.hotkey,
+                    miner_response_id=miner_response.id,
+                    feedback=feedback_text,
                 )
-                valid_responses.append(miner_response)
+            )
+            valid_responses.append(miner_response)
 
     return miner_feedbacks, valid_responses
 

@@ -30,8 +30,8 @@ from commons.human_feedback.utils import (
 from commons.orm import ORM
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import MinerResponse
-from database.prisma.types import ValidatorTaskInclude
-from dojo.protocol import DendriteQueryResponse, TaskSynapseObject
+from database.prisma.types import HFLStateUpdateInput, ValidatorTaskInclude
+from dojo.protocol import DendriteQueryResponse, TaskSynapseObject, TextFeedbackEvent
 from neurons.validator import Validator
 
 
@@ -140,7 +140,7 @@ class FeedbackLoop:
                 expire_to=expire_to,
                 is_processed=True,
                 has_previous_task=False,
-                task_type=TaskTypeEnum.CODE_GENERATION,
+                task_types=[TaskTypeEnum.CODE_GENERATION],
             ):
                 for dendrite_response in tasks_batch:
                     eligible_task = await self._evaluate_task(dendrite_response)
@@ -385,14 +385,29 @@ class FeedbackLoop:
                         )
 
                     else:
-                        # TODO: handled edge case where we have no responses
                         # Handle task with insufficient responses at max retries
                         logger.warning(
                             f"Task {task.id} failed to get enough responses after {MAX_RETRY_ATTEMPTS} attempts. "
                             f"Using available {response_count} responses."
                         )
+                        if response_count == 0:
+                            logger.warning(f"Task {task.id} has no responses, skipping")
+                            await HFLManager.update_state(
+                                hfl_state_id=task.HFLState.id,
+                                updates=HFLStateUpdateInput(
+                                    status=HFLStatusEnum.TF_FAILED
+                                ),
+                                event_data=TextFeedbackEvent(
+                                    type=HFLStatusEnum.TF_FAILED,
+                                    task_id=task.id,
+                                    iteration=task.HFLState.current_iteration,
+                                ),
+                            )
+                            await ORM.mark_validator_task_as_processed([task.id])
 
-                        if response_count > 0:
+                            continue
+
+                        else:
                             # Use all available responses (up to 3)
                             available_feedbacks = miner_feedbacks[
                                 : min(3, response_count)
@@ -523,11 +538,15 @@ class FeedbackLoop:
             )
 
             # Get SF_PENDING tasks in batches
-            async for sf_tasks_batch, _ in ORM.get_SF_tasks_by_hfl_status(
+            async for sf_tasks_batch, _ in ORM.get_tasks_by_hfl_status(
                 status=HFLStatusEnum.SF_PENDING,
+                task_type=TaskTypeEnum.SCORE_FEEDBACK,
                 expire_from=expire_from,
                 expire_to=expire_to,
                 batch_size=10,
+                include_options=ValidatorTaskInclude(
+                    {"HFLState": True, "miner_responses": True}
+                ),
             ):
                 if not sf_tasks_batch:
                     continue
@@ -581,6 +600,7 @@ class FeedbackLoop:
             # Get tasks with TF_SCHEDULED status in batches
             async for scheduled_tasks_batch, _ in ORM.get_tasks_by_hfl_status(
                 status=HFLStatusEnum.TF_SCHEDULED,
+                task_type=TaskTypeEnum.SCORE_FEEDBACK,
                 batch_size=10,
                 include_options=ValidatorTaskInclude(
                     {"HFLState": True, "completions": True}

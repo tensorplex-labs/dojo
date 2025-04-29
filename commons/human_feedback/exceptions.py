@@ -29,16 +29,6 @@ class HFLProcessingError(HFLError):
     pass
 
 
-class FeedbackImprovementError(HFLError):
-    """Raised when there's an error with the Synthetic API integration."""
-
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-    pass
-
-
 class InsufficientResponsesError(HFLError):
     """Raised when there aren't enough valid responses to continue."""
 

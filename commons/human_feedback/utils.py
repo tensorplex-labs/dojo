@@ -2,15 +2,21 @@
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from bittensor.utils.btlogging import logging as logger
 
+from commons.dataset.types import HumanFeedbackResponse
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
+from database.client import prisma
 from database.prisma import Json
-from database.prisma.models import HFLState, MinerScore
-from database.prisma.types import MinerScoreWhereInput
+from database.prisma.models import Criterion, HFLState, MinerScore, ValidatorTask
+from database.prisma.types import (
+    MinerScoreCreateInput,
+    MinerScoreUpdateInput,
+    MinerScoreWhereInput,
+    ValidatorTaskInclude,
+)
 from dojo import TASK_DEADLINE
 from dojo.protocol import (
     CompletionResponse,
@@ -18,6 +24,7 @@ from dojo.protocol import (
     TaskResult,
     TaskSynapseObject,
     TaskTypeEnum,
+    TextFeedbackScore,
 )
 
 
@@ -107,31 +114,22 @@ def get_time_window_for_tasks(hours_ago_start: int = 48, hours_ago_end: int = 0)
 
 
 def map_human_feedback_to_task_synapse(
-    response_data: dict[str, Any],
+    response_data: HumanFeedbackResponse,
 ) -> TaskSynapseObject | None:
     """
-    Map the HumanFeedbackResponse from Redis to a TaskSynapseObject.
-
-    This function handles the Redis response format which includes additional fields
-    like success and hf_id that aren't part of our data model.
+    Map the HumanFeedbackResponse to a TaskSynapseObject.
 
     Args:
-        response_data: The response data from Redis
+        response_data: HumanFeedbackResponse object from Synthetic API
 
     Returns:
         A TaskSynapseObject ready to be sent to miners, or None if conversion fails
     """
     try:
-        # First, check if the response was successful
-        if isinstance(response_data, dict) and not response_data.get("success", True):
-            error_message = response_data.get("message", "Unknown error")
-            logger.error(f"Error in human feedback response: {error_message}")
-            return None
-
         # Create a new synthetic task for scoring
         task_synapse = TaskSynapseObject(
             task_id=get_new_uuid(),
-            prompt=response_data.get("base_prompt", ""),
+            prompt=response_data.base_prompt,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
             expire_at=set_expire_time(TASK_DEADLINE),
         )
@@ -142,8 +140,8 @@ def map_human_feedback_to_task_synapse(
         # First add the original (base) code as a completion for reference
         completion_responses.append(
             CompletionResponse(
-                model=response_data.get("model", "unknown"),
-                completion=response_data.get("base_code", ""),
+                model="original",  # Use a default model name for base code
+                completion=response_data.base_code,
                 completion_id=get_new_uuid(),
                 criteria_types=[
                     ScoreCriteria(
@@ -155,15 +153,17 @@ def map_human_feedback_to_task_synapse(
         )
 
         # Add each generated version from feedback
-        for feedback_task in response_data.get("human_feedback_tasks", []):
+        for feedback_task in response_data.human_feedback_tasks:
             if (
-                "generated_code" in feedback_task
-                and "code" in feedback_task["generated_code"]
+                hasattr(feedback_task, "generated_code")
+                and feedback_task.generated_code
             ):
                 completion_responses.append(
                     CompletionResponse(
-                        model=feedback_task.get("model", "unknown"),
-                        completion=feedback_task["generated_code"]["code"],
+                        model=feedback_task.model
+                        if hasattr(feedback_task, "model")
+                        else "unknown",
+                        completion=feedback_task.generated_code,
                         completion_id=get_new_uuid(),
                         criteria_types=[
                             ScoreCriteria(
@@ -451,3 +451,317 @@ async def should_continue_hfl(
     except Exception as e:
         logger.error(f"Error in should_continue_hfl: {e}")
         return False, f"error: {str(e)}"
+
+
+def extract_criteria_values_by_model_and_type(task_results: list[TaskResult]) -> dict:
+    """
+    Extract and group criterion values by model ID and criterion type from task results.
+
+    Example input:
+    task_results = [
+        {
+            "result_data": [
+                {
+                    "model": "model_123",
+                    "criteria": [
+                        {"type": "score", "value": 80},
+                        {"type": "text", "value": "Good code"}
+                    ]
+                },
+                {
+                    "model": "model_456",
+                    "criteria": [
+                        {"type": "score", "value": 90}
+                    ]
+                }
+            ]
+        },
+        {
+            "result_data": [
+                {
+                    "model": "model_123",
+                    "criteria": [
+                        {"type": "score", "value": 70},
+                        {"type": "text", "value": "Needs improvement"}
+                    ]
+                }
+            ]
+        }
+    ]
+
+    Example output:
+    {
+        "model_123": {
+            "score": [80, 70],
+            "text": ["Good code", "Needs improvement"]
+        },
+        "model_456": {
+            "score": [90]
+        }
+    }
+
+    Args:
+        task_results: List of task results from miners
+
+    Returns:
+        Dictionary mapping model IDs to criterion types to lists of values
+    """
+    model_to_criteria_values = {}
+
+    for result in task_results:
+        # Each task result contains result_data for multiple models
+        for result_data in result.result_data:
+            model_id = getattr(result_data, "model", None)
+            criteria_list = getattr(result_data, "criteria", [])
+
+            if not model_id or not criteria_list:
+                continue
+
+            # Initialize dictionary for this model if not exists
+            if model_id not in model_to_criteria_values:
+                model_to_criteria_values[model_id] = {}
+
+            # Group criteria by type and collect values
+            for criterion in criteria_list:
+                criterion_type = criterion.get("type")
+                criterion_value = criterion.get("value")
+
+                if criterion_type and criterion_value is not None:
+                    # Initialize list for this criterion type if not exists
+                    if criterion_type not in model_to_criteria_values[model_id]:
+                        model_to_criteria_values[model_id][criterion_type] = []
+
+                    # Add this value to the list
+                    model_to_criteria_values[model_id][criterion_type].append(
+                        criterion_value
+                    )
+
+    return model_to_criteria_values
+
+
+def calculate_criteria_averages(model_to_criteria_values: dict) -> dict:
+    """
+    Calculate average values for each criterion type by model, focusing on numeric types like "score".
+
+    Example input:
+    {
+        "model_123": {
+            "score": [80, 70],
+            "text": ["Good code", "Needs improvement"]
+        },
+        "model_456": {
+            "score": [90]
+        }
+    }
+
+    Example output:
+    {
+        "model_123": {
+            "score": 75.0,         # Average of [80, 70]
+            "text": ["Good code", "Needs improvement"]  # Text values are kept as-is
+        },
+        "model_456": {
+            "score": 90.0          # Average of [90]
+        }
+    }
+
+    Args:
+        model_to_criteria_values: Dictionary mapping model IDs to criterion types to lists of values
+
+    Returns:
+        Dictionary mapping model IDs to criterion types to averaged values (for numeric types)
+    """
+    model_criteria_type_to_avg = {}
+
+    for model_id, criteria_types in model_to_criteria_values.items():
+        model_criteria_type_to_avg[model_id] = {}
+
+        for criterion_type, values in criteria_types.items():
+            if not values:
+                continue
+
+            # For score type, calculate average
+            if criterion_type == "score" and all(
+                isinstance(v, int | float) for v in values
+            ):
+                avg_value = sum(values) / len(values)
+                model_criteria_type_to_avg[model_id][criterion_type] = avg_value
+            else:
+                # For non-numeric types like text, just pass through the values
+                model_criteria_type_to_avg[model_id][criterion_type] = values
+
+    return model_criteria_type_to_avg
+
+
+@staticmethod
+async def create_initial_miner_scores(
+    validator_task_id: str,
+    miner_hotkey: str,
+    task_results: list[TaskResult],
+) -> bool:
+    """
+    Create initial miner scores based on task results for a specific miner.
+
+    This function:
+    1. Extracts criteria values from task results grouped by model and criterion type
+    2. Calculates averages for numeric criterion types (e.g., "score")
+    3. Maps these to the corresponding completion and criterion records in the database
+    4. Creates or updates MinerScore records with the appropriate values
+
+    Args:
+        sf_task_id: Score feedback task ID
+        miner_hotkey: Hotkey of the miner to update scores for
+        task_results: List of task results containing score information
+
+    Returns:
+        Tuple containing success flag and error message (if any)
+    """
+    try:
+        # Step 1: Find the miner response for this task and miner
+        db_miner_response = await prisma.minerresponse.find_first(
+            where={
+                "validator_task_id": validator_task_id,
+                "hotkey": miner_hotkey,
+            },
+        )
+
+        if not db_miner_response:
+            logger.error(
+                f"No miner response found for task {validator_task_id} and miner {miner_hotkey}"
+            )
+            return False
+
+        # Step 2: Get the SF task with completions and criteria
+        sf_task = await ValidatorTask.prisma().find_unique(
+            where={"id": validator_task_id},
+            include=ValidatorTaskInclude(
+                {"completions": {"include": {"criterion": True}}}
+            ),
+        )
+
+        if not sf_task or not sf_task.completions:
+            logger.error(f"No completions found for SF task {validator_task_id}")
+            return False
+
+        # Step 3: Extract and group criteria values from task results
+        # Example result: {"model_123": {"score": [80, 70], "text": ["Good code", "Needs improvement"]}}
+
+        from commons.human_feedback.utils import (
+            extract_criteria_values_by_model_and_type,
+        )
+
+        model_to_criteria_values = extract_criteria_values_by_model_and_type(
+            task_results
+        )
+
+        # Step 4: Calculate averages for numeric criteria (e.g., scores)
+        # Example result: {"model_123": {"score": 75.0, "text": ["Good code", "Needs improvement"]}}
+
+        from commons.human_feedback.utils import calculate_criteria_averages
+
+        model_criteria_type_to_values = calculate_criteria_averages(
+            model_to_criteria_values
+        )
+
+        logger.info(f"Processed criteria values: {model_criteria_type_to_values}")
+
+        # Step 5: Create mapping from completion_id and criterion type to criterion object
+        # Example: {"completion_123": {"score": <Criterion object>, "text": <Criterion object>}}
+        completion_criteria_map: dict[str, dict[str, Criterion]] = {}
+        for completion in sf_task.completions:
+            completion_id = completion.completion_id
+            completion_criteria_map[completion_id] = {}
+
+            if not completion.criterion:
+                logger.warning(f"No criterion found for completion {completion_id}")
+                continue
+
+            for criterion in completion.criterion:
+                criterion_type = (
+                    criterion.criteria_type.lower()
+                )  # Ensure lowercase comparison
+                completion_criteria_map[completion_id][criterion_type] = criterion
+
+        # Step 6: Update database records in a transaction
+        async with prisma.tx() as tx:
+            updates_count = 0
+
+            # Process each model's criteria values
+            for model_id, criteria_values in model_criteria_type_to_values.items():
+                if model_id not in completion_criteria_map:
+                    logger.warning(f"No matching completion found for model {model_id}")
+                    continue
+
+                model_criteria: dict[str, Criterion] = completion_criteria_map[model_id]
+
+                # Process each criterion type (score, text, etc.)
+                for criterion_type, values in criteria_values.items():
+                    if criterion_type not in model_criteria:
+                        logger.warning(
+                            f"No criterion of type '{criterion_type}' found for model {model_id}"
+                        )
+                        continue
+
+                    criterion = model_criteria[criterion_type]
+                    scores_data = {}
+
+                    # Create appropriate scores object based on criterion type
+                    if criterion_type == "score":
+                        # For score type, create a structured Scores object
+                        from dojo.protocol import Scores
+
+                        scores_obj = Scores(
+                            raw_score=values,  # This is the calculated average
+                            # Initialize other scores as None
+                            rank_id=None,
+                            normalised_score=None,
+                            ground_truth_score=None,
+                            cosine_similarity_score=None,
+                            normalised_cosine_similarity_score=None,
+                            cubic_reward_score=None,
+                            sf_score=None,
+                            icc_score=None,
+                        )
+                        scores_data = scores_obj.model_dump()
+                    elif criterion_type == "text":
+                        # For text type, store as a list or join into a single string
+                        scores_data = TextFeedbackScore(tf_score=None).model_dump()
+                    else:
+                        # For other criterion types, store the value directly
+                        pass
+
+                    # Use upsert to create or update the score record
+                    upserted_score = await tx.minerscore.upsert(
+                        where={
+                            "criterion_id_miner_response_id": {
+                                "criterion_id": criterion.id,
+                                "miner_response_id": db_miner_response.id,
+                            }
+                        },
+                        data={
+                            "create": MinerScoreCreateInput(
+                                miner_response_id=db_miner_response.id,
+                                criterion_id=criterion.id,
+                                scores=Json(scores_data),
+                            ),
+                            "update": MinerScoreUpdateInput(
+                                scores=Json(scores_data),
+                            ),
+                        },
+                    )
+
+                    logger.debug(
+                        f"Upserted score {upserted_score.id} for criterion type {criterion_type}"
+                    )
+                    updates_count += 1
+
+            logger.info(
+                f"Successfully updated {updates_count} scores for miner {miner_hotkey} on task {validator_task_id}"
+            )
+            return updates_count > 0
+
+    except Exception as e:
+        logger.error(
+            f"Error updating scores for miner {miner_hotkey} on task {validator_task_id}: {e}"
+        )
+        return False
