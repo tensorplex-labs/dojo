@@ -791,7 +791,7 @@ class Validator(aobject):
                 # upload scores to analytics API after updating.
                 # record last successful upload time.
                 self.last_anal_upload_time = await run_analytics_upload(
-                    self._scores_alock, self.last_anal_upload_time, expire_to
+                    self._scores_alock, self.last_anal_upload_time, expire_to, self.kami
                 )
             except Exception:
                 logger.error("Error in score_and_send_feedback")

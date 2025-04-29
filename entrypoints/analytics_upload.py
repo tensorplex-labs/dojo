@@ -13,9 +13,10 @@ from typing import List
 
 import bittensor as bt
 import httpx
-from bittensor.core.async_subtensor import AsyncSubtensor
 from bittensor.core.metagraph import AsyncMetagraph
 from bittensor.utils.btlogging import logging as logger
+
+from dojo.kami.kami import Kami
 
 from commons.exceptions import NoProcessedTasksYet
 from commons.objects import ObjectManager
@@ -185,7 +186,7 @@ async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response
 
 
 async def run_analytics_upload(
-    scores_alock: asyncio.Lock, expire_from: datetime | None, expire_to: datetime
+    scores_alock: asyncio.Lock, expire_from: datetime | None, expire_to: datetime, kami: Kami
 ) -> datetime | None:
     """
     run_analytics_upload()
@@ -215,10 +216,9 @@ async def run_analytics_upload(
         wallet = bt.wallet(config=config)
         validator_hotkey = wallet.hotkey.ss58_address
 
-        async with AsyncSubtensor(config=config) as subtensor:
-            subnet_metagraph = await subtensor.metagraph(config.netuid)  # type: ignore
-            root_metagraph = await subtensor.metagraph(0)
-            all_miners = await _get_all_miner_hotkeys(subnet_metagraph, root_metagraph)
+        subnet_metagraph = await kami.get_metagraph(config.netuid)  # type: ignore
+        root_metagraph = await kami.get_metagraph(0)
+        all_miners = await _get_all_miner_hotkeys(subnet_metagraph, root_metagraph)
 
         # 1. collect processed tasks from db
         anal_data: AnalyticsPayload = await _get_task_data(
