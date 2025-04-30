@@ -152,7 +152,7 @@ class Miner(aobject):
             if serve_success.get("statusCode", None) == 200:
                 logger.success("Successfully served axon for miner!")
             else:
-                logger.error("Failed to serve axon for miner, exiting.")
+                logger.error(f"Failed to serve axon for miner, exiting with error message: {serve_success.get('message')}")
                 exit()
         else:
             logger.info("Axon already served, no need to serve again.")
