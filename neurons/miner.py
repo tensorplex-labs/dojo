@@ -18,8 +18,7 @@ from commons.utils import aget_effective_stake, aobject, get_epoch_time
 #                            serve_axon)
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import parse_block_headers
-from dojo.kami import Kami
-from dojo.kami.types import ServeAxonPayload
+from dojo.kami import Kami, ServeAxonPayload
 from dojo.protocol import (
     Heartbeat,
     ScoringResult,

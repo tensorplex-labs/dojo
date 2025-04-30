@@ -20,8 +20,7 @@ from Crypto.Hash import keccak
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
 from commons.objects import ObjectManager
-from dojo.kami import Kami
-from dojo.kami.types import SubnetMetagraph
+from dojo.kami import Kami, SubnetMetagraph
 
 ROOT_WEIGHT = 0.18
 ROOT_NETUID = 0

@@ -6,8 +6,8 @@ import torch
 from bittensor.utils.btlogging import logging as logger
 from numpy.typing import NDArray
 
+from dojo.kami import SubnetMetagraph
 from dojo.kami.kami import Kami
-from dojo.kami.types import SubnetMetagraph
 
 U32_MAX = 4294967295
 U16_MAX = 65535
