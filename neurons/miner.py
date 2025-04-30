@@ -188,6 +188,7 @@ class Miner(aobject):
 
     def _cleanup(self):
         self.axon.stop()
+        self.kami.close()
 
     async def ack_heartbeat(self, synapse: Heartbeat) -> Heartbeat:
         caller_hotkey = (

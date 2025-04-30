@@ -861,6 +861,7 @@ class Validator(aobject):
         """Handle cleanup operations when shutting down"""
         self.axon.stop()
         logger.success("Validator axon stopped")
+        self.kami.close()
 
     async def _generate_synthetic_request(
         self,

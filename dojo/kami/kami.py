@@ -1,8 +1,10 @@
+import json
 import os
 from typing import Any, Dict
 
 import aiohttp
 from bittensor_commit_reveal import get_encrypted_commit
+from loguru import logger
 
 from dojo.kami.types import (
     ServeAxonPayload,
@@ -12,7 +14,7 @@ from dojo.kami.types import (
 
 class Kami:
     """
-    Kami is a class that handles the connection to the Dojo API.
+    Kami is a class that handles the connection to the Kami API.
     """
 
     def __init__(self, url: str = "http://kami:3000"):
@@ -38,11 +40,11 @@ class Kami:
         self, endpoint: str, params: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """
-        Send a GET request to the Dojo API.
+        Send a GET request to the Kami API.
 
         Args:
             endpoint (str): The API endpoint to send the request to.
-            params (Optional[Dict[str, Any]]): Optional query parameters to include in the request.
+            params (Dict[str, Any] | None): Optional query parameters to include in the request.
 
         Returns:
             Dict[str, Any]: The JSON response from the API.
@@ -57,17 +59,25 @@ class Kami:
             ) as response:
                 return await response.json()
         except aiohttp.ClientError as e:
-            raise RuntimeError(f"Error connecting to Dojo API: {e}")
+            message = f"Error connecting to Kami API: {e}"
+            logger.error(message)
+            raise RuntimeError(f"Error connecting to Kami API: {e}")
+        except json.decoder.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON response: {e}")
+            raise e
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            raise e
 
     async def post(
         self, endpoint: str, data: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """
-        Send a POST request to the Dojo API.
+        Send a POST request to the Kami API.
 
         Args:
             endpoint (str): The API endpoint to send the request to.
-            data (Optional[Dict[str, Any]]): Optional data to include in the request body.
+            data (Dict[str, Any] | None): Optional data to include in the request body.
 
         Returns:
             Dict[str, Any]: The JSON response from the API.
@@ -82,7 +92,15 @@ class Kami:
             ) as response:
                 return await response.json()
         except aiohttp.ClientError as e:
-            raise RuntimeError(f"Error connecting to Dojo API: {e}")
+            message = f"Error connecting to Kami API: {e}"
+            logger.error(message)
+            raise RuntimeError(message)
+        except json.decoder.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON response: {e}")
+            raise e
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            raise e
 
     async def get_metagraph(self, netuid: int) -> Dict[str, Any]:
         """
