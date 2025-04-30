@@ -9,6 +9,7 @@ from loguru import logger
 from dojo.kami.types import (
     ServeAxonPayload,
     SetWeightsPayload,
+    SubnetMetagraph,
 )
 
 
@@ -17,8 +18,9 @@ class Kami:
     Kami is a class that handles the connection to the Kami API.
     """
 
-    def __init__(self, url: str = "http://kami:3000"):
-        self.url = os.getenv("KAMI_API_URL", url)
+    # TODO: change back to `http://kami:3000` before release
+    def __init__(self, url: str = "http://localhost:3000"):
+        self.url = os.getenv("KAMI_API_URL", url).rstrip("/")
         self.session: aiohttp.ClientSession | None = None
         self.headers = {
             "Content-Type": "application/json",
@@ -102,7 +104,7 @@ class Kami:
             logger.error(f"Unexpected error: {e}")
             raise e
 
-    async def get_metagraph(self, netuid: int) -> Dict[str, Any]:
+    async def get_metagraph(self, netuid: int) -> SubnetMetagraph:
         """
         Get the metagraph for a given netuid.
 
@@ -116,7 +118,7 @@ class Kami:
         metagraph = get_metagraph.get("data", {})
         return metagraph
 
-    async def get_hotkeys(self, netuid: int) -> Dict[str, Any]:
+    async def get_hotkeys(self, netuid: int) -> list[str]:
         """
         Get the neurons for a given netuid.
 

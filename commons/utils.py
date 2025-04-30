@@ -14,7 +14,6 @@ import numpy as np
 import plotext
 import requests
 import torch
-from bittensor.core.metagraph import AsyncMetagraph
 from bittensor.utils.btlogging import logging as logger
 from Crypto.Hash import keccak
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
@@ -71,7 +70,7 @@ def get_effective_stake(hotkey: str, subtensor: bt.subtensor) -> float:
     return effective_stake
 
 
-async def aget_effective_stake(hotkey: str, subnet_metagraph: AsyncMetagraph) -> float:
+async def aget_effective_stake(hotkey: str, subnet_metagraph: SubnetMetagraph) -> float:
     # With runtime api, you do not need to query root metagraph, you can just get it from the subnet itself.
     idx = subnet_metagraph.get("hotkeys", []).index(hotkey)
 

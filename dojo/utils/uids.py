@@ -58,6 +58,7 @@ async def extract_miner_uids(kami: Kami) -> List[int]:
         for uid in range(num_neurons)
         if subnet_metagraph.get("axons", [])[uid].get("ip", "")
         # and eff_stakes[uid] < VALIDATOR_MIN_STAKE
+        # TODO: change before releasing to main (prod)
         and eff_stakes[uid] < 100
     ]
 
