@@ -1,17 +1,13 @@
-import asyncio
-import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import aiohttp
+from bittensor_commit_reveal import get_encrypted_commit
 
 from dojo.kami.types import (
-    CommitRevealPayload,
     ServeAxonPayload,
     SetWeightsPayload,
-    SubnetMetagraph,
 )
-from bittensor_commit_reveal import get_encrypted_commit
 
 
 class Kami:
@@ -21,7 +17,7 @@ class Kami:
 
     def __init__(self, url: str = "http://kami:3000"):
         self.url = os.getenv("KAMI_API_URL", url)
-        self.session = None
+        self.session: aiohttp.ClientSession | None = None
         self.headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -39,7 +35,7 @@ class Kami:
             await self.session.close()
 
     async def get(
-        self, endpoint: str, params: Optional[Dict[str, Any]] = None
+        self, endpoint: str, params: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """
         Send a GET request to the Dojo API.
@@ -64,7 +60,7 @@ class Kami:
             raise RuntimeError(f"Error connecting to Dojo API: {e}")
 
     async def post(
-        self, endpoint: str, data: Optional[Dict[str, Any]] = None
+        self, endpoint: str, data: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """
         Send a POST request to the Dojo API.
