@@ -1423,7 +1423,7 @@ class Validator:
             logger.error(f"Error fetching from miner {miner_hotkey}: {str(e)}")
             return []
 
-    # TODO: move to utils
+    # TODO: move to utils??
     @staticmethod
     def _calculate_averages(task_results: list[TaskResult]) -> dict[str, float]:
         """Calculate average scores for each model from task results.

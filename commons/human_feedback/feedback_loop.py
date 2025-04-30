@@ -342,9 +342,22 @@ class FeedbackLoop:
                     elif retry_count < MAX_RETRY_ATTEMPTS:
                         # Handle task with insufficient responses needing retry
                         task_synapse = await get_task_synapse_for_retry(task.id)
+
                         if not task_synapse:
                             logger.warning(f"Task {task.id} not found, skipping")
                             continue
+
+                        if not task_synapse.completion_responses:
+                            logger.warning(
+                                f"Task {task.id} has no completion responses, skipping"
+                            )
+                            continue
+
+                        obfuscated_model_to_model, task_synapse.completion_responses = (
+                            validator.obfuscate_model_names(
+                                task_synapse.completion_responses
+                            )
+                        )
 
                         active_miners = await get_active_miners_for_hfl(validator, 7)
 
@@ -373,6 +386,14 @@ class FeedbackLoop:
                                 f"No miner responses found for task {task.id}"
                             )
                             continue
+
+                        # deobfuscate model names
+                        for response in miner_responses:
+                            if response.completion_responses:
+                                for completion in response.completion_responses:
+                                    completion.model = obfuscated_model_to_model.get(
+                                        completion.model, completion.model
+                                    )
 
                         count, updated_hfl_state = await ORM.save_tf_retry_responses(
                             validator_task_id=task.id,

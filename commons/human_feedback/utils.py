@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from bittensor.utils.btlogging import logging as logger
 
 from commons.dataset.types import HumanFeedbackResponse
-from commons.orm import ORM
 from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
 from database.client import prisma
 from database.prisma import Json
@@ -401,7 +400,6 @@ async def should_continue_hfl(
             )
             return False, "max_iterations_reached"
 
-        # TODO: KIV
         # Condition 2: Consensus threshold reached; for example, 90% of miners scored the same completion highest
         (
             completion_percentages,
@@ -420,30 +418,30 @@ async def should_continue_hfl(
 
         # TODO: KIV
         # Condition 3: Improvement threshold reached; for example, 10% improvement over the previous task
-        try:
-            # Get the previous task (original or parent SF) using existing ORM function
-            previous_task = await ORM.get_original_or_parent_sf_task(latest_sf_task_id)
+        # try:
+        #     # Get the previous task (original or parent SF) using existing ORM function
+        #     previous_task = await ORM.get_original_or_parent_sf_task(latest_sf_task_id)
 
-            if previous_task and previous_task.id:
-                # Use the specialized function to check improvement
-                meets_threshold, improvement = await check_improvement_threshold(
-                    current_sf_task_id=latest_sf_task_id,
-                    previous_task_id=previous_task.id,
-                    min_improvement_percentage=min_improvement_percentage,
-                )
+        #     if previous_task and previous_task.id:
+        #         # Use the specialized function to check improvement
+        #         meets_threshold, improvement = await check_improvement_threshold(
+        #             current_sf_task_id=latest_sf_task_id,
+        #             previous_task_id=previous_task.id,
+        #             min_improvement_percentage=min_improvement_percentage,
+        #         )
 
-                if not meets_threshold:
-                    return (
-                        False,
-                        f"insufficient_improvement_{improvement:.1f}_percent",
-                    )
-            else:
-                logger.warning(
-                    f"Could not find previous task for SF task {latest_sf_task_id}"
-                )
-        except Exception as e:
-            logger.error(f"Error checking improvement threshold: {e}")
-            # Continue with other checks if improvement calculation fails
+        #         if not meets_threshold:
+        #             return (
+        #                 False,
+        #                 f"insufficient_improvement_{improvement:.1f}_percent",
+        #             )
+        #     else:
+        #         logger.warning(
+        #             f"Could not find previous task for SF task {latest_sf_task_id}"
+        #         )
+        # except Exception as e:
+        #     logger.error(f"Error checking improvement threshold: {e}")
+        #     # Continue with other checks if improvement calculation fails
 
         # If no stopping conditions met, continue
         return True, None
@@ -521,17 +519,26 @@ def extract_criteria_values_by_model_and_type(task_results: list[TaskResult]) ->
             if model_id not in model_to_criteria_values:
                 model_to_criteria_values[model_id] = {}
 
+            # TODO: need validation method
             # Group criteria by type and collect values
             for criterion in criteria_list:
                 criterion_type = criterion.get("type")
-                criterion_value = criterion.get("value")
+                if not criterion_type:
+                    logger.warning(f"No criterion type found for criterion {criterion}")
+                    continue
 
-                if criterion_type and criterion_value is not None:
-                    # Initialize list for this criterion type if not exists
+                if criterion_type == "text":
+                    criterion_value = criterion.get("text_feedback", {})
+                else:
+                    criterion_value = criterion.get("value", {})
+
+                # Only proceed if we have a value
+                if criterion_value is not None:
+                    # Initialize the list for this criterion type if not exists
                     if criterion_type not in model_to_criteria_values[model_id]:
                         model_to_criteria_values[model_id][criterion_type] = []
 
-                    # Add this value to the list
+                    # Now append the value
                     model_to_criteria_values[model_id][criterion_type].append(
                         criterion_value
                     )
@@ -578,6 +585,9 @@ def calculate_criteria_averages(model_to_criteria_values: dict) -> dict:
 
         for criterion_type, values in criteria_types.items():
             if not values:
+                logger.warning(
+                    f"No values found for model {model_id} and criterion type {criterion_type}"
+                )
                 continue
 
             # For score type, calculate average
@@ -586,9 +596,9 @@ def calculate_criteria_averages(model_to_criteria_values: dict) -> dict:
             ):
                 avg_value = sum(values) / len(values)
                 model_criteria_type_to_avg[model_id][criterion_type] = avg_value
-            else:
+            elif criterion_type == "text":
                 # For non-numeric types like text, just pass through the values
-                model_criteria_type_to_avg[model_id][criterion_type] = values
+                model_criteria_type_to_avg[model_id][criterion_type] = " ".join(values)
 
     return model_criteria_type_to_avg
 
@@ -616,6 +626,9 @@ async def create_initial_miner_scores(
     Returns:
         Tuple containing success flag and error message (if any)
     """
+    logger.info(
+        f"Creating initial miner scores +++++++++++++++++++++++++++++ {validator_task_id} and miner {miner_hotkey}"
+    )
     try:
         # Step 1: Find the miner response for this task and miner
         db_miner_response = await prisma.minerresponse.find_first(
@@ -653,6 +666,7 @@ async def create_initial_miner_scores(
         model_to_criteria_values = extract_criteria_values_by_model_and_type(
             task_results
         )
+        logger.info(f"Model to criteria values: {model_to_criteria_values}")
 
         # Step 4: Calculate averages for numeric criteria (e.g., scores)
         # Example result: {"model_123": {"score": 75.0, "text": ["Good code", "Needs improvement"]}}
@@ -725,7 +739,9 @@ async def create_initial_miner_scores(
                         scores_data = scores_obj.model_dump()
                     elif criterion_type == "text":
                         # For text type, store as a list or join into a single string
-                        scores_data = TextFeedbackScore(tf_score=None).model_dump()
+                        scores_data = TextFeedbackScore(
+                            tf_score=None, text_feedback=values
+                        ).model_dump()
                     else:
                         # For other criterion types, store the value directly
                         pass

@@ -56,6 +56,9 @@ class Scores(BaseModel):
 
 class TextFeedbackScore(BaseModel):
     tf_score: float | None = Field(description="Score of the completion", default=None)
+    text_feedback: str | None = Field(
+        description="Text feedback of the completion", default=None
+    )
 
 
 class ScoreCriteria(BaseModel):

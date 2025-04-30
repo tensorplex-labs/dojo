@@ -107,11 +107,6 @@ async def create_score_feedback_task(
             logger.error(f"Failed to send improved task to miners for {tf_task_id}")
             return None
 
-        # Remove responses that don't have a dojo_task_id
-        miner_responses = [
-            response for response in miner_responses if response.dojo_task_id
-        ]
-
         # deobfuscate model names
         for response in miner_responses:
             if response.completion_responses:
