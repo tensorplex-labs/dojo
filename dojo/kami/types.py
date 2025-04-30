@@ -1,6 +1,6 @@
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class ServeAxonPayload(BaseModel):
@@ -54,7 +54,7 @@ class IdentitiesInfo(BaseModel):
 class AxonInfo(BaseModel):
     block: int
     version: int
-    ip: int
+    ip: str
     port: int
     ipType: int
     protocol: int
@@ -64,8 +64,8 @@ class AxonInfo(BaseModel):
 
 class SubnetMetagraph(BaseModel):
     netuid: int
-    name: List[int]
-    symbol: List[int]
+    name: str
+    symbol: str
     identity: SubnetIdentity
     networkRegisteredAt: int
     ownerHotkey: str
@@ -75,20 +75,22 @@ class SubnetMetagraph(BaseModel):
     lastStep: int
     blocksSinceLastStep: int
     subnetEmission: int
-    alphaIn: int
-    alphaOut: int
-    taoIn: int
-    alphaOutEmission: int
-    alphaInEmission: int
-    taoInEmission: int
-    pendingAlphaEmission: int
-    pendingRootEmission: int
-    subnetVolume: int
+    alphaIn: float
+    alphaOut: float
+    taoIn: float
+    alphaOutEmission: float
+    alphaInEmission: float
+    taoInEmission: float
+    pendingAlphaEmission: float
+    pendingRootEmission: float
+    subnetVolume: float
     movingPrice: MovingPrice
     rho: int
     kappa: int
-    minAllowedWeights: int
-    maxAllowedWeights: int
+    # # TODO: not sure if this field is present
+    # minAllowedWeights: int
+    # # TODO: not sure if this field is present
+    # maxAllowedWeights: int
     weightsVersion: int
     weightsRateLimit: int
     activityCutoff: int
@@ -117,21 +119,21 @@ class SubnetMetagraph(BaseModel):
     bondsMovingAvg: int
     hotkeys: List[str]
     coldkeys: List[str]
-    identities: List[IdentitiesInfo]
+    identities: List[IdentitiesInfo | None]
     axons: List[AxonInfo]
     active: List[bool]
     validatorPermit: List[bool]
     pruningScore: List[int]
     lastUpdate: List[int]
-    emission: List[int]
-    dividends: List[int]
-    incentives: List[int]
-    consensus: List[int]
-    trust: List[int]
-    rank: List[int]
+    emission: List[float]
+    dividends: List[float]
+    incentives: List[float]
+    consensus: List[float]
+    trust: List[float]
+    rank: List[float]
     blockAtRegistration: List[int]
-    alphaStake: List[int]
-    taoStake: List[int]
-    totalStake: List[int]
-    taoDividendsPerHotkey: List[Tuple[str, int]]
-    alphaDividendsPerHotkey: List[Tuple[str, int]]
+    alphaStake: List[float]
+    taoStake: List[float]
+    totalStake: List[float]
+    taoDividendsPerHotkey: List[Tuple[str, float]]
+    alphaDividendsPerHotkey: List[Tuple[str, float]]
