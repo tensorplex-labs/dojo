@@ -1,11 +1,13 @@
 import os
-import torch
-import numpy as np
 from typing import Union
+
+import numpy as np
+import torch
+from bittensor.utils.btlogging import logging as logger
+from numpy.typing import NDArray
+
 from dojo.kami.kami import Kami
 from dojo.kami.types import SubnetMetagraph
-from numpy.typing import NDArray
-from bittensor.utils.btlogging import logging as logger
 
 U32_MAX = 4294967295
 U16_MAX = 65535
@@ -18,10 +20,10 @@ async def aprocess_weights_for_netuid(
     kami: Kami,
     metagraph: SubnetMetagraph,
     exclude_quantile: int = 0,
-) -> Union[
-    tuple["torch.Tensor", "torch.FloatTensor"],
-    tuple[NDArray[np.int64], NDArray[np.float32]],
-]:
+) -> (
+    tuple["torch.Tensor", "torch.FloatTensor"]
+    | tuple[NDArray[np.int64], NDArray[np.float32]]
+):
     """
     Processes weight tensors for a given subnet id using the provided weight and UID arrays, applying constraints
     and normalization based on the subtensor and metagraph data. This function can handle both NumPy arrays and PyTorch
@@ -86,7 +88,7 @@ async def aprocess_weights_for_netuid(
     if nzw_size == 0 or metagraph_size < min_allowed_weights:
         logger.warning("No non-zero weights returning all ones.")
         final_weights = (
-            torch.ones((metagraph_size)).to(metagraph_size) / metagraph_size
+            torch.ones(metagraph_size).to(metagraph_size) / metagraph_size
             if use_torch
             else np.ones((metagraph_size), dtype=np.int64) / metagraph_size
         )
@@ -108,7 +110,7 @@ async def aprocess_weights_for_netuid(
         )
         # ( const ): Should this be np.zeros( ( metagraph_size ) ) to reset everyone to build up weight?
         weights = (
-            torch.ones((metagraph_size)).to(metagraph_size) * 1e-5
+            torch.ones(metagraph_size).to(metagraph_size) * 1e-5
             if use_torch
             else np.ones((metagraph_size), dtype=np.int64) * 1e-5
         )  # creating minimum even non-zero weights

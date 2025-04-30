@@ -16,12 +16,8 @@ import bittensor as bt
 import numpy as np
 import torch
 from bittensor.utils.btlogging import logging as logger
-from dojo.utils.weight_utils import (
-    aprocess_weights_for_netuid,
-    convert_weights_and_uids_for_emit,
-)
 from torch.nn import functional as F
-from bittensor_commit_reveal import get_encrypted_commit
+
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import (
@@ -47,8 +43,7 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
-from dojo.chain import parse_block_headers
-from dojo.kami.kami import Kami
+from dojo.kami import Kami
 from dojo.kami.types import SetWeightsPayload, SubnetMetagraph
 from dojo.protocol import (
     CompletionResponse,
@@ -66,6 +61,10 @@ from dojo.protocol import (
 )
 from dojo.utils.config import get_config
 from dojo.utils.uids import extract_miner_uids, is_miner
+from dojo.utils.weight_utils import (
+    aprocess_weights_for_netuid,
+    convert_weights_and_uids_for_emit,
+)
 from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
@@ -108,7 +107,7 @@ class Validator(aobject):
 
         self.kami_url = os.getenv("KAMI_API_URL")
         if self.kami_url is None:
-            raise ValueError(f"Reqiure KAMI_API_URL to be set in environment variables")
+            raise ValueError("Require KAMI_API_URL to be set in environment variables")
         self.kami = Kami(self.kami_url)
 
         self.loop = asyncio.get_event_loop()
@@ -162,7 +161,7 @@ class Validator(aobject):
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
         miners_uids = await self.get_miner_uids()
-        metagraph_axons = await self._retrieve_axons_via_uids(miner_uids)
+        metagraph_axons = await self._retrieve_axons_via_uids(miners_uids)
         axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]
         if not axons:
             logger.warning("No axons to send consensus to... skipping")
@@ -280,7 +279,9 @@ class Validator(aobject):
                 logger.error(f"Failed to set weights: {result}")
                 return
             if result.get("statusCode", None) == 200:
-                logger.success(f"Set weights successfully with hash {result.get('data')}")
+                logger.success(
+                    f"Set weights successfully with hash {result.get('data')}"
+                )
         except asyncio.TimeoutError:
             logger.error("Setting weights timed out after 90 seconds")
             return
@@ -302,7 +303,9 @@ class Validator(aobject):
         max_attempts = 5
         attempt = 0
         result = False
-        while attempt < max_attempts and (not result or result.get("statusCode", None) != 200):
+        while attempt < max_attempts and (
+            not result or result.get("statusCode", None) != 200
+        ):
             message: str = ""
             try:
                 logger.info(
@@ -318,7 +321,6 @@ class Validator(aobject):
                 #     pass
 
                 logger.info(f"Converting weights and uids for emit: {uids}, {weights}")
-
 
                 uids, weights = convert_weights_and_uids_for_emit(
                     uids=uids,
@@ -343,16 +345,16 @@ class Validator(aobject):
                 logger.warning(
                     f"Failed to set weights with attempt {attempt + 1}/{max_attempts} due to: {e}"
                 )
-                
+
                 if attempt == max_attempts:
                     logger.error("Max attempts reached. Could not set weights.")
-                    return {'success': False, 'data': 'Max attempts reached'}
-                
+                    return {"success": False, "data": "Max attempts reached"}
+
                 await asyncio.sleep(12)
             finally:
                 attempt += 1
 
-        return {'success': False, 'data': 'Max attempts reached'}
+        return {"success": False, "data": "Max attempts reached"}
 
     async def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
@@ -437,9 +439,9 @@ class Validator(aobject):
             _terminal_plot(
                 f"scores before update, block: {self.block}", self.scores.numpy()
             )
-            assert existing_scores.shape == rewards.shape, (
-                "Scores and rewards must be the same length when calculating moving average"
-            )
+            assert (
+                existing_scores.shape == rewards.shape
+            ), "Scores and rewards must be the same length when calculating moving average"
 
             self.scores = alpha * rewards + (1 - alpha) * existing_scores
             self.scores = torch.clamp(self.scores, min=0.0)

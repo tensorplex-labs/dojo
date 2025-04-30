@@ -16,14 +16,13 @@ import httpx
 from bittensor.core.metagraph import AsyncMetagraph
 from bittensor.utils.btlogging import logging as logger
 
-from dojo.kami.kami import Kami
-
 from commons.exceptions import NoProcessedTasksYet
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
 from dojo import ANALYTICS_UPLOAD, VALIDATOR_MIN_STAKE
+from dojo.kami import Kami
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 
 VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
@@ -186,7 +185,10 @@ async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response
 
 
 async def run_analytics_upload(
-    scores_alock: asyncio.Lock, expire_from: datetime | None, expire_to: datetime, kami: Kami
+    scores_alock: asyncio.Lock,
+    expire_from: datetime | None,
+    expire_to: datetime,
+    kami: Kami,
 ) -> datetime | None:
     """
     run_analytics_upload()

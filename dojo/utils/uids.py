@@ -5,13 +5,10 @@ from collections import defaultdict
 from typing import List
 
 import bittensor as bt
-from bittensor.utils.btlogging import logging as logger
 
-from commons.exceptions import FatalSubtensorConnectionError
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, get_effective_stake, keccak256_hash
-from dojo.chain import get_async_subtensor
-from dojo.kami.kami import Kami
+from dojo.kami import Kami
 
 
 def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
@@ -36,8 +33,6 @@ async def extract_miner_uids(kami: Kami) -> List[int]:
 
     # block = await kami.get_current_block()
     subnet_metagraph = await kami.get_metagraph(config.netuid)
-
-    from dojo import VALIDATOR_MIN_STAKE
 
     semaphore = asyncio.Semaphore(20)  # Allow 20 concurrent calls
 

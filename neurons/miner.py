@@ -17,8 +17,8 @@ from commons.utils import aget_effective_stake, aobject, get_epoch_time
 
 #                            serve_axon)
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
-from dojo.chain import get_async_subtensor, parse_block_headers
-from dojo.kami.kami import Kami
+from dojo.chain import parse_block_headers
+from dojo.kami import Kami
 from dojo.kami.types import ServeAxonPayload
 from dojo.protocol import (
     Heartbeat,
@@ -152,7 +152,9 @@ class Miner(aobject):
             if serve_success.get("statusCode", None) == 200:
                 logger.success("Successfully served axon for miner!")
             else:
-                logger.error(f"Failed to serve axon for miner, exiting with error message: {serve_success.get('message')}")
+                logger.error(
+                    f"Failed to serve axon for miner, exiting with error message: {serve_success.get('message')}"
+                )
                 exit()
         else:
             logger.info("Axon already served, no need to serve again.")
