@@ -88,7 +88,7 @@ class Miner(aobject):
             request: Request, synapse: TaskSynapseObject
         ) -> TaskSynapseObject:
             """Handles the task request from the validator and forwards it to the DojoAPI."""
-            return await self.forward_task_request(request, synapse)
+            return await self.process_task_request(request, synapse)
 
         async def _heartbeat_adapter(request: Request, synapse: Heartbeat) -> Heartbeat:
             return await self.ack_heartbeat(request, synapse)
@@ -274,7 +274,7 @@ class Miner(aobject):
 
         return synapse
 
-    async def forward_task_request(
+    async def process_task_request(
         self, request: Request, synapse: TaskSynapseObject
     ) -> TaskSynapseObject:
         # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
@@ -308,8 +308,8 @@ class Miner(aobject):
 
         return synapse
 
-    async def forward_task_result_request(
-        self, synapse: TaskResultRequest
+    async def process_task_result_request(
+        self, request: Request, synapse: TaskResultRequest
     ) -> TaskResultRequest:
         """Handle a TaskResultRequest from a validator, fetching the task result from the DojoAPI."""
         if not synapse or not synapse.dojo_task_id:

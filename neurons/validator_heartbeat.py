@@ -67,8 +67,6 @@ async def send_heartbeats(
     metagraph: bt.metagraph,
     semaphore: asyncio.Semaphore,
 ) -> list[int]:
-    """Perform a health check periodically, sending heartbeats to all miners to
-    check which miners are reachable"""
     try:
         subtensor = await get_async_subtensor()
         if not subtensor:

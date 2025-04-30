@@ -60,7 +60,7 @@ from dojo.utils.config import get_config
 from dojo.utils.uids import is_miner
 from entrypoints.analytics_upload import run_analytics_upload
 
-from .validator_heartbeats import send_heartbeats
+from .validator_heartbeat import send_heartbeats
 from .validator_synthetic_tasks import send_synthetic_task
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
