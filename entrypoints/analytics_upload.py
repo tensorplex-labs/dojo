@@ -13,7 +13,6 @@ from typing import List
 
 import bittensor as bt
 import httpx
-from bittensor.core.metagraph import AsyncMetagraph
 from bittensor.utils.btlogging import logging as logger
 
 from commons.exceptions import NoProcessedTasksYet
@@ -29,16 +28,16 @@ VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
 
 
 async def _get_all_miner_hotkeys(
-    subnet_metagraph: AsyncMetagraph, root_metagraph: AsyncMetagraph
+    subnet_metagraph, root_metagraph
 ) -> List[str]:
     """
     returns a list of all metagraph hotkeys with stake less than VALIDATOR_MIN_STAKE
     """
     return [
         hotkey
-        for hotkey in subnet_metagraph.hotkeys
+        for hotkey in subnet_metagraph['hotkeys']
         if await aget_effective_stake(
-            hotkey, root_metagraph=root_metagraph, subnet_metagraph=subnet_metagraph
+            hotkey, subnet_metagraph=subnet_metagraph
         )
         < VALIDATOR_MIN_STAKE
     ]
