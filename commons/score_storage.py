@@ -60,27 +60,60 @@ class ScoreStorage:
             return False
 
     @classmethod
-    async def save(cls, scores: torch.Tensor) -> None:
-        """Save validator scores to .pt file"""
+    async def save(
+        cls, scores: torch.Tensor, hfl_scores: torch.Tensor | None = None
+    ) -> None:
+        """
+        Save validator scores to .pt file
+
+        Args:
+            scores: The synthetic task scores tensor
+            hfl_scores: The HFL task scores tensor (optional during transition)
+        """
         try:
             cls.SCORES_DIR.mkdir(exist_ok=True)
-            torch.save(scores, cls.SCORES_FILE)
-            logger.success("Successfully saved validator scores to file")
+
+            # Check if we need to maintain backward compatibility
+            if hfl_scores is None:
+                # Legacy format - just save the synthetic scores directly
+                torch.save(scores, cls.SCORES_FILE)
+                logger.success(
+                    "Successfully saved validator synthetic scores to file (legacy format)"
+                )
+            else:
+                # New format - save both score types in a dictionary
+                scores_dict = {"synthetic_scores": scores, "hfl_scores": hfl_scores}
+                torch.save(scores_dict, cls.SCORES_FILE)
+                logger.success(
+                    "Successfully saved validator synthetic and HFL scores to file"
+                )
+
         except Exception as e:
             logger.error(f"Failed to save validator scores: {e}")
             raise
 
     @classmethod
-    async def load(cls) -> torch.Tensor | None:
+    async def load(cls) -> tuple[torch.Tensor | None, torch.Tensor | None]:
         """Load validator scores from .pt file"""
         try:
             if not cls.SCORES_FILE.exists():
                 logger.warning("No validator scores file found")
-                return None
+                return None, None
 
-            scores = torch.load(cls.SCORES_FILE)
-            logger.success("Successfully loaded validator scores from file")
-            return scores
+            saved_data = torch.load(cls.SCORES_FILE)
+
+            # Handle both dictionary format and legacy tensor format
+            if isinstance(saved_data, dict):
+                # New format
+                synthetic_scores = saved_data.get("synthetic_scores", None)
+                hfl_scores = saved_data.get("hfl_scores", None)
+            else:
+                # Legacy format - just save the synthetic scores directly
+                synthetic_scores = saved_data
+                hfl_scores = None
+                logger.info("Loaded legacy score format, HFL scores not available")
+
+            return synthetic_scores, hfl_scores
         except Exception as e:
             logger.error(f"Failed to load validator scores: {e}")
-            return None
+            return None, None

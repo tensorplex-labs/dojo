@@ -19,8 +19,9 @@ TF_WEIGHTS = 0.7
 SF_WEIGHT = 0.3
 
 
-# TODO: apply this on validator
-async def score_hfl_tasks(task: ValidatorTask) -> dict[str, float]:
+async def score_hfl_tasks(
+    task: ValidatorTask,
+) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
     """MAIN DRIVER FUNCTION TO SCORE HFL TASKS"""
 
     # average across a few?
@@ -39,7 +40,7 @@ async def score_hfl_tasks(task: ValidatorTask) -> dict[str, float]:
             TF_WEIGHTS * tf_score + SF_WEIGHT * hotkey_to_sf_score.get(hotkey, 0.0)
         )
 
-    return dict(hotkey_to_score)
+    return dict(hotkey_to_score), hotkey_to_tf_score, hotkey_to_sf_score
 
 
 @staticmethod

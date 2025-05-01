@@ -1388,6 +1388,7 @@ class ORM:
             logger.error(f"Failed to get validator task with ID {task_id}: {e}")
         return None
 
+    # TODO: KIV
     @staticmethod
     async def update_hfl_scores(
         sf_task_id: str,
@@ -1497,6 +1498,177 @@ class ORM:
         except Exception as e:
             logger.error(f"Error updating HFL scores: {e}")
             return False, list(hotkey_to_scores.keys())
+
+    @staticmethod
+    async def update_hfl_final_scores(
+        sf_task_id: str,
+        hotkey_to_sf_scores: dict[str, float],
+        hotkey_to_tf_scores: dict[str, float],
+        batch_size: int = 10,
+        max_retries: int = 3,
+    ) -> tuple[bool, list[str]]:
+        """Update both SF and TF scores in the MinerScore table.
+
+        Args:
+            sf_task_id: Score Feedback task ID
+            hotkey_to_sf_scores: SF scores component (ICC)
+            hotkey_to_tf_scores: TF scores component (feedback improvement)
+            batch_size: Batch size for processing
+            max_retries: Max retry attempts
+
+        Returns:
+            Tuple containing success flag and list of failed hotkeys
+        """
+        try:
+            # Get SF task and related data
+            sf_task = await ORM.get_validator_task_by_id(sf_task_id)
+            if not sf_task:
+                logger.error(f"No SF task found with ID {sf_task_id}")
+                return False, []
+
+            # Find original or parent task for updating TF scores
+            previous_task = await ORM.get_original_or_parent_sf_task(sf_task_id)
+            if not previous_task:
+                logger.error(f"Previous task not found for SF task {sf_task_id}")
+                return False, []
+
+            # Get all miner responses for SF task
+            sf_miner_responses = await prisma.minerresponse.find_many(
+                where={
+                    "validator_task_id": sf_task_id,
+                    "hotkey": {"in": list(hotkey_to_sf_scores.keys())},
+                },
+                include={"scores": {"include": {"criterion_relation": True}}},
+            )
+
+            # Get all miner responses for parent/original task
+            parent_miner_responses = await prisma.minerresponse.find_many(
+                where={
+                    "validator_task_id": previous_task.id,
+                    "hotkey": {"in": list(hotkey_to_tf_scores.keys())},
+                },
+                include={"scores": {"include": {"criterion_relation": True}}},
+            )
+
+            failed_hotkeys = []
+
+            # Update SF scores (ICC scores in SF task)
+            for i in range(0, len(sf_miner_responses), batch_size):
+                batch = sf_miner_responses[i : i + batch_size]
+
+                for attempt in range(max_retries):
+                    try:
+                        async with prisma.tx() as tx:
+                            for miner_response in batch:
+                                hotkey = miner_response.hotkey
+                                if hotkey not in hotkey_to_sf_scores:
+                                    continue
+
+                                sf_score = hotkey_to_sf_scores[hotkey]
+
+                                # Update scores for this miner in SF task (criteria with type "score")
+                                for score_record in miner_response.scores or []:
+                                    # We only need to find score criteria
+                                    criterion = score_record.criterion_relation
+                                    if (
+                                        criterion
+                                        and criterion.criteria_type.lower() == "score"
+                                    ):
+                                        # Parse existing scores
+                                        scores_data = json.loads(score_record.scores)
+
+                                        # Update with the SF component (ICC)
+                                        if isinstance(scores_data, dict):
+                                            # Update appropriate fields in Scores model
+                                            scores_data["icc_score"] = sf_score
+
+                                            await tx.minerscore.update(
+                                                where={
+                                                    "criterion_id_miner_response_id": {
+                                                        "criterion_id": score_record.criterion_id,
+                                                        "miner_response_id": miner_response.id,
+                                                    }
+                                                },
+                                                data={
+                                                    "scores": Json(
+                                                        json.dumps(scores_data)
+                                                    )
+                                                },
+                                            )
+                                            break
+
+                        # If we make it here, break the retry loop
+                        break
+
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            logger.error(
+                                f"Failed to update SF scores after {max_retries} attempts: {e}"
+                            )
+                            failed_hotkeys.extend([mr.hotkey for mr in batch])
+                        else:
+                            await asyncio.sleep(2**attempt)
+
+            # Update TF scores (text feedback scores in parent/original task)
+            for i in range(0, len(parent_miner_responses), batch_size):
+                batch = parent_miner_responses[i : i + batch_size]
+
+                for attempt in range(max_retries):
+                    try:
+                        async with prisma.tx() as tx:
+                            for miner_response in batch:
+                                hotkey = miner_response.hotkey
+                                if hotkey not in hotkey_to_tf_scores:
+                                    continue
+
+                                tf_score = hotkey_to_tf_scores[hotkey]
+
+                                # Update scores for this miner in parent/original task
+                                for score_record in miner_response.scores or []:
+                                    criterion = score_record.criterion_relation
+                                    if criterion:
+                                        # Find appropriate type for updating
+                                        if criterion.criteria_type.lower() == "text":
+                                            # For text feedback, use TextFeedbackScore model
+                                            scores_data = json.loads(
+                                                score_record.scores
+                                            )
+
+                                            if isinstance(scores_data, dict):
+                                                scores_data["tf_score"] = tf_score
+
+                                                await tx.minerscore.update(
+                                                    where={
+                                                        "criterion_id_miner_response_id": {
+                                                            "criterion_id": score_record.criterion_id,
+                                                            "miner_response_id": miner_response.id,
+                                                        }
+                                                    },
+                                                    data={
+                                                        "scores": Json(
+                                                            json.dumps(scores_data)
+                                                        )
+                                                    },
+                                                )
+                                                break
+
+                        # If we make it here, break the retry loop
+                        break
+
+                    except Exception as e:
+                        if attempt == max_retries - 1:
+                            logger.error(
+                                f"Failed to update TF scores after {max_retries} attempts: {e}"
+                            )
+                            failed_hotkeys.extend([mr.hotkey for mr in batch])
+                        else:
+                            await asyncio.sleep(2**attempt)
+
+            return len(failed_hotkeys) == 0, failed_hotkeys
+
+        except Exception as e:
+            logger.error(f"Error updating HFL scores: {e}")
+            return False, []
 
 
 # ---------------------------------------------------------------------------- #

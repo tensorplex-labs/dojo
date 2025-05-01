@@ -126,7 +126,7 @@ class Validator:
         self.dendrite = bt.dendrite(wallet=self.wallet)
         logger.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
-        self.scores: torch.Tensor = torch.zeros(
+        self.synthetic_score: torch.Tensor = torch.zeros(
             len(self.metagraph.hotkeys), dtype=torch.float32
         )
         self.hfl_scores = torch.Tensor = torch.zeros(
@@ -345,7 +345,7 @@ class Validator:
         for uid, hotkey in enumerate(previous_metagraph.hotkeys):
             if hotkey != self.metagraph.hotkeys[uid]:
                 # hotkey has been replaced
-                self.scores[uid] = 0
+                self.synthetic_score[uid] = 0
                 self.hfl_scores[uid] = 0
 
         # Check to see if the metagraph has changed size.
@@ -353,23 +353,23 @@ class Validator:
         if len(previous_metagraph.hotkeys) < len(self.metagraph.hotkeys):
             # Update the size of the moving average scores.
             new_scores = torch.zeros(len(self.metagraph.hotkeys))
-            min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
-            new_scores[:min_len] = self.scores[:min_len]
+            min_len = min(len(previous_metagraph.hotkeys), len(self.synthetic_score))
+            new_scores[:min_len] = self.synthetic_score[:min_len]
 
             new_hfl_scores = torch.zeros(len(self.metagraph.hotkeys))
             min_len = min(len(previous_metagraph.hotkeys), len(self.hfl_scores))
             new_hfl_scores[:min_len] = self.hfl_scores[:min_len]
             async with self._scores_alock:
-                self.scores = torch.clamp(new_scores, min=0.0)
+                self.synthetic_score = torch.clamp(new_scores, min=0.0)
                 self.hfl_scores = torch.clamp(new_hfl_scores, min=0.0)
 
     def _calculate_incentives(
         self,
         metagraph_hotkeys: list[str],
         hotkey_to_scores: dict[str, float],
-        scores_tensor: torch.FloatTensor,
-    ) -> tuple[torch.FloatTensor, torch.FloatTensor]:
-        # scores dimensions might have been updated after resyncing... len(uids) != len(self.scores)
+        scores_tensor: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # scores dimensions might have been updated after resyncing... len(uids) != len(self.synthetic_score)
         new_incentives = torch.zeros((len(metagraph_hotkeys),))
         existing_incentives = torch.zeros((len(metagraph_hotkeys),))
         nan_value_indices = np.isnan(list(hotkey_to_scores.values()))
@@ -407,25 +407,29 @@ class Validator:
         ), "Existing incentives and new incentives must have same shape for consistency"
         return existing_incentives, new_incentives
 
-    async def update_scores(self, hotkey_to_scores: dict[str, float]):
+    async def update_scores(
+        self,
+        hotkey_to_synthetic_scores: dict[str, float],
+        hotkey_to_hfl_scores: dict[str, float],
+    ):
         """
         Performs exponential moving average on the scores based on the rewards received from the miners,
-        after setting the self.scores variable here, `set_weights` will be called to set the weights on chain.
+        after setting the self.synthetic_score and self.hfl_scores variables here, `set_weights` will be called to set the weights on chain.
         """
-        if not hotkey_to_scores:
+        if not hotkey_to_synthetic_scores or not hotkey_to_hfl_scores:
             logger.warning("hotkey_to_scores is empty, skipping score update")
             return
 
         hotkeys: list[str] = self.metagraph.hotkeys
         existing_incentives, new_incentives = self._calculate_incentives(
             metagraph_hotkeys=hotkeys,
-            hotkey_to_scores=hotkey_to_scores,
-            scores_tensor=self.scores,
+            hotkey_to_scores=hotkey_to_synthetic_scores,
+            scores_tensor=self.synthetic_score,
         )
 
         existing_hfl_incentives, new_hfl_incentives = self._calculate_incentives(
             metagraph_hotkeys=hotkeys,
-            hotkey_to_scores=hotkey_to_scores,
+            hotkey_to_scores=hotkey_to_hfl_scores,
             scores_tensor=self.hfl_scores,
         )
 
@@ -435,14 +439,18 @@ class Validator:
         # Update scores with rewards produced by this step.
         async with self._scores_alock:
             _terminal_plot(
-                f"scores before update, block: {self.block}", self.scores.numpy()
+                f"scores before update, block: {self.block}",
+                self.synthetic_score.numpy(),
             )
 
             alpha: float = self.config.neuron.moving_average_alpha
-            self.scores = alpha * new_incentives + (1 - alpha) * existing_incentives
-            self.scores = torch.clamp(self.scores, min=0.0)
+            self.synthetic_score = (
+                alpha * new_incentives + (1 - alpha) * existing_incentives
+            )
+            self.synthetic_score = torch.clamp(self.synthetic_score, min=0.0)
             _terminal_plot(
-                f"scores after update, block: {self.block}", self.scores.numpy()
+                f"scores after update, block: {self.block}",
+                self.synthetic_score.numpy(),
             )
 
             beta: float = self.config.weights.hfl_ema_alpha
@@ -454,7 +462,7 @@ class Validator:
                 f"scores after update, block: {self.block}", self.hfl_scores.numpy()
             )
 
-        logger.info(f"Updated scores: {self.scores}")
+        logger.info(f"Updated scores: {self.synthetic_score}")
         logger.info(f"Updated HFL scores: {self.hfl_scores}")
 
     async def save_state(
@@ -465,12 +473,16 @@ class Validator:
             return
 
         try:
-            if np.count_nonzero(self.scores) == 0:
+            if np.count_nonzero(self.synthetic_score) == 0:
                 logger.warning("Scores are all zeros, but saving anyway!")
 
-            # TODO: should combine_scores be saved instead?
-            await ScoreStorage.save(self.scores)
-            logger.success(f"📦 Saved validator state with scores: {self.scores}")
+            if np.count_nonzero(self.hfl_scores) == 0:
+                logger.warning("HFL scores are all zeros, but saving anyway!")
+
+            await ScoreStorage.save(self.synthetic_score, self.hfl_scores)
+            logger.success(
+                f"📦 Saved validator state with scores: {self.synthetic_score}"
+            )
         except EmptyScores as e:
             logger.info(f"No need to to save validator state: {e}")
         except Exception as e:
@@ -478,9 +490,17 @@ class Validator:
 
     async def _load_state(self):
         try:
-            scores = await ScoreStorage.load()
+            synthetic_scores, hfl_scores = await ScoreStorage.load()
+            # At upgrade time, we'll have synthetic_scores from previous version but hfl_scores will be None
+            # Handle this migration case explicitly with clear logging
+            if synthetic_scores is not None and hfl_scores is None:
+                logger.info(
+                    "Detected upgrade from previous version: loading synthetic scores only, initializing HFL scores to zeros"
+                )
+                hfl_scores = torch.zeros(len(synthetic_scores))
 
-            if scores is None:
+            # Neither score was found
+            if synthetic_scores is None and hfl_scores is None:
                 num_processed_tasks = await ORM.get_num_processed_tasks()
                 if num_processed_tasks > 0:
                     logger.error(
@@ -492,25 +512,58 @@ class Validator:
                     )
                 return None
 
-            logger.success(f"Loaded validator state: {scores=}")
+            logger.success(
+                f"Loaded validator state: synthetic_scores shape={synthetic_scores.shape if synthetic_scores is not None else None}, hfl_scores shape={hfl_scores.shape if hfl_scores is not None else None}"
+            )
             async with self._scores_alock:
-                # if metagraph has more hotkeys than scores, adjust length
-                if len(scores) < len(self.metagraph.hotkeys):
+                # If synthetic_scores is None, initialize it with zeros
+                if synthetic_scores is None:
+                    synthetic_scores = torch.zeros(len(self.metagraph.hotkeys))
+                    logger.warning("Synthetic scores not found, initializing to zeros")
+
+                # If hfl_scores is None, initialize it with zeros
+                if hfl_scores is None:
+                    hfl_scores = torch.zeros(len(self.metagraph.hotkeys))
+                    logger.warning("HFL scores not found, initializing to zeros")
+
+                # If metagraph has more hotkeys than scores, adjust length for synthetic scores
+                if len(synthetic_scores) < len(self.metagraph.hotkeys):
                     logger.warning(
-                        "Scores state is less than current metagraph hotkeys length, adjusting length. This should only happen when subnet is not at max UIDs yet."
+                        "Synthetic scores state is less than current metagraph hotkeys length, adjusting length. This should only happen when subnet is not at max UIDs yet."
                     )
-                    # length adjusted scores
-                    adjusted_scores = torch.zeros(len(self.metagraph.hotkeys))
-                    adjusted_scores[: len(scores)] = scores
+                    # Length adjusted scores
+                    adjusted_synthetic_scores = torch.zeros(len(self.metagraph.hotkeys))
+                    adjusted_synthetic_scores[: len(synthetic_scores)] = (
+                        synthetic_scores
+                    )
                     logger.info(
-                        f"Load state: adjusted scores shape from {scores.shape} to {adjusted_scores.shape}"
+                        f"Load state: adjusted synthetic scores shape from {synthetic_scores.shape} to {adjusted_synthetic_scores.shape}"
                     )
-                    self.scores = torch.clamp(adjusted_scores, 0.0)
+                    self.synthetic_score = torch.clamp(adjusted_synthetic_scores, 0.0)
                 else:
-                    self.scores = torch.clamp(scores, 0.0)
+                    self.synthetic_score = torch.clamp(synthetic_scores, 0.0)
+
+                # If metagraph has more hotkeys than scores, adjust length for HFL scores
+                if len(hfl_scores) < len(self.metagraph.hotkeys):
+                    logger.warning(
+                        "HFL scores state is less than current metagraph hotkeys length, adjusting length. This should only happen when subnet is not at max UIDs yet."
+                    )
+                    # Length adjusted scores
+                    adjusted_hfl_scores = torch.zeros(len(self.metagraph.hotkeys))
+                    adjusted_hfl_scores[: len(hfl_scores)] = hfl_scores
+                    logger.info(
+                        f"Load state: adjusted HFL scores shape from {hfl_scores.shape} to {adjusted_hfl_scores.shape}"
+                    )
+                    self.hfl_scores = torch.clamp(adjusted_hfl_scores, 0.0)
+                else:
+                    self.hfl_scores = torch.clamp(hfl_scores, 0.0)
 
                 _terminal_plot(
-                    f"scores on load, block: {self.block}", self.scores.numpy()
+                    f"synthetic scores on load, block: {self.block}",
+                    self.synthetic_score.numpy(),
+                )
+                _terminal_plot(
+                    f"HFL scores on load, block: {self.block}", self.hfl_scores.numpy()
                 )
 
         except Exception as e:
@@ -751,7 +804,7 @@ class Validator:
         while True:
             await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)  # 60 minutes
             # for each hotkey, a list of scores from all tasks being scored
-            hotkey_to_all_scores = defaultdict(list)
+            hotkey_to_synthetic_scores = defaultdict(list)
 
             hotkey_to_hfl_scores = defaultdict(list)
             try:
@@ -789,7 +842,7 @@ class Validator:
                             if processed_id:
                                 processed_request_ids.append(processed_id)
                             for hotkey, score in hotkey_to_score.items():
-                                hotkey_to_all_scores[hotkey].append(score)
+                                hotkey_to_synthetic_scores[hotkey].append(score)
 
                         elif validator_task.task_type == TaskTypeEnum.SCORE_FEEDBACK:
                             # SF task flow - need to check if it's ready for scoring
@@ -813,14 +866,35 @@ class Validator:
 
                             if hfl_state.status == HFLStatusEnum.SF_COMPLETED:
                                 # Calculate TF scores
-                                hotkey_to_hfl_scores = await hfl.score_hfl_tasks(task)
+                                (
+                                    hotkey_to_score,
+                                    hotkey_to_tf_score,
+                                    hotkey_to_sf_score,
+                                ) = await hfl.score_hfl_tasks(task)
+
+                                # update miner scores in database
+                                await ORM.update_hfl_final_scores(
+                                    task.id,
+                                    hotkey_to_tf_score,
+                                    hotkey_to_sf_score,
+                                )
 
                                 # Mark as processed
                                 processed_request_ids.append(task.id)
-                                for hotkey, score in hotkey_to_hfl_scores.items():
-                                    hotkey_to_all_scores[hotkey].append(score)
+                                # Get the parent TF task ID from the HFL state or task
+                                tf_task_id = task.previous_task_id
+                                if tf_task_id:
+                                    processed_request_ids.append(tf_task_id)
+                                    logger.info(
+                                        f"Marking parent TF task {tf_task_id} as processed"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"No parent TF task found for SF task {task.id}"
+                                    )
+                                for hotkey, score in hotkey_to_score.items():
+                                    hotkey_to_hfl_scores[hotkey].append(score)
 
-                                # TODO: update miner scores in database
                                 logger.info(
                                     f"Scored HFL task {task.id}, hotkey to score: {hotkey_to_hfl_scores}"
                                 )
@@ -835,18 +909,32 @@ class Validator:
                 # average scores across all tasks being scored by this trigger to update_scores
                 # so miners moving average decay is lower
                 # we incentivise both quality and quantity, but quality has higher weight than quantity
-                final_hotkey_to_score = {
+                final_hotkey_to_synthetic_score = {
                     hotkey: sum(scores) / len(scores) * self.QUALITY_WEIGHT
                     + sum(scores)
                     / len(processed_request_ids)
                     * (1 - self.QUALITY_WEIGHT)
-                    for hotkey, scores in hotkey_to_all_scores.items()
+                    for hotkey, scores in hotkey_to_synthetic_scores.items()
+                    if scores
+                }
+
+                final_hotkey_to_hfl_score = {
+                    hotkey: sum(scores) / len(scores) * self.QUALITY_WEIGHT
+                    + sum(scores)
+                    / len(processed_request_ids)
+                    * (1 - self.QUALITY_WEIGHT)
+                    for hotkey, scores in hotkey_to_hfl_scores.items()
                     if scores
                 }
                 logger.info(
-                    f"📝 Got hotkey to score across all tasks between expire_at from:{expire_from} and expire_at to:{expire_to}: {final_hotkey_to_score}"
+                    f"📝 Got hotkey to score across synthetic tasks between expire_at from:{expire_from} and expire_at to:{expire_to}: {final_hotkey_to_synthetic_score}"
+                    f"📝 Got hotkey to score across HFL tasks between expire_at from:{expire_from} and expire_at to:{expire_to}: {final_hotkey_to_hfl_score}"
                 )
-                await self.update_scores(hotkey_to_scores=final_hotkey_to_score)
+
+                await self.update_scores(
+                    hotkey_to_synthetic_scores=final_hotkey_to_synthetic_score,
+                    hotkey_to_hfl_scores=final_hotkey_to_hfl_score,
+                )
 
                 # upload scores to analytics API after updating.
                 # record last successful upload time.
@@ -1593,10 +1681,10 @@ class Validator:
         async with self._scores_alock:
             # TODO: assignment of self.hfl_score
             assert (
-                self.scores.shape == self.hfl_scores.shape
+                self.synthetic_score.shape == self.hfl_scores.shape
             ), "Scores and HFL scores must be the same shape"
             combined_score = (
-                synthetic_score_weight * self.scores
+                synthetic_score_weight * self.synthetic_score
                 + hfl_score_weight * self.hfl_scores
             )
 

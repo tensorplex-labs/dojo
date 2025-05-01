@@ -733,7 +733,6 @@ async def create_initial_miner_scores(
                             cosine_similarity_score=None,
                             normalised_cosine_similarity_score=None,
                             cubic_reward_score=None,
-                            sf_score=None,
                             icc_score=None,
                         )
                         scores_data = scores_obj.model_dump()

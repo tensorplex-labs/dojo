@@ -47,10 +47,6 @@ class Scores(BaseModel):
     cubic_reward_score: float | None = Field(
         description="Cubic reward score of the miner", default=None
     )
-    # TODO: should a new model be created for this?
-    sf_score: float | None = Field(
-        description="Score feedback of the miner", default=None
-    )
     icc_score: float | None = Field(description="ICC score of the miner", default=None)
 
 
