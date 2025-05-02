@@ -2,8 +2,6 @@ from typing import Any, List, Tuple
 
 from pydantic import BaseModel, field_validator
 
-from dojo.chain.types import HexString
-
 
 class SubnetHyperparameters(BaseModel):
     rho: int
@@ -12,9 +10,9 @@ class SubnetHyperparameters(BaseModel):
     minAllowedWeights: int
     maxWeightsLimit: int
     tempo: int
-    minDifficulty: HexString
-    maxDifficulty: HexString
-    difficulty: HexString
+    minDifficulty: int
+    maxDifficulty: int
+    difficulty: int
     weightsVersion: int
     weightsRateLimit: int
     adjustmentInterval: int
@@ -34,14 +32,18 @@ class SubnetHyperparameters(BaseModel):
     alphaLow: int
     liquidAlphaEnabled: bool
 
-    @field_validator("difficulty", "minDifficulty", "maxDifficulty", mode="before")
-    def validate_number(cls, v: Any) -> HexString:
-        if isinstance(v, str):
-            return HexString(v)
+    @field_validator(
+        "difficulty", "minDifficulty", "maxDifficulty", "adjustmentAlpha", mode="before"
+    )
+    def validate_hex_number(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.startswith("0x"):
+            return int(v, 16)
+        elif isinstance(v, int):
+            return v
         return v
 
     class Config:
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed = False
 
 
 class ServeAxonPayload(BaseModel):
@@ -139,15 +141,15 @@ class SubnetMetagraph(BaseModel):
     numUids: int
     maxUids: int
     burn: int
-    difficulty: HexString
+    difficulty: int
     registrationAllowed: bool
     powRegistrationAllowed: bool
     immunityPeriod: int
-    minDifficulty: HexString
-    maxDifficulty: HexString
+    minDifficulty: int
+    maxDifficulty: int
     minBurn: int
     maxBurn: int
-    adjustmentAlpha: str
+    adjustmentAlpha: int
     adjustmentInterval: int
     targetRegsPerInterval: bool
     maxRegsPerBlock: int
@@ -179,11 +181,15 @@ class SubnetMetagraph(BaseModel):
     taoDividendsPerHotkey: List[Tuple[str, float]]
     alphaDividendsPerHotkey: List[Tuple[str, float]]
 
-    @field_validator("difficulty", "minDifficulty", "maxDifficulty", mode="before")
-    def validate_number(cls, v: Any) -> HexString:
-        if isinstance(v, str):
-            return HexString(v)
+    @field_validator(
+        "difficulty", "minDifficulty", "maxDifficulty", "adjustmentAlpha", mode="before"
+    )
+    def validate_hex_number(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.startswith("0x"):
+            return int(v, 16)
+        elif isinstance(v, int):
+            return v
         return v
 
     class Config:
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed = False
