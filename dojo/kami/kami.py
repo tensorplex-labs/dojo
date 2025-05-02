@@ -114,7 +114,7 @@ class Kami:
             netuid (int): The netuid to get the metagraph for.
 
         Returns:
-            Dict[str, Any]: The JSON response from the API.
+            SubnetMetagraph: The subnet metagraph object.
         """
         get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
         metagraph = get_metagraph.get("data", {})
@@ -122,10 +122,10 @@ class Kami:
 
     async def get_hotkeys(self, netuid: int) -> list[str]:
         """
-        Get the neurons for a given netuid.
+        Get the hotkeys for a given netuid.
 
         Args:
-            netuid (int): The netuid to get the neurons for.
+            netuid (int): The netuid to get the hotkeys for.
 
         Returns:
             list[str]: The list of hotkeys for the given netuid.
@@ -135,10 +135,10 @@ class Kami:
 
     async def get_axons(self, netuid: int) -> list[AxonInfo]:
         """
-        Get the neurons for a given netuid.
+        Get the axons for a given netuid.
 
         Args:
-            netuid (int): The netuid to get the neurons for.
+            netuid (int): The netuid to get the axons for.
 
         Returns:
             list[AxonInfo]: The list of axons for the given netuid.
@@ -153,14 +153,14 @@ class Kami:
 
     async def get_current_block(self) -> int:
         """
-        Get the neurons for a given netuid.
+        tcurrent finalized block number.
 
-        Returns:
-            int: The current finalized block.
+                Returns:
+                    int: The current finalized block number.
         """
         result = await self.get("chain/latest-block")
         latest_block = result.get("data", {}).get("blockNumber", "")
-        return latest_block
+        return int(latest_block)
 
     async def get_subnet_hyperparameters(self, netuid: int) -> SubnetHyperparameters:
         """
@@ -170,7 +170,7 @@ class Kami:
             netuid (int): The netuid to get the hyperparameters for.
 
         Returns:
-            Dict[str, Any]: The JSON response from the API.
+            SubnetHyperparameters: The subnet hyperparameters object.
         """
         result = await self.get(f"chain/subnet-hyperparameters/{netuid}")
         hyperparameters = result.get("data", {})
@@ -180,12 +180,12 @@ class Kami:
         self, netuid: int, hotkey: str, block: int | None = None
     ) -> bool:
         """
-        Check if a hotkey is registered.
+        Check if a hotkey is registered in a subnet.
 
         Args:
             netuid (int): The netuid to check.
-            hotkey (string): The hotkey to check.
-            block (int): The block number to check.
+            hotkey (str): The hotkey to check.
+            block (int | None): Optional block number to check at. If None, uses the latest block.
 
         Returns:
             bool: True if the hotkey is registered, False otherwise.
@@ -203,10 +203,10 @@ class Kami:
 
     async def serve_axon(self, payload: ServeAxonPayload) -> Dict[str, Any]:
         """
-        Serve axons for a given payload.
+        Register an axon server with the network.
 
         Args:
-            payload (ServeAxonPayload): The payload to serve.
+            payload (ServeAxonPayload): The payload containing axon information.
 
         Returns:
             Dict[str, Any]: The JSON response from the API.
@@ -215,16 +215,19 @@ class Kami:
 
     async def set_weights(self, payload: SetWeightsPayload) -> Dict[str, Any]:
         """
-        Set weights for a given payload.
+        Set weights for neurons in the network.
+
+        Handles both standard weight setting and commit-reveal weight setting
+        based on subnet hyperparameters.
 
         Args:
-            payload (SetWeightsPayload): The payload to set weights for.
+            payload (SetWeightsPayload): The payload containing weights information.
 
         Returns:
             Dict[str, Any]: The JSON response from the API.
         """
         get_hpams = await self.get_subnet_hyperparameters(payload.netuid)
-        if get_hpams.get("commitRevealWeightsEnabled", False):
+        if get_hpams.commitRevealWeightsEnabled:
             tempo = get_hpams.get("tempo", 0)
             reveal_period = get_hpams.get("commitRevealPeriod", 0)
             if tempo == 0 or reveal_period == 0:
