@@ -43,7 +43,7 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
-from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
+from dojo.kami import AxonInfo, Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -1340,8 +1340,8 @@ class Validator(aobject):
                 port=axon.port,
                 hotkey=miner_hotkey,
                 coldkey=coldkey,
-                version=axon.get("version", 0),
-                ip_type=axon.get("ip_type", 0),
+                version=axon.version,
+                ip_type=axon.ipType,
             )
 
             # Send the request via Dendrite and get the response
@@ -1609,7 +1609,9 @@ class Validator(aobject):
         return miner_uids
 
     async def _retrieve_axons_via_uids(self, uids: List[int]) -> List[bt.AxonInfo]:
-        axons_array = [(uid, self.metagraph.axons[uid]) for uid in uids]
+        axons_array: list[tuple[int, AxonInfo]] = [
+            (uid, self.metagraph.axons[uid]) for uid in uids
+        ]
 
         axons: list[bt.AxonInfo] = []
 
@@ -1618,12 +1620,12 @@ class Validator(aobject):
             coldkey = self.metagraph.coldkeys[uid]
 
             new_axon = bt.AxonInfo(
-                ip=axon.get("ip", ""),
-                port=axon.get("port", 0),
+                ip=axon.ip,
+                port=axon.port,
                 hotkey=hotkey,
                 coldkey=coldkey,
-                version=axon.get("version", 0),
-                ip_type=axon.get("ip_type", 0),
+                version=axon.version,
+                ip_type=axon.ipType,
             )
             axons.append(new_axon)
 
