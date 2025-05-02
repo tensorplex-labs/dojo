@@ -1,6 +1,8 @@
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from dojo.chain.types import HexString
 
 
 class SubnetHyperparameters(BaseModel):
@@ -10,8 +12,9 @@ class SubnetHyperparameters(BaseModel):
     minAllowedWeights: int
     maxWeightsLimit: int
     tempo: int
-    minDifficulty: int
-    maxDifficulty: str
+    minDifficulty: HexString
+    maxDifficulty: HexString
+    difficulty: HexString
     weightsVersion: int
     weightsRateLimit: int
     adjustmentInterval: int
@@ -25,12 +28,20 @@ class SubnetHyperparameters(BaseModel):
     servingRateLimit: int
     maxValidators: int
     adjustmentAlpha: str
-    difficulty: int
     commitRevealPeriod: int
     commitRevealWeightsEnabled: bool
     alphaHigh: int
     alphaLow: int
     liquidAlphaEnabled: bool
+
+    @field_validator("difficulty", "minDifficulty", "maxDifficulty", mode="before")
+    def validate_number(cls, v: Any) -> HexString:
+        if isinstance(v, str):
+            return HexString(v)
+        return v
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class ServeAxonPayload(BaseModel):
@@ -128,12 +139,12 @@ class SubnetMetagraph(BaseModel):
     numUids: int
     maxUids: int
     burn: int
-    difficulty: int
+    difficulty: HexString
     registrationAllowed: bool
     powRegistrationAllowed: bool
     immunityPeriod: int
-    minDifficulty: int
-    maxDifficulty: str
+    minDifficulty: HexString
+    maxDifficulty: HexString
     minBurn: int
     maxBurn: int
     adjustmentAlpha: str
@@ -167,3 +178,12 @@ class SubnetMetagraph(BaseModel):
     totalStake: List[float]
     taoDividendsPerHotkey: List[Tuple[str, float]]
     alphaDividendsPerHotkey: List[Tuple[str, float]]
+
+    @field_validator("difficulty", "minDifficulty", "maxDifficulty", mode="before")
+    def validate_number(cls, v: Any) -> HexString:
+        if isinstance(v, str):
+            return HexString(v)
+        return v
+
+    class Config:
+        arbitrary_types_allowed = True
