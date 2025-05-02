@@ -387,9 +387,7 @@ class Miner(aobject):
             f"Incoming {request_tag} request from IP: {ip_addr} with hotkey: {caller_hotkey}"
         )
 
-        if not caller_hotkey or caller_hotkey not in self.subnet_metagraph.get(
-            "hotkeys", []
-        ):
+        if not caller_hotkey or caller_hotkey not in self.subnet_metagraph.hotkeys:
             logger.warning(f"Blacklisting unrecognized hotkey {caller_hotkey}")
             return True, "Unrecognized hotkey"
 

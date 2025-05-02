@@ -50,7 +50,7 @@ async def aprocess_weights_for_netuid(
 
     # get subnet hyperparameters
     hpams = await kami.get_subnet_hyperparameters(netuid=netuid)
-    metagraph_size = metagraph.get("numUids", 0)
+    metagraph_size = metagraph.numUids
 
     use_torch = True if os.getenv("USE_TORCH") == "1" else False
 

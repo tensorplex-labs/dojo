@@ -523,7 +523,7 @@ class Validator(aobject):
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
         return (
-            self.block - self.metagraph.get("lastUpdate", [])[self.uid]
+            self.block - self.metagraph.lastUpdate[self.uid]
         ) > self.config.neuron.epoch_length
 
     def should_set_weights(self) -> bool:
@@ -533,7 +533,7 @@ class Validator(aobject):
 
         # Define appropriate logic for when set weights.
         return (
-            self.block - self.metagraph.get("lastUpdate", 0)[self.uid]
+            self.block - self.metagraph.lastUpdate[self.uid]
         ) > self.config.neuron.epoch_length
 
     async def sync(self):
@@ -628,7 +628,7 @@ class Validator(aobject):
 
                 active_uids = {
                     uid
-                    for uid, axon in enumerate(self.metagraph.get("axons", []))
+                    for uid, axon in enumerate(self.metagraph.axons)
                     if self.metagraph.hotkeys[uid] in active_hotkeys
                 }
 
@@ -1020,9 +1020,7 @@ class Validator(aobject):
                         hotkey_index = self.metagraph.hotkeys.index(
                             response.axon.hotkey
                         )
-                        response.miner_coldkey = self.metagraph.get("coldkeys", [])[
-                            hotkey_index
-                        ]
+                        response.miner_coldkey = self.metagraph.coldkeys[hotkey_index]
                     except ValueError:
                         response.miner_coldkey = None
                 else:
@@ -1331,15 +1329,15 @@ class Validator(aobject):
         try:
             try:
                 axon_index = self.metagraph.hotkeys.index(miner_hotkey)
-                coldkey = self.metagraph.get("coldkeys", [])[axon_index]
+                coldkey = self.metagraph.coldkeys[axon_index]
             except ValueError:
                 logger.warning(f"Miner hotkey {miner_hotkey} not found in metagraph")
                 return []
 
-            axon = self.metagraph.get("axons")[axon_index]
+            axon = self.metagraph.axons[axon_index]
             miner_axon = bt.AxonInfo(
-                ip=axon.get("ip", ""),
-                port=axon.get("port", 0),
+                ip=axon.ip,
+                port=axon.port,
                 hotkey=miner_hotkey,
                 coldkey=coldkey,
                 version=axon.get("version", 0),
@@ -1611,13 +1609,13 @@ class Validator(aobject):
         return miner_uids
 
     async def _retrieve_axons_via_uids(self, uids: List[int]) -> List[bt.AxonInfo]:
-        axons_array = [(uid, self.metagraph.get("axons", [])[uid]) for uid in uids]
+        axons_array = [(uid, self.metagraph.axons[uid]) for uid in uids]
 
         axons: list[bt.AxonInfo] = []
 
         for uid, axon in axons_array:
             hotkey = self.metagraph.hotkeys[uid]
-            coldkey = self.metagraph.get("coldkeys", [])[uid]
+            coldkey = self.metagraph.coldkeys[uid]
 
             new_axon = bt.AxonInfo(
                 ip=axon.get("ip", ""),
