@@ -3,6 +3,36 @@ from typing import List, Tuple
 from pydantic import BaseModel
 
 
+class SubnetHyperparameters(BaseModel):
+    rho: int
+    kappa: int
+    immunityPeriod: int
+    minAllowedWeights: int
+    maxWeightsLimit: int
+    tempo: int
+    minDifficulty: int
+    maxDifficulty: str
+    weightsVersion: int
+    weightsRateLimit: int
+    adjustmentInterval: int
+    activityCutoff: int
+    registrationAllowed: bool
+    targetRegsPerInterval: int
+    minBurn: int
+    maxBurn: int
+    bondsMovingAvg: int
+    maxRegsPerBlock: int
+    servingRateLimit: int
+    maxValidators: int
+    adjustmentAlpha: str
+    difficulty: int
+    commitRevealPeriod: int
+    commitRevealWeightsEnabled: bool
+    alphaHigh: int
+    alphaLow: int
+    liquidAlphaEnabled: bool
+
+
 class ServeAxonPayload(BaseModel):
     netuid: int
     version: int = 1

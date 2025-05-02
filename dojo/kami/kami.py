@@ -7,8 +7,10 @@ from bittensor_commit_reveal import get_encrypted_commit
 from loguru import logger
 
 from dojo.kami.types import (
+    AxonInfo,
     ServeAxonPayload,
     SetWeightsPayload,
+    SubnetHyperparameters,
     SubnetMetagraph,
 )
 
@@ -116,7 +118,7 @@ class Kami:
         """
         get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
         metagraph = get_metagraph.get("data", {})
-        return metagraph
+        return SubnetMetagraph.model_validate(metagraph)
 
     async def get_hotkeys(self, netuid: int) -> list[str]:
         """
@@ -126,14 +128,12 @@ class Kami:
             netuid (int): The netuid to get the neurons for.
 
         Returns:
-            Dict[str, Any]: The JSON response from the API.
+            list[str]: The list of hotkeys for the given netuid.
         """
-        get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
-        metagraph = get_metagraph.get("data", {})
-        hotkeys = metagraph.get("hotkeys", [])
-        return hotkeys
+        metagraph = await self.get_metagraph(netuid)
+        return metagraph.hotkeys
 
-    async def get_axons(self, netuid: int) -> Dict[str, Any]:
+    async def get_axons(self, netuid: int) -> list[AxonInfo]:
         """
         Get the neurons for a given netuid.
 
@@ -141,30 +141,15 @@ class Kami:
             netuid (int): The netuid to get the neurons for.
 
         Returns:
-            Dict[str, Any]: The JSON response from the API.
+            list[AxonInfo]: The list of axons for the given netuid.
         """
         get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
         metagraph = get_metagraph.get("data", {})
         axons = metagraph.get("axons", [])
-        return axons
+        if len(axons) == 0:
+            logger.warning("No axons found in metagraph response.")
 
-    async def get_stake(self, netuid: int) -> Dict[str, Any]:
-        """
-        Get the root stake.
-
-        Returns:
-            Dict[str, Any]: The JSON response from the API.
-        """
-        result = dict[str, int]()
-        get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
-        metagraph = get_metagraph.get("data", {})
-        alpha_stake = metagraph.get("alphaStake", [])
-        root_stake = metagraph.get("taoStake", [])
-
-        result["alpha_stake"] = alpha_stake
-        result["root_stake"] = root_stake
-
-        return result
+        return [AxonInfo.model_validate(axon) for axon in axons]
 
     async def get_current_block(self) -> int:
         """
@@ -177,7 +162,7 @@ class Kami:
         latest_block = result.get("data", {}).get("blockNumber", "")
         return latest_block
 
-    async def get_subnet_hyperparameters(self, netuid: int) -> Dict[str, Any]:
+    async def get_subnet_hyperparameters(self, netuid: int) -> SubnetHyperparameters:
         """
         Get the subnet hyperparameters for a given netuid.
 
@@ -189,7 +174,7 @@ class Kami:
         """
         result = await self.get(f"chain/subnet-hyperparameters/{netuid}")
         hyperparameters = result.get("data", {})
-        return hyperparameters
+        return SubnetHyperparameters.model_validate(hyperparameters)
 
     async def is_hotkey_registered(
         self, netuid: int, hotkey: str, block: int | None = None
