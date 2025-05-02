@@ -116,7 +116,7 @@ class Kami:
         Returns:
             SubnetMetagraph: The subnet metagraph object.
         """
-        get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
+        get_metagraph = await self.get(f"chainV2/subnet-metagraph/{netuid}")
         metagraph = get_metagraph.get("data", {})
         return SubnetMetagraph.model_validate(metagraph)
 
@@ -143,7 +143,7 @@ class Kami:
         Returns:
             list[AxonInfo]: The list of axons for the given netuid.
         """
-        get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
+        get_metagraph = await self.get(f"chainV2/subnet-metagraph/{netuid}")
         metagraph = get_metagraph.get("data", {})
         axons = metagraph.get("axons", [])
         if len(axons) == 0:
@@ -158,7 +158,7 @@ class Kami:
                 Returns:
                     int: The current finalized block number.
         """
-        result = await self.get("chain/latest-block")
+        result = await self.get("chainV2/latest-block")
         latest_block = result.get("data", {}).get("blockNumber", "")
         return int(latest_block)
 
@@ -172,7 +172,7 @@ class Kami:
         Returns:
             SubnetHyperparameters: The subnet hyperparameters object.
         """
-        result = await self.get(f"chain/subnet-hyperparameters/{netuid}")
+        result = await self.get(f"chainV2/subnet-hyperparameters/{netuid}")
         hyperparameters = result.get("data", {})
         return SubnetHyperparameters.model_validate(hyperparameters)
 
@@ -193,11 +193,11 @@ class Kami:
         result = dict[str, bool]()
         if block is None:
             result = await self.get(
-                f"chain/check-hotkey?netuid={netuid}&hotkey={hotkey}"
+                f"chainV2/check-hotkey?netuid={netuid}&hotkey={hotkey}"
             )
         else:
             result = await self.get(
-                f"chain/check-hotkey?netuid={netuid}&hotkey={hotkey}&block={block}"
+                f"chainV2/check-hotkey?netuid={netuid}&hotkey={hotkey}&block={block}"
             )
         return result.get("data", {}).get("isHotkeyValid", False)
 
@@ -211,7 +211,7 @@ class Kami:
         Returns:
             Dict[str, Any]: The JSON response from the API.
         """
-        return await self.post("chain/serve-axon", data=payload.model_dump())
+        return await self.post("chainV2/serve-axon", data=payload.model_dump())
 
     async def set_weights(self, payload: SetWeightsPayload) -> Dict[str, Any]:
         """
@@ -259,6 +259,6 @@ class Kami:
                 "reveal_round": reveal_round,
             }
 
-            return await self.post("chain/set-commit-reveal-weights", data=cr_payload)
+            return await self.post("chainV2/set-commit-reveal-weights", data=cr_payload)
 
-        return await self.post("chain/set-weights", data=payload.model_dump())
+        return await self.post("chainV2/set-weights", data=payload.model_dump())
