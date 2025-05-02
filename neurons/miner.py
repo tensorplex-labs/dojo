@@ -36,6 +36,7 @@ class Miner(aobject):
     kami: Kami
 
     async def __init__(self):
+        self._last_block = None
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
@@ -502,11 +503,11 @@ class Miner(aobject):
 
     @property
     def block(self):
-        return self._block
+        return self._last_block
 
     @block.setter
     def block(self, value: int):
-        self._block = value
+        self._last_block = value
 
     async def block_headers_callback(self, block: dict):
         logger.trace(f"Received block headers{block}")
