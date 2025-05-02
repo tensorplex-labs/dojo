@@ -72,11 +72,11 @@ def get_effective_stake(hotkey: str, subtensor: bt.subtensor) -> float:
 
 async def aget_effective_stake(hotkey: str, subnet_metagraph: SubnetMetagraph) -> float:
     # With runtime api, you do not need to query root metagraph, you can just get it from the subnet itself.
-    idx = subnet_metagraph.get("hotkeys", []).index(hotkey)
+    idx = subnet_metagraph.hotkeys.index(hotkey)
 
     root_stake = 0
     try:
-        root_stake = subnet_metagraph.get("taoStake", [])[idx]
+        root_stake = subnet_metagraph.taoStake[idx]
     except (ValueError, IndexError):
         logger.trace(
             f"Hotkey {hotkey} not found in root metagraph, defaulting to 0 root_stake"
@@ -84,7 +84,7 @@ async def aget_effective_stake(hotkey: str, subnet_metagraph: SubnetMetagraph) -
 
     alpha_stake = 0
     try:
-        alpha_stake = subnet_metagraph.get("alphaStake", [])[idx]
+        alpha_stake = subnet_metagraph.alphaStake[idx]
     except (ValueError, IndexError):
         logger.trace(
             f"Hotkey {hotkey} not found in subnet metagraph for netuid: {subnet_metagraph.netuid}, defaulting to 0 alpha_stake"

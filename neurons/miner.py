@@ -18,7 +18,7 @@ from commons.utils import aget_effective_stake, aobject, get_epoch_time
 #                            serve_axon)
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import parse_block_headers
-from dojo.kami import Kami, ServeAxonPayload
+from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
 from dojo.protocol import (
     Heartbeat,
     ScoringResult,
@@ -52,7 +52,7 @@ class Miner(aobject):
         await self.init_metagraphs()
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
-        self.uid: int = self.subnet_metagraph.get("hotkeys", []).index(
+        self.uid: int = self.subnet_metagraph.hotkeys.index(
             self.wallet.hotkey.ss58_address
         )
 
@@ -95,8 +95,10 @@ class Miner(aobject):
 
         self.block = await self.kami.get_current_block()
         # The metagraph holds the state of the network, letting us know about other validators and miners.
-        self.subnet_metagraph = await self.kami.get_metagraph(self.config.netuid)  # type: ignore
-        self.root_metagraph = await self.kami.get_metagraph(0)
+        self.subnet_metagraph: SubnetMetagraph = await self.kami.get_metagraph(
+            self.config.netuid
+        )  # type: ignore
+        self.root_metagraph: SubnetMetagraph = await self.kami.get_metagraph(0)
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
         await self.check_registered()
@@ -484,13 +486,10 @@ class Miner(aobject):
         Check if the axon is served successfully.
         """
         hotkey = self.wallet.hotkey.ss58_address
-        uid = self.subnet_metagraph.get("hotkeys", []).index(hotkey)
-        current_axon_ip: str = self.subnet_metagraph.get("axons", [])[uid].get(
-            "ip", None
-        )
-        current_axon_port = self.subnet_metagraph.get("axons", [])[uid].get(
-            "port", None
-        )
+        uid = self.subnet_metagraph.hotkeys.index(hotkey)
+        current_axon: AxonInfo = self.subnet_metagraph.axons[uid]
+        current_axon_ip: str = current_axon.ip
+        current_axon_port = current_axon.port
 
         if not current_axon_ip:
             logger.info(

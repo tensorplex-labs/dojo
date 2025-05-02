@@ -41,11 +41,9 @@ async def extract_miner_uids(kami: Kami) -> List[int]:
             return await aget_effective_stake(hotkey, subnet_metagraph)
 
     # Create tasks for all hotkeys
-    num_neurons = int(len(subnet_metagraph.get("axons", [])))
+    num_neurons = int(len(subnet_metagraph.axons))
     tasks = [
-        asyncio.create_task(
-            _semaphore_get_stake(subnet_metagraph.get("hotkeys", [])[i])
-        )
+        asyncio.create_task(_semaphore_get_stake(subnet_metagraph.hotkeys[i]))
         for i in range(num_neurons)
     ]
 
@@ -56,7 +54,7 @@ async def extract_miner_uids(kami: Kami) -> List[int]:
     return [
         uid
         for uid in range(num_neurons)
-        if subnet_metagraph.get("axons", [])[uid].get("ip", "")
+        if subnet_metagraph.axons[uid].ip
         # and eff_stakes[uid] < VALIDATOR_MIN_STAKE
         # TODO: change before releasing to main (prod)
         and eff_stakes[uid] < 100

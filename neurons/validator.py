@@ -129,7 +129,7 @@ class Validator(aobject):
         self.vali_hotkey = self.wallet.hotkey.ss58_address
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
-        self.uid = self.metagraph.get("hotkeys", []).index(self.vali_hotkey)
+        self.uid = self.metagraph.hotkeys.index(self.vali_hotkey)
         logger.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
         )
@@ -141,7 +141,7 @@ class Validator(aobject):
         logger.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
         self.scores: torch.Tensor = torch.zeros(
-            len(self.metagraph.get("hotkeys", [])), dtype=torch.float32
+            len(self.metagraph.hotkeys), dtype=torch.float32
         )
 
         await self.check_registered()
@@ -359,13 +359,13 @@ class Validator(aobject):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
         # Copies state of metagraph before syncing.
         previous_metagraph = copy.deepcopy(self.metagraph)
-        previous_axons = previous_metagraph.get("axons", [])
-        previous_hotkeys = previous_metagraph.get("hotkeys", [])
+        previous_axons = previous_metagraph.axons
+        previous_hotkeys = previous_metagraph.hotkeys
 
         # Sync the metagraph.
         self.metagraph = await self.kami.get_metagraph(self.config.netuid)
-        current_axons = self.metagraph.get("axons", [])
-        current_hotkeys = self.metagraph.get("hotkeys", [])
+        current_axons = self.metagraph.axons
+        current_hotkeys = self.metagraph.hotkeys
 
         # Check if the metagraph axon info has changed.
         if previous_axons == current_axons:
@@ -486,7 +486,7 @@ class Validator(aobject):
             logger.success(f"Loaded validator state: {scores=}")
             async with self._scores_alock:
                 # if metagraph has more hotkeys than scores, adjust length
-                if len(scores) < len(self.metagraph.get("hotkeys", [])):
+                if len(scores) < len(self.metagraph.hotkeys):
                     logger.warning(
                         "Scores state is less than current metagraph hotkeys length, adjusting length. This should only happen when subnet is not at max UIDs yet."
                     )
@@ -629,7 +629,7 @@ class Validator(aobject):
                 active_uids = {
                     uid
                     for uid, axon in enumerate(self.metagraph.get("axons", []))
-                    if self.metagraph.get("hotkeys", [])[uid] in active_hotkeys
+                    if self.metagraph.hotkeys[uid] in active_hotkeys
                 }
 
                 async with self._uids_alock:
@@ -1017,7 +1017,7 @@ class Validator(aobject):
                 # Get coldkey from metagraph using hotkey index
                 if response.axon and response.axon.hotkey:
                     try:
-                        hotkey_index = self.metagraph.get("hotkeys", []).index(
+                        hotkey_index = self.metagraph.hotkeys.index(
                             response.axon.hotkey
                         )
                         response.miner_coldkey = self.metagraph.get("coldkeys", [])[
@@ -1330,7 +1330,7 @@ class Validator(aobject):
 
         try:
             try:
-                axon_index = self.metagraph.get("hotkeys", []).index(miner_hotkey)
+                axon_index = self.metagraph.hotkeys.index(miner_hotkey)
                 coldkey = self.metagraph.get("coldkeys", [])[axon_index]
             except ValueError:
                 logger.warning(f"Miner hotkey {miner_hotkey} not found in metagraph")
@@ -1597,15 +1597,13 @@ class Validator(aobject):
         Returns:
             List of tuples containing (hotkey_short, uid)
         """
-        miner_uids = []
+        miner_uids: list[tuple[str, int | None]] = []
         for miner_response in batch:
             hotkey = miner_response.miner_hotkey
             hotkey_short = hotkey if hotkey else "None"
 
             try:
-                uid: int = (
-                    metagraph.get("hotkeys", []).index(hotkey) if hotkey else None
-                )
+                uid: int | None = metagraph.hotkeys.index(hotkey)
                 miner_uids.append((hotkey_short, uid))
             except ValueError:
                 miner_uids.append((hotkey_short, None))
@@ -1618,7 +1616,7 @@ class Validator(aobject):
         axons: list[bt.AxonInfo] = []
 
         for uid, axon in axons_array:
-            hotkey = self.metagraph.get("hotkeys", [])[uid]
+            hotkey = self.metagraph.hotkeys[uid]
             coldkey = self.metagraph.get("coldkeys", [])[uid]
 
             new_axon = bt.AxonInfo(
