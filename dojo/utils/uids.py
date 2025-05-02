@@ -38,13 +38,11 @@ async def extract_miner_uids(kami: Kami) -> List[int]:
 
     # Create tasks for all hotkeys
     num_neurons = int(len(subnet_metagraph.axons))
-    tasks = [
+
+    eff_stakes = [
         aget_effective_stake(subnet_metagraph.hotkeys[i], subnet_metagraph)
         for i in range(num_neurons)
     ]
-
-    # Process all tasks and collect results in order
-    eff_stakes = await asyncio.gather(*tasks)
 
     # Return miner UIDs based on stakes
     return [
