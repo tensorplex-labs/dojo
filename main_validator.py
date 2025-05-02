@@ -3,12 +3,11 @@ import gc
 from contextlib import asynccontextmanager
 
 import uvicorn
-from bittensor.utils.btlogging import logging as logger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
 from commons.api.middleware import LimitContentLengthMiddleware
-from commons.block_subscriber import start_block_subscriber
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import FatalSyntheticGenerationError
 from commons.objects import ObjectManager

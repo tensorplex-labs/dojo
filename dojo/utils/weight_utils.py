@@ -3,7 +3,7 @@ from typing import Union
 
 import numpy as np
 import torch
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 from numpy.typing import NDArray
 
 from dojo.kami import SubnetMetagraph

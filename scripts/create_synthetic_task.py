@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI

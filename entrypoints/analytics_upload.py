@@ -13,7 +13,7 @@ from typing import List
 
 import bittensor as bt
 import httpx
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.exceptions import NoProcessedTasksYet
 from commons.objects import ObjectManager

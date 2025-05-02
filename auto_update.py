@@ -4,7 +4,7 @@ import sys
 import time
 from datetime import datetime
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.utils import datetime_to_iso8601_str
 from dojo import get_latest_git_tag

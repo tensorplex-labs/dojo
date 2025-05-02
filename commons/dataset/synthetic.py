@@ -2,7 +2,7 @@ import os
 import traceback
 
 import aiohttp
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 from tenacity import (
     AsyncRetrying,
     RetryError,

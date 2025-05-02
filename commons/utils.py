@@ -14,8 +14,8 @@ import numpy as np
 import plotext
 import requests
 import torch
-from bittensor.utils.btlogging import logging as logger
 from Crypto.Hash import keccak
+from loguru import logger
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
 from commons.objects import ObjectManager

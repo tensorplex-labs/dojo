@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from database.prisma import Prisma
 

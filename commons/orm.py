@@ -4,7 +4,7 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.exceptions import (
     ExpiredFromMoreThanExpireTo,

@@ -6,9 +6,8 @@ from datetime import datetime
 from typing import Dict, Tuple
 
 import bittensor
-from bittensor.core.metagraph import AsyncMetagraph
-from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.networking import ip_to_int, ip_version
+from loguru import logger
 
 # from commons.exceptions import FatalSubtensorConnectionError
 from commons.human_feedback.dojo import DojoAPI
@@ -31,8 +30,6 @@ from dojo.utils.config import get_config
 
 class Miner(aobject):
     _should_exit: bool = False
-    root_metagraph: AsyncMetagraph
-    subnet_metagraph: AsyncMetagraph
     kami: Kami
 
     async def __init__(self):

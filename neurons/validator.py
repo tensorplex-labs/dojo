@@ -15,7 +15,7 @@ import aiohttp
 import bittensor as bt
 import numpy as np
 import torch
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 from torch.nn import functional as F
 
 import dojo

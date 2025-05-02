@@ -15,9 +15,9 @@ import aiofiles
 import bittensor as bt
 import httpx
 import uvicorn
-from bittensor.utils.btlogging import logging as logger
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
 from commons.api_settings import ValidatorAPISettings, get_settings
 from commons.cache import RedisCache
