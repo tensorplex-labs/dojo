@@ -34,16 +34,12 @@ async def extract_miner_uids(kami: Kami) -> List[int]:
     # block = await kami.get_current_block()
     subnet_metagraph = await kami.get_metagraph(config.netuid)
 
-    semaphore = asyncio.Semaphore(20)  # Allow 20 concurrent calls
-
-    async def _semaphore_get_stake(hotkey):
-        async with semaphore:
-            return await aget_effective_stake(hotkey, subnet_metagraph)
+    asyncio.Semaphore(20)  # Allow 20 concurrent calls
 
     # Create tasks for all hotkeys
     num_neurons = int(len(subnet_metagraph.axons))
     tasks = [
-        asyncio.create_task(_semaphore_get_stake(subnet_metagraph.hotkeys[i]))
+        aget_effective_stake(subnet_metagraph.hotkeys[i], subnet_metagraph)
         for i in range(num_neurons)
     ]
 

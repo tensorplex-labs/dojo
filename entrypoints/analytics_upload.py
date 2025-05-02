@@ -21,24 +21,22 @@ from commons.orm import ORM
 from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
 from dojo import ANALYTICS_UPLOAD, VALIDATOR_MIN_STAKE
-from dojo.kami import Kami
+from dojo.kami import Kami, SubnetMetagraph
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 
 VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
 
 
 async def _get_all_miner_hotkeys(
-    subnet_metagraph, root_metagraph
+    subnet_metagraph: SubnetMetagraph, root_metagraph: SubnetMetagraph
 ) -> List[str]:
     """
     returns a list of all metagraph hotkeys with stake less than VALIDATOR_MIN_STAKE
     """
     return [
         hotkey
-        for hotkey in subnet_metagraph['hotkeys']
-        if await aget_effective_stake(
-            hotkey, subnet_metagraph=subnet_metagraph
-        )
+        for hotkey in subnet_metagraph.hotkeys
+        if aget_effective_stake(hotkey, subnet_metagraph=subnet_metagraph)
         < VALIDATOR_MIN_STAKE
     ]
 

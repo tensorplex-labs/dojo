@@ -70,7 +70,7 @@ def get_effective_stake(hotkey: str, subtensor: bt.subtensor) -> float:
     return effective_stake
 
 
-async def aget_effective_stake(hotkey: str, subnet_metagraph: SubnetMetagraph) -> float:
+def aget_effective_stake(hotkey: str, subnet_metagraph: SubnetMetagraph) -> float:
     # With runtime api, you do not need to query root metagraph, you can just get it from the subnet itself.
     idx = subnet_metagraph.hotkeys.index(hotkey)
 

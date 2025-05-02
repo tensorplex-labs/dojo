@@ -404,9 +404,7 @@ class Miner(aobject):
                 f"Ignored minimum validator stake requirement of {VALIDATOR_MIN_STAKE}",
             )
 
-        effective_stake = await aget_effective_stake(
-            caller_hotkey, self.subnet_metagraph
-        )
+        effective_stake = aget_effective_stake(caller_hotkey, self.subnet_metagraph)
         if effective_stake < float(VALIDATOR_MIN_STAKE):
             message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"
             logger.warning(message)
