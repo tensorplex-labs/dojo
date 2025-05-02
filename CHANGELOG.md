@@ -1,3 +1,9 @@
+## [1.11.2](https://github.com/tensorplex-labs/dojo/compare/v1.11.1...v1.11.2) (2025-04-29)
+
+### Bug Fixes
+
+* close and reinit subtensor during heartbeats ([2ea96db](https://github.com/tensorplex-labs/dojo/commit/2ea96dbd84c175f61cb2c4e55b6933cea5aafc2b))
+
 ## [1.11.1](https://github.com/tensorplex-labs/dojo/compare/v1.11.0...v1.11.1) (2025-04-28)
 
 ### Bug Fixes
