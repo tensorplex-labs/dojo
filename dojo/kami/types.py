@@ -151,7 +151,7 @@ class SubnetMetagraph(BaseModel):
     maxBurn: int
     adjustmentAlpha: int
     adjustmentInterval: int
-    targetRegsPerInterval: bool
+    targetRegsPerInterval: int
     maxRegsPerBlock: int
     servingRateLimit: int
     commitRevealWeightsEnabled: bool
