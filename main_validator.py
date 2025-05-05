@@ -17,8 +17,6 @@ from dojo.utils.config import source_dotenv
 
 source_dotenv()
 
-validator = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,10 +39,10 @@ def _check_fatal_errors(task: asyncio.Task):
 
 async def _shutdown_validator():
     logger.info("Performing shutdown tasks...")
-    validator._should_exit = True
-    validator.executor.shutdown(wait=True)
-    validator.subtensor.substrate.close()
-    await validator.save_state()
+    validator = await ObjectManager.get_validator()
+    if validator:
+        validator.subtensor.substrate.close()
+        await validator.save_state()
     await SyntheticAPI.close_session()
     await disconnect_db()
     try:
