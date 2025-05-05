@@ -7,7 +7,6 @@ import random
 import time
 import traceback
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, Dict, List, TypeAlias
 
@@ -43,7 +42,7 @@ from commons.utils import (
     initialise,
     set_expire_time,
 )
-from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
+from dojo import get_spec_version
 from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.protocol import (
     CompletionResponse,
@@ -71,21 +70,21 @@ ObfuscatedModelMap: TypeAlias = Dict[str, str]
 SyntheticMetadata: TypeAlias = dict
 
 
-latest_local = get_latest_git_tag()
-latest_remote = get_latest_remote_tag()
-if (
-    latest_local
-    and latest_remote
-    and latest_local.strip("v") != latest_remote.strip("v")
-):
-    logger.warning("Your repository is not up to date, and may fail to set weights.")
-    logger.warning(
-        f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
-    )
+# TODO: re-enable before release
+# latest_local = get_latest_git_tag()
+# latest_remote = get_latest_remote_tag()
+# if (
+#     latest_local
+#     and latest_remote
+#     and latest_local.strip("v") != latest_remote.strip("v")
+# ):
+#     logger.warning("Your repository is not up to date, and may fail to set weights.")
+#     logger.warning(
+#         f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
+#     )
 
 
 class Validator(aobject):
-    _should_exit: bool = False
     _scores_alock = asyncio.Lock()
     _uids_alock = asyncio.Lock()
     _request_alock = asyncio.Lock()
@@ -156,7 +155,6 @@ class Validator(aobject):
             )
             raise RuntimeError("Score migration failed - validator cannot start")
 
-        self.executor = ThreadPoolExecutor(max_workers=2)
         await self.load_state()
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
@@ -598,7 +596,7 @@ class Validator(aobject):
         Periodically logs the status of the validator, including the current block and time.
         This function runs in a loop until the validator is signaled to exit.
         """
-        while not self._should_exit:
+        while True:
             logger.info(
                 f"Validator running... block:{str(self.block)} time: {time.time()}"
             )
@@ -673,10 +671,6 @@ class Validator(aobject):
                             obfuscated_model_to_model,
                             synthetic_metadata,
                         )
-
-                if self._should_exit:
-                    logger.info("Validator should stop...")
-                    break
 
                 self.step += 1
 
