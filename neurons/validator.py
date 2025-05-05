@@ -35,6 +35,7 @@ from commons.score_storage import ScoreStorage
 from commons.scoring import Scoring
 from commons.utils import (
     _terminal_plot,
+    aget_effective_stake,
     aobject,
     datetime_as_utc,
     get_epoch_time,
@@ -43,7 +44,7 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
-from dojo.kami import AxonInfo, Kami, SetWeightsPayload, SubnetMetagraph
+from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -59,7 +60,7 @@ from dojo.protocol import (
     TaskTypeEnum,
 )
 from dojo.utils.config import get_config
-from dojo.utils.uids import extract_miner_uids, is_miner
+from dojo.utils.uids import is_miner
 from dojo.utils.weight_utils import (
     aprocess_weights_for_netuid,
     convert_weights_and_uids_for_emit,
@@ -68,6 +69,7 @@ from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
 SyntheticMetadata: TypeAlias = dict
+
 
 latest_local = get_latest_git_tag()
 latest_remote = get_latest_remote_tag()
@@ -126,7 +128,7 @@ class Validator(aobject):
         logger.info(f"Metagraph Loaded: {self.metagraph}")
 
         # Save validator hotkey
-        self.vali_hotkey = self.wallet.hotkey.ss58_address
+        self.vali_hotkey: str = self.wallet.hotkey.ss58_address
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.metagraph.hotkeys.index(self.vali_hotkey)
@@ -160,7 +162,7 @@ class Validator(aobject):
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
         miners_uids = await self.get_miner_uids()
-        metagraph_axons = await self._retrieve_axons_via_uids(miners_uids)
+        metagraph_axons = await self._retrieve_axons(miners_uids)
         axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]
         if not axons:
             logger.warning("No axons to send consensus to... skipping")
@@ -607,10 +609,8 @@ class Validator(aobject):
         while True:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
             try:
-                all_miner_uids = await extract_miner_uids(self.kami)
-                logger.info(f"Sending heartbeats to {len(all_miner_uids)} miners")
-
-                axons = await self._retrieve_axons_via_uids(all_miner_uids)
+                axons = await self._retrieve_axons()
+                logger.info(f"Sending heartbeats to {len(axons)} miners")
 
                 # Send heartbeats in batches
                 batch_size = 10
@@ -953,7 +953,7 @@ class Validator(aobject):
         start = get_epoch_time()
         sel_miner_uids = await self.get_miner_uids()
 
-        axons = await self._retrieve_axons_via_uids(sel_miner_uids)
+        axons = await self._retrieve_axons(sel_miner_uids)
 
         if not axons:
             logger.warning("🤷 No axons to query ... skipping")
@@ -1608,16 +1608,32 @@ class Validator(aobject):
 
         return miner_uids
 
-    async def _retrieve_axons_via_uids(self, uids: List[int]) -> List[bt.AxonInfo]:
-        axons_array: list[tuple[int, AxonInfo]] = [
-            (uid, self.metagraph.axons[uid]) for uid in uids
-        ]
+    async def _retrieve_axons(self, uids: list[int] = []) -> List[bt.AxonInfo]:
+        # Return miner UIDs based on stakes
 
         axons: list[bt.AxonInfo] = []
 
-        for uid, axon in axons_array:
+        for uid, axon in enumerate(self.metagraph.axons):
+            if uids and uid not in uids:
+                logger.debug(f"UID {uid} not in selected UIDs {uids} skipping")
+                continue
+
+            if not axon.ip or not axon.port:
+                logger.debug(f"Missing IP or port for axon: {axon} skipping")
+                continue
+
             hotkey = self.metagraph.hotkeys[uid]
             coldkey = self.metagraph.coldkeys[uid]
+
+            eff_stake = aget_effective_stake(hotkey, self.metagraph)
+            if (
+                not get_config().ignore_min_stake
+                and eff_stake > dojo.VALIDATOR_MIN_STAKE
+            ):
+                logger.debug(
+                    f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {dojo.VALIDATOR_MIN_STAKE} to be considered miner"
+                )
+                continue
 
             new_axon = bt.AxonInfo(
                 ip=axon.ip,
