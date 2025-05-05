@@ -10,10 +10,12 @@ class ObjectManager:
     @classmethod
     async def get_miner(cls):
         if get_config().simulation:
-            from simulator.miner import MinerSim
-
-            if cls._miner is None:
-                cls._miner = await MinerSim()
+            # TODO: re-implement simulator
+            # from simulator.miner import MinerSim
+            #
+            # if cls._miner is None:
+            #     cls._miner = await MinerSim()
+            pass
         else:
             from neurons.miner import Miner
 
@@ -24,10 +26,12 @@ class ObjectManager:
     @classmethod
     async def get_validator(cls):
         if get_config().simulation:
-            from simulator.validator import ValidatorSim
-
-            if cls._validator is None:
-                cls._validator = ValidatorSim()
+            # TODO: re-implement simulator
+            # from simulator.validator import ValidatorSim
+            #
+            # if cls._validator is None:
+            #     cls._validator = ValidatorSim()
+            pass
         else:
             from neurons.validator import Validator
 

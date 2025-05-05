@@ -532,10 +532,6 @@ class Validator(aobject):
         ) > self.config.neuron.epoch_length
 
     async def sync(self):
-        # has_connection = await self._ensure_subtensor_connection()
-        # if not has_connection:
-        #     logger.warning("Subtensor connection failed - continuing with partial sync")
-
         await self.check_registered()
 
         if await self.should_sync_metagraph():
@@ -569,19 +565,6 @@ class Validator(aobject):
         except Exception as e:
             logger.error(f"Failed to reconnect to subtensor: {e}")
             return await self._try_reconnect_subtensor()
-
-    async def _ensure_subtensor_connection(self):
-        async with self._connection_lock:
-            try:
-                self.subtensor.get_current_block()
-                self._block_check_attempts = 0
-                return True
-            except (BrokenPipeError, ConnectionError):
-                logger.warning("Connection lost, attempting immediate reconnection")
-                return await self._try_reconnect_subtensor()
-            except Exception as e:
-                logger.error(f"Unexpected error checking connection: {e}")
-                return False
 
     # ---------------------------------------------------------------------------- #
     #                         VALIDATOR CORE FUNCTIONS                             #
