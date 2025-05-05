@@ -80,6 +80,12 @@ DEFAULT_MINER_HOTKEYS = [
     "5EbaEE3sCpNq5WezaiyKaA7jX3bvphYdwqD5b3bkzPELvxZY",  # miner_test2
 ]
 
+with open(COMPLETION_JSON_PATH) as f:
+    completion_data = json.load(f)
+
+dummy_completion = completion_data.get("completions", [])
+dummy_prompt = completion_data.get("prompt", "")
+
 
 async def seed_test_data(
     num_tasks: int = DEFAULT_NUM_TASKS,
@@ -211,7 +217,7 @@ async def create_validator_tasks(
         # Create the validator task with metadata as JSON
         task = await prisma.validatortask.create(
             data={
-                "prompt": Json("This is a test prompt for testing the HFL"),
+                "prompt": dummy_prompt,
                 "task_type": TaskTypeEnum.CODE_GENERATION,
                 "is_processed": True,
                 "expire_at": expire_at,
@@ -639,9 +645,7 @@ async def create_tf_tasks(
         # Create the TF task with reference to previous task
         task = await prisma.validatortask.create(
             data={
-                "prompt": Json(
-                    f"This is a TEXT_FEEDBACK test prompt for scenario: {scenario}"
-                ),
+                "prompt": dummy_prompt,
                 "task_type": TaskTypeEnum.TEXT_FEEDBACK,
                 "is_processed": False,
                 "expire_at": expire_at,
