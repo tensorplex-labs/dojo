@@ -25,7 +25,7 @@ class SubnetHyperparameters(BaseModel):
     maxRegsPerBlock: int
     servingRateLimit: int
     maxValidators: int
-    adjustmentAlpha: str
+    adjustmentAlpha: int
     commitRevealPeriod: int
     commitRevealWeightsEnabled: bool
     alphaHigh: int

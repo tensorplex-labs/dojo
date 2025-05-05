@@ -70,8 +70,8 @@ async def aprocess_weights_for_netuid(
     # Network configuration parameters from an subtensor.
     # These parameters determine the range of acceptable weights for each neuron.
     quantile = exclude_quantile / U16_MAX
-    min_allowed_weights = hpams.get("minAllowedWeights", 0)
-    max_weight_limit = hpams.get("maxWeightsLimit", 0)
+    min_allowed_weights = hpams.minAllowedWeights
+    max_weight_limit = hpams.maxWeightsLimit
     logger.debug(f"quantile: {quantile}")
     logger.debug(f"min_allowed_weights: {min_allowed_weights}")
     logger.debug(f"max_weight_limit: {max_weight_limit}")
