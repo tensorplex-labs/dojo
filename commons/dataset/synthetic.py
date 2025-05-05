@@ -75,9 +75,7 @@ class SyntheticAPI:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(MAX_RETRIES),
                 wait=wait_exponential(multiplier=1, max=30),
-                before_sleep=before_sleep_log(
-                    logger._logger, log_level=10, exc_info=True
-                ),
+                before_sleep=before_sleep_log(logger, log_level=10, exc_info=True),
             ):
                 with attempt:
                     async with cls._session.get(path) as response:

@@ -1,4 +1,3 @@
-import asyncio
 import bisect
 import uuid
 from collections import defaultdict
@@ -33,8 +32,6 @@ async def extract_miner_uids(kami: Kami) -> List[int]:
 
     # block = await kami.get_current_block()
     subnet_metagraph = await kami.get_metagraph(config.netuid)
-
-    asyncio.Semaphore(20)  # Allow 20 concurrent calls
 
     # Create tasks for all hotkeys
     num_neurons = int(len(subnet_metagraph.axons))
