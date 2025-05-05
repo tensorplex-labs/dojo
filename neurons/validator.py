@@ -39,7 +39,6 @@ from commons.utils import (
     datetime_as_utc,
     get_epoch_time,
     get_new_uuid,
-    initialise,
     set_expire_time,
 )
 from dojo import get_spec_version
@@ -67,7 +66,7 @@ from dojo.utils.weight_utils import (
 from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
-SyntheticMetadata: TypeAlias = dict
+SyntheticMetadata: TypeAlias = dict[str, str]
 
 
 # TODO: re-enable before release
@@ -111,19 +110,15 @@ class Validator(aobject):
         self.kami = Kami(self.kami_url)
 
         self.loop = asyncio.get_event_loop()
-        # TODO @dev WIP from BaseNeuron
         self.config = ObjectManager.get_config()
 
-        # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
-        self.device = self.config.neuron.device
-
-        # Log the configuration for reference.
         logger.info(self.config)
 
-        self.wallet, self.metagraph, self.axon = await initialise(
-            self.config, self.kami
-        )
-
+        logger.info("Setting up bittensor objects....")
+        # The wallet holds the cryptographic key pairs for the miner.
+        self.wallet = bt.wallet(config=self.config)
+        logger.info(f"Wallet: {self.wallet}")
+        self.metagraph = await self.kami.get_metagraph(self.config.netuid)
         logger.info(f"Metagraph Loaded: {self.metagraph}")
 
         # Save validator hotkey
@@ -159,7 +154,7 @@ class Validator(aobject):
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
-        miners_uids = await self.get_miner_uids()
+        miners_uids = await self.get_active_miner_uids()
         metagraph_axons = await self._retrieve_axons(miners_uids)
         axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]
         if not axons:
@@ -204,7 +199,7 @@ class Validator(aobject):
                         except Exception as e:
                             logger.error(f"Error obfuscating {file.filename}: {e}")
 
-    async def get_miner_uids(self):
+    async def get_active_miner_uids(self):
         async with self._uids_alock:
             return sorted(list(self._active_miner_uids))
 
@@ -624,7 +619,7 @@ class Validator(aobject):
                         r.axon.hotkey for r in responses if r and r.ack and r.axon
                     )
 
-                active_uids = {
+                active_uids: set[int] = {
                     uid
                     for uid, axon in enumerate(self.metagraph.axons)
                     if self.metagraph.hotkeys[uid] in active_hotkeys
@@ -679,12 +674,12 @@ class Validator(aobject):
                 await asyncio.sleep(dojo.VALIDATOR_RUN)
             except KeyboardInterrupt:
                 # Handle shutdown gracefully
-                await self._cleanup()
+                await self.cleanup()
                 return
             except FatalSyntheticGenerationError:
                 # if synthetic-API is unresponsive, shut down validator.
                 logger.error("Synthetic API is unresponsive, shutting down validator")
-                await self._cleanup()
+                await self.cleanup()
                 raise
             # In case of unforeseen errors, the validator will log the error and continue operations.
             except Exception as err:
@@ -693,7 +688,7 @@ class Validator(aobject):
                 await asyncio.sleep(dojo.VALIDATOR_RUN)
 
         # Cleanup on exit
-        await self._cleanup()
+        await self.cleanup()
 
     async def update_tasks_polling(self):
         """
@@ -837,25 +832,23 @@ class Validator(aobject):
 
     # Validator Setup Functions
     async def check_registered(self):
-        is_member = await self.kami.is_hotkey_registered(
+        is_registered = await self.kami.is_hotkey_registered(
             netuid=int(self.config.netuid),  # type: ignore
             hotkey=str(self.wallet.hotkey.ss58_address),
-            # block=int(self.block),
         )
-        if not is_member:
+        if not is_registered:
             logger.error(
                 f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli s register` before trying again"
             )
-            self._cleanup()
+            await self.cleanup()
             exit(1)
 
     # Validator Run helper functions
-    async def _cleanup(self):
+    async def cleanup(self):
         """Handle cleanup operations when shutting down"""
-        self.axon.stop()
         logger.success("Validator axon stopped")
-        self.kami.close()
+        await self.kami.close()
 
     async def _generate_synthetic_request(
         self,
@@ -945,7 +938,7 @@ class Validator(aobject):
             return
 
         start = get_epoch_time()
-        sel_miner_uids = await self.get_miner_uids()
+        sel_miner_uids = await self.get_active_miner_uids()
 
         axons = await self._retrieve_axons(sel_miner_uids)
 
