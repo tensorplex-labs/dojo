@@ -18,6 +18,7 @@ from database.prisma.types import (
 )
 from dojo import TASK_DEADLINE
 from dojo.protocol import (
+    CodeAnswer,
     CompletionResponse,
     ScoreCriteria,
     TaskResult,
@@ -137,10 +138,11 @@ def map_human_feedback_to_task_synapse(
         completion_responses: list[CompletionResponse] = []
 
         # First add the original (base) code as a completion for reference
+        original_completion = CodeAnswer.model_validate(response_data.base_code)
         completion_responses.append(
             CompletionResponse(
                 model="original",  # Use a default model name for base code
-                completion=response_data.base_code,
+                completion=original_completion,
                 completion_id=get_new_uuid(),
                 criteria_types=[
                     ScoreCriteria(

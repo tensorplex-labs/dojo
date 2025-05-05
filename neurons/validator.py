@@ -1669,7 +1669,74 @@ class Validator:
         block_number = block_header.number.to_int()
         self._last_block = block_number
 
-    async def get_combined_score(self) -> torch.FloatTensor:
+    def _extract_miners_hotkey_uid(
+        self, batch: list[TaskSynapseObject], metagraph: bt.metagraph
+    ) -> list[tuple[str, int]]:
+        """
+        Extract UIDs for miners based on their hotkeys.
+
+        Args:
+            batch: List of miner responses
+            metagraph: The metagraph containing hotkey information
+
+        Returns:
+            List of tuples containing (hotkey_short, uid)
+        """
+        miner_uids = []
+        for miner_response in batch:
+            hotkey = miner_response.miner_hotkey
+            hotkey_short = hotkey if hotkey else "None"
+
+            try:
+                uid = metagraph.hotkeys.index(hotkey) if hotkey else None
+                miner_uids.append((hotkey_short, uid))
+            except ValueError:
+                miner_uids.append((hotkey_short, None))
+
+        return miner_uids
+
+    def _classify_miner_results(
+        self,
+        batch: list[TaskSynapseObject],
+        updated_miner_responses: list[TaskSynapseObject],
+        miner_uids: list[tuple[str, int]],
+    ) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
+        """
+        Classify miners as successful or failed based on their responses.
+
+        Args:
+            batch: List of original miner responses
+            updated_miner_responses: List of successfully processed miner responses
+            miner_uids: List of (hotkey_short, uid) tuples from _extract_miners_hotkey_uid
+
+        Returns:
+            Tuple of (successful_identifiers, failed_identifiers)
+        """
+        # Get the hotkeys of successful miners from updated_miner_responses
+        successful_hotkeys = {
+            miner_response.miner_hotkey
+            for miner_response in updated_miner_responses
+            if miner_response.miner_hotkey
+        }
+
+        # Classify each miner as successful or failed
+        successful_identifiers = []
+        failed_identifiers = []
+
+        for idx, miner_response in enumerate(batch):
+            hotkey = miner_response.miner_hotkey
+            if not hotkey:
+                continue
+
+            identifier = miner_uids[idx]
+            if hotkey in successful_hotkeys:
+                successful_identifiers.append(identifier)
+            else:
+                failed_identifiers.append(identifier)
+
+        return successful_identifiers, failed_identifiers
+
+    async def get_combined_score(self) -> torch.Tensor:
         """Combination of both synthetic task score and HFL task score
 
         Returns:

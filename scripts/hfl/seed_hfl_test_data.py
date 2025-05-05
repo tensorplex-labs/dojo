@@ -540,7 +540,8 @@ async def seed_tf_test_data(
 
     # Clean up existing TF test data if requested
     if cleanup:
-        await cleanup_test_data(TaskTypeEnum.TEXT_FEEDBACK)
+        # await cleanup_test_data(TaskTypeEnum.TEXT_FEEDBACK)
+        await cleanup_test_data()
 
     created_tasks = {}
 
@@ -618,23 +619,18 @@ async def create_tf_tasks(
     """
     created_tasks = []
 
-    # Find or create a previous task to refer to (original task)
-    previous_task = await prisma.validatortask.find_first(
-        where={"task_type": TaskTypeEnum.CODE_GENERATION}
+    previous_task = await create_validator_tasks(
+        num_tasks=1,
+        num_completions=4,
+        num_responses=4,
+        target_percentage=70,
     )
 
     if not previous_task:
-        # Create a previous task if none exists
-        previous_task = await prisma.validatortask.create(
-            data={
-                "prompt": Json("This is a previous task for TEXT_FEEDBACK testing"),
-                "task_type": TaskTypeEnum.CODE_GENERATION,
-                "is_processed": True,
-                "expire_at": datetime_as_utc(
-                    datetime.now(timezone.utc) - timedelta(hours=2)
-                ),
-            }
-        )
+        raise ValueError("No previous task is created")
+
+    if previous_task:
+        previous_task = previous_task[0]
 
     for i in range(num_tasks):
         # Create a task that expired recently (1 hour ago)

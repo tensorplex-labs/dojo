@@ -10,12 +10,7 @@ from bittensor.utils.btlogging import logging as logger
 from commons.exceptions import CreateTaskFailed
 from commons.utils import loaddotenv
 from dojo import get_dojo_api_base_url
-from dojo.protocol import (
-    CodeAnswer,
-    MultimediaAnswer,
-    TaskSynapseObject,
-    TaskTypeEnum,
-)
+from dojo.protocol import CodeAnswer, MultimediaAnswer, TaskSynapseObject, TaskTypeEnum
 
 DOJO_API_BASE_URL = get_dojo_api_base_url()
 # to be able to get the curlify requests
@@ -77,6 +72,7 @@ class DojoAPI:
     @staticmethod
     def serialize_task_request(data: TaskSynapseObject):
         # Use a mapping for task_modality to avoid if-else logic
+        # TODO: KIV
         if data.task_type in (
             TaskTypeEnum.TEXT_FEEDBACK,
             TaskTypeEnum.CODE_GENERATION,

@@ -485,6 +485,12 @@ class FeedbackLoop:
             - Update state to SF_PENDING
         """
         try:
+            if not validator._active_miner_uids:
+                logger.warning(
+                    f"No active miners found for {TaskTypeEnum.SCORE_FEEDBACK} task... skipping"
+                )
+                return
+
             # Get tasks with TF_COMPLETED status in batches
             async for tf_tasks_batch, _ in ORM.get_TF_tasks_by_hfl_status(
                 status=HFLStatusEnum.TF_COMPLETED,

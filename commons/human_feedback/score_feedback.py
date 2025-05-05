@@ -35,7 +35,8 @@ async def get_improved_task_from_synthetic_api(
         HumanFeedbackResponse object or None if not found/error
     """
     response = await SyntheticAPI.get_improved_task_raw(syn_req_id)
-    logger.info(f"Response: {response}")
+    # TODO: Remove this
+    logger.info(f"Response from synthetic API +++++++++++++++: {response}")
     return response
 
 
@@ -61,7 +62,9 @@ async def create_score_feedback_task(
             return None
 
         # Get improved task from synthetic API (raw response)
-        improved_task_data = await get_improved_task_from_synthetic_api(
+        improved_task_data: (
+            HumanFeedbackResponse | None
+        ) = await get_improved_task_from_synthetic_api(
             hfl_state.current_synthetic_req_id
         )
 
@@ -80,6 +83,12 @@ async def create_score_feedback_task(
                 "Failed to map improved task data to TaskSynapseObject or no completion responses"
             )
             return None
+
+        # Send to miners as CODE_GENERATION
+        task_synapse.task_type = TaskTypeEnum.CODE_GENERATION
+
+        # TODO: Remove this
+        logger.info(f"Task synapse+++++++++++++++++++++++++++++++++: {task_synapse}")
 
         obfuscated_model_to_model, completion_responses = (
             validator.obfuscate_model_names(task_synapse.completion_responses)
@@ -102,6 +111,7 @@ async def create_score_feedback_task(
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
             axons=axons,
         )
+        logger.info(f"Miner responses: {miner_responses}")
 
         if not miner_responses:
             logger.error(f"Failed to send improved task to miners for {tf_task_id}")
@@ -115,6 +125,7 @@ async def create_score_feedback_task(
                         completion.model, completion.model
                     )
 
+        # TODO: investigate if sf_task is save even we got HFL request failed
         # Save SF task and update HFL state
         validator_task, updated_hfl_state = await ORM.save_sf_task(
             validator_task=task_synapse,

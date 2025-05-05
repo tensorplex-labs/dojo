@@ -15,46 +15,19 @@ from tenacity import (
 
 from commons.api_settings import RedisSettings
 from commons.cache import RedisCache
-from commons.dataset.types import (
-    HumanFeedbackResponse,
-    HumanFeedbackTask,
-    TextFeedbackRequest,
-)
+from commons.dataset.types import HumanFeedbackResponse, TextFeedbackRequest
+from commons.dataset.utils import map_human_feedback_response, map_synthetic_response
 from commons.exceptions import (
     FatalSyntheticGenerationError,
     FeedbackImprovementError,
     SyntheticGenerationError,
 )
-from commons.utils import get_new_uuid
 from dojo.protocol import SyntheticQA
 from dojo.utils.config import source_dotenv
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
 source_dotenv()
 redis_config = RedisSettings()
-
-
-def _map_synthetic_response(response: dict) -> SyntheticQA:
-    # Create a new dictionary to store the mapped fields
-    mapped_data = {
-        "prompt": response["prompt"],
-        "ground_truth": response["ground_truth"],
-    }
-
-    responses = list(
-        map(
-            lambda resp: {
-                "model": resp["model"],
-                "completion": resp["completion"],
-                "completion_id": resp["cid"],
-            },
-            response["responses"],
-        )
-    )
-
-    mapped_data["responses"] = responses
-
-    return SyntheticQA.model_validate(mapped_data)
 
 
 class SyntheticAPI:
@@ -70,7 +43,6 @@ class SyntheticAPI:
         if cls._cache is None:
             cls._cache = RedisCache(redis_config)
             await cls._cache.connect()
-            logger.info(f"Redis cache initialized successfully {cls._cache.redis_url}")
 
     @classmethod
     async def close_session(cls):
@@ -104,12 +76,12 @@ class SyntheticAPI:
         if cls._session is None:
             raise FatalSyntheticGenerationError("Failed to initialize session")
 
+        logger.info(
+            f"Sending human feedback request for {text_feedback_data} miner feedbacks"
+        )
         path = f"{SYNTHETIC_API_BASE_URL}/api/human-feedback"
         request_data = text_feedback_data.model_dump(mode="json")
-
-        logger.info(
-            f"Sending human feedback request for {len(request_data['miner_feedbacks'])} miner feedbacks"
-        )
+        logger.info(f"Request data +++++++++++++++ after model dump: {request_data}")
 
         try:
             async for attempt in AsyncRetrying(
@@ -182,7 +154,7 @@ class SyntheticAPI:
                                 "No body found in the response."
                             )
 
-                        synthetic_qa = _map_synthetic_response(response_json["body"])
+                        synthetic_qa = map_synthetic_response(response_json["body"])
                         logger.success("Synthetic QA generated and parsed successfully")
                         return synthetic_qa
         except RetryError:
@@ -262,14 +234,18 @@ class SyntheticAPI:
             # Get the data from Redis
             data = await cls._cache.get(key)
 
+            # TODO: Remove this
             logger.info(f"Retrieved raw human feedback data for ID: {hf_id}")
 
             if not data:
                 logger.warning(f"No human feedback data found for ID: {hf_id}")
                 return None
 
+            # TODO: Remove this
+            logger.info(f"Raw response +++++++++=====: {data}")
             # Decode and parse the JSON data
             raw_response = json.loads(data.decode("utf-8"))
+            logger.info(f"after decoding +++++++++=====: {raw_response}")
 
             # Check if the response indicates an error
             if not raw_response.get("success", True):
@@ -280,27 +256,25 @@ class SyntheticAPI:
             # Manually construct the HumanFeedbackResponse object
             try:
                 # Prepare human feedback tasks with completion_id handling
-                human_feedback_tasks = []
+                # human_feedback_tasks = []
 
-                for task_data in raw_response.get("human_feedback_tasks", []):
-                    # Create the task with all required fields
-                    # If completion_id is missing, it will use the default_factory
-                    task = HumanFeedbackTask(
-                        miner_hotkey=task_data.get("miner_hotkey", ""),
-                        miner_response_id=task_data.get("miner_response_id", ""),
-                        feedback=task_data.get("feedback", ""),
-                        model=task_data.get("model", "unknown"),
-                        completion_id=get_new_uuid(),
-                        generated_code=task_data.get("generated_code", None),
-                    )
-                    human_feedback_tasks.append(task)
+                # for task_data in raw_response.get("human_feedback_tasks", []):
+                #     # Create the task with all required fields
+                #     # If completion_id is missing, it will use the default_factory
+                #     task = HumanFeedbackTask(
+                #         miner_hotkey=task_data.get("miner_hotkey", ""),
+                #         miner_response_id=task_data.get("miner_response_id", ""),
+                #         feedback=task_data.get("feedback", ""),
+                #         model=task_data.get("model", "unknown"),
+                #         completion_id=get_new_uuid(),
+                #         generated_code=CodeAnswer.model_validate_json(
+                #             task_data.get("generated_code", None)
+                #         ),
+                #     )
+                #     human_feedback_tasks.append(task)
 
                 # Create and return the complete response object
-                return HumanFeedbackResponse(
-                    base_prompt=raw_response.get("base_prompt", ""),
-                    base_code=raw_response.get("base_code", ""),
-                    human_feedback_tasks=human_feedback_tasks,
-                )
+                return map_human_feedback_response(raw_response)
 
             except ValidationError as e:
                 logger.error(f"Failed to validate response data: {e}")

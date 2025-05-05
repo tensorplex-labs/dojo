@@ -1,9 +1,9 @@
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from commons.utils import get_new_uuid
-from dojo.protocol import CodeAnswer
+from dojo.protocol import CodeAnswer, MultimediaAnswer
 
 
 class HumanFeedbackTask(BaseModel):
@@ -19,8 +19,26 @@ class HumanFeedbackTask(BaseModel):
 
 class HumanFeedbackResponse(BaseModel):
     base_prompt: str
-    base_code: str
+    base_code: CodeAnswer | MultimediaAnswer
     human_feedback_tasks: List[HumanFeedbackTask]
+
+    @model_validator(mode="after")
+    def verify_code_objects(self):
+        # Verify base_code is a CodeAnswer instance
+        if not isinstance(self.base_code, CodeAnswer | MultimediaAnswer):
+            raise ValueError(
+                f"base_code must be a CodeAnswer or MultimedeaAnswer instance, got {type(self.base_code)}"
+            )
+
+        # Verify all generated_code fields are CodeAnswer instances
+        for idx, task in enumerate(self.human_feedback_tasks):
+            if not isinstance(task.generated_code, CodeAnswer | MultimediaAnswer):
+                raise ValueError(
+                    f"generated_code in task {idx} must be a CodeAnswer or MultimediaAnswer instance, "
+                    f"got {type(task.generated_code)}"
+                )
+
+        return self
 
 
 class MinerFeedback(BaseModel):
@@ -42,8 +60,8 @@ class TextFeedbackRequest(BaseModel):
     """
 
     base_prompt: str = Field(description="Original prompt that was given to the LLM")
-    base_code: str | dict = Field(
-        description="Original completion that was selected for feedback (can be string or JSON object)"
+    base_code: CodeAnswer | MultimediaAnswer | str | None = Field(
+        description="Completion from the model"
     )
     miner_feedbacks: List[MinerFeedback] = Field(
         description="List of human feedback completions from miners"

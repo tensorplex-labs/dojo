@@ -19,6 +19,7 @@ from commons.orm import ORM
 from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, MinerResponse, ValidatorTask
+from database.prisma.types import ValidatorTaskInclude
 from dojo.protocol import (
     CriteriaType,
     TaskSynapseObject,
@@ -189,6 +190,7 @@ async def fetch_miner_feedback_for_task(
             )
             continue
 
+        logger.info(f"Task results for miner {miner_response.hotkey}: {result}")
         # Create initial miner scores with their relations
         success = await create_initial_miner_scores(
             validator_task_id=task.id,
@@ -238,7 +240,12 @@ async def send_text_feedback_to_synthetic_api(
             return None
 
         # Get original task
-        original_task = await ORM.get_validator_task_by_id(hfl_state.original_task_id)
+        original_task = await ORM.get_validator_task_by_id(
+            hfl_state.original_task_id,
+            include=ValidatorTaskInclude(
+                completions={"include": {"criterion": {"include": {"scores": True}}}}
+            ),
+        )
 
         if not original_task or not original_task.completions:
             logger.warning(
@@ -247,6 +254,10 @@ async def send_text_feedback_to_synthetic_api(
             return None
 
         # Get the completion from the original task
+        # TODO: remove this
+        logger.info(
+            f"Original task completions: {original_task.completions}, {hfl_state.original_task_id}"
+        )
         base_completion = original_task.completions[0].completion
 
         # Create the TextFeedbackRequest object

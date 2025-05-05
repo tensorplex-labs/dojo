@@ -1109,37 +1109,41 @@ class ORM:
                 raise ValueError(f"Failed to update HFL state with ID {hfl_state.id}")
 
             completion_relations = [
-                {
-                    "miner_response_id": feedback_task.miner_response_id,
-                    "completion_id": feedback_task.completion_id,
-                }
+                HFLCompletionRelationCreateWithoutRelationsInput(
+                    miner_response_id=feedback_task.miner_response_id,
+                    sf_completion_id=feedback_task.completion_id,
+                )
                 for feedback_task in human_feedback_response.human_feedback_tasks
             ]
 
-            await tx.hflcompletionrelation.create_many(
-                data=[
-                    HFLCompletionRelationCreateWithoutRelationsInput(
-                        **relation,
-                        created_at=datetime_as_utc(datetime.now()),
-                        updated_at=datetime_as_utc(datetime.now()),
-                    )
-                    for relation in completion_relations
-                ]
+            logger.info(
+                f"Creating completion relations: completion_relations={completion_relations}"
             )
+
+            await tx.hflcompletionrelation.create_many(data=completion_relations)
 
             return created_task, updated_hfl_state
 
     @staticmethod
-    async def get_validator_task_by_id(task_id: str) -> ValidatorTask | None:
+    async def get_validator_task_by_id(
+        task_id: str, include: ValidatorTaskInclude | None = None
+    ) -> ValidatorTask | None:
         """Get a task by its ID."""
-        task = await ValidatorTask.prisma().find_unique(
-            where={"id": task_id},
-            include=ValidatorTaskInclude(
-                completions={"include": {"criterion": {"include": {"scores": True}}}},
-                miner_responses={"include": {"scores": True}},
-                HFLState=True,
-            ),
-        )
+        if include:
+            task = await ValidatorTask.prisma().find_unique(
+                where={"id": task_id},
+                include=include,
+            )
+        else:
+            task = await ValidatorTask.prisma().find_unique(
+                where={"id": task_id},
+                include=ValidatorTaskInclude(
+                    completions={
+                        "include": {"criterion": {"include": {"scores": True}}}
+                    },
+                    miner_responses={"include": {"scores": True}},
+                ),
+            )
 
         if not task:
             logger.error(f"Task with ID {task_id} not found")
