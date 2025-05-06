@@ -110,7 +110,7 @@ subtensor-mainnet:
 	elif [ "$(ARCH)" = "amd64" ]; then \
 		docker compose -f docker-compose.subtensor.yaml up -d mainnet-lite-amd64; \
 	else \
-	    @echo "Unsupported architecture: $(ARCH)"; \
+	    echo "Unsupported architecture: $(ARCH)"; \
 	fi
 
 subtensor-testnet:
@@ -119,7 +119,7 @@ subtensor-testnet:
 	elif [ "$(ARCH)" = "amd64" ]; then \
 		docker compose -f docker-compose.subtensor.yaml up -d testnet-lite-amd64; \
 	else \
-	    @echo "Unsupported architecture: $(ARCH)"; \
+	    echo "Unsupported architecture: $(ARCH)"; \
 	fi
 
 # ---------------------------------------------------------------------------- #

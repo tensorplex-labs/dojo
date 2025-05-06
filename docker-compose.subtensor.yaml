@@ -9,7 +9,7 @@ networks:
 services:
   common-amd64: &common-amd64
     # image: ghcr.io/opentensor/subtensor:v2.0.9-amd64
-    image: ghcr.io/opentensor/subtensor:v2.0.9-amd64
+    image: ghcr.io/opentensor/subtensor@sha256:e0d22ae345f8c8a241c69aecc4fffd364fd57665e1baf2e0135e8fd57501e2fc
     build:
       context: .
       dockerfile: Dockerfile
@@ -74,7 +74,7 @@ services:
 
   common-arm64: &common-arm64
     # image: ghcr.io/opentensor/subtensor:v2.0.9-arm64
-    image: ghcr.io/opentensor/subtensor:v2.0.9-arm64
+    image: ghcr.io/opentensor/subtensor@sha256:f0f0be6dd2ba7d454ccf907acb948a46376ad8d57910c4043835d45772cd23be
     build:
       context: .
       dockerfile: Dockerfile
