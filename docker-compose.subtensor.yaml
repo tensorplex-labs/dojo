@@ -7,8 +7,8 @@ networks:
     name: subtensor
 
 services:
-  common: &common
-    image: ghcr.io/opentensor/subtensor:latest
+  common-amd64: &common-amd64
+    image: ghcr.io/opentensor/subtensor:v2.0.11-amd64
     build:
       context: .
       dockerfile: Dockerfile
@@ -19,6 +19,7 @@ services:
     networks:
       - subtensor
     ports:
+      # NOTE: uncomment these when you want to expose them
       # - "9944:9944"
       - "30333:30333"
       # - "9933:9933"
@@ -32,8 +33,8 @@ services:
       options:
         max-size: "100m"
 
-  mainnet-lite:
-    <<: *common
+  mainnet-lite-amd64:
+    <<: *common-amd64
     container_name: subtensor-mainnet-lite
     volumes:
       - mainnet-lite-volume:/tmp/blockchain
@@ -50,8 +51,72 @@ services:
           --bootnodes /dns/bootnode.finney.chain.opentensor.ai/tcp/30333/ws/p2p/12D3KooWRwbMb85RWnT8DSXSYMWQtuDwh4LJzndoRrTDotTR5gDC \
           --sync warp
 
-  testnet-lite:
-    <<: *common
+  testnet-lite-amd64:
+    <<: *common-amd64
+    container_name: subtensor-testnet-lite
+    volumes:
+      - testnet-lite-volume:/tmp/blockchain
+    command:
+      - /bin/bash
+      - -c
+      - |
+        node-subtensor \
+          --base-path /tmp/blockchain \
+          --chain raw_spec_testfinney.json \
+          --rpc-external --rpc-cors all \
+          --no-mdns \
+          --in-peers 500 --out-peers 500 \
+          --bootnodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
+          --sync warp
+          --reserved-nodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
+          --reserved-only
+
+  common-arm64: &common-arm64
+    image: ghcr.io/opentensor/subtensor:v2.0.11-arm64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: subtensor
+    cpu_count: 4
+    mem_limit: 40000000000
+    memswap_limit: 80000000000
+    networks:
+      - subtensor
+    ports:
+      # NOTE: uncomment these when you want to expose them
+      # - "9944:9944"
+      - "30333:30333"
+      # - "9933:9933"
+    expose:
+      - "9944"
+      - "30333"
+      - "9933"
+    environment:
+      - CARGO_HOME=/var/www/node-subtensor/.cargo
+    logging:
+      options:
+        max-size: "100m"
+
+  mainnet-lite-arm64:
+    <<: *common-arm64
+    container_name: subtensor-mainnet-lite
+    volumes:
+      - mainnet-lite-volume:/tmp/blockchain
+    command:
+      - /bin/bash
+      - -c
+      - |
+        node-subtensor \
+          --base-path /tmp/blockchain \
+          --chain raw_spec_finney.json \
+          --rpc-external --rpc-cors all \
+          --no-mdns \
+          --in-peers 500 --out-peers 500 \
+          --bootnodes /dns/bootnode.finney.chain.opentensor.ai/tcp/30333/ws/p2p/12D3KooWRwbMb85RWnT8DSXSYMWQtuDwh4LJzndoRrTDotTR5gDC \
+          --sync warp
+
+  testnet-lite-arm64:
+    <<: *common-arm64
     container_name: subtensor-testnet-lite
     volumes:
       - testnet-lite-volume:/tmp/blockchain

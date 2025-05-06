@@ -206,6 +206,7 @@ docker plugin install grafana/loki-docker-driver:3.3.2-amd64 --alias loki --gran
 4. Start local subtensor node (**optional**)
    > The included subtensor service only exposes 30333 (p2p) to the public, 9933 and 9944 are only accessible internally in the docker network, feel free to change the configuration if required.
 
+Take note that these commands will detect whether your machine is arm64 or amd64 under the hood, all use the relevant tag for the subtensor image.
 ```bash
 # Mainnet
 make subtensor-mainnet
