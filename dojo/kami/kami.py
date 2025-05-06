@@ -3,7 +3,7 @@ import os
 from typing import Any, Dict
 
 import aiohttp
-from bittensor_commit_reveal import get_encrypted_commit
+from bittensor_commit_reveal import get_encrypted_commit  # type: ignore
 from loguru import logger
 
 from dojo.kami.types import (
@@ -20,7 +20,6 @@ class Kami:
     Kami is a class that handles the connection to the Kami API.
     """
 
-    # TODO: change back to `http://kami:3000` before release
     def __init__(self, url: str = "http://localhost:3000"):
         self.url = os.getenv("KAMI_API_URL", url).rstrip("/")
         self.session: aiohttp.ClientSession | None = None
@@ -228,8 +227,8 @@ class Kami:
         """
         get_hpams = await self.get_subnet_hyperparameters(payload.netuid)
         if get_hpams.commitRevealWeightsEnabled:
-            tempo = get_hpams.get("tempo", 0)
-            reveal_period = get_hpams.get("commitRevealPeriod", 0)
+            tempo = get_hpams.tempo
+            reveal_period = get_hpams.commitRevealPeriod
             if tempo == 0 or reveal_period == 0:
                 raise ValueError(
                     "Tempo and reveal round must be greater than 0 for commit reveal weights."
@@ -240,7 +239,7 @@ class Kami:
             )
 
             # Encrypt `commit_hash` with t-lock and `get reveal_round`
-            commit_for_reveal, reveal_round = get_encrypted_commit(
+            commit_for_reveal, reveal_round = get_encrypted_commit(  # type: ignore
                 uids=payload.dests,
                 weights=payload.weights,
                 version_key=payload.version_key,
@@ -253,9 +252,9 @@ class Kami:
             print(f"Commit for reveal: {commit_for_reveal}")
             print(f"Reveal round: {reveal_round}")
 
-            cr_payload = {
+            cr_payload: dict[str, int | str] = {
                 "netuid": payload.netuid,
-                "commit": commit_for_reveal.hex(),
+                "commit": commit_for_reveal.hex(),  # type: ignore
                 "reveal_round": reveal_round,
             }
 
