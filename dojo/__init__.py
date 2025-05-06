@@ -69,6 +69,13 @@ HFL_MAX_ITERATIONS = 3
 ANALYTICS_UPLOAD = 65 * 60
 assert VALIDATOR_UPDATE_SCORE < TASK_DEADLINE
 
+HFL_TF_CREATE_INTERVAL = 3600  # 1 hour for initial TF task creation
+HFL_TF_UPDATE_INTERVAL = 900  # 15 minutes for Text Feedback updates
+HFL_SF_CREATE_INTERVAL = 800  # 13 minutes for Score Feedback task creation
+HFL_SF_UPDATE_INTERVAL = 700  # 11 minutes for Score Feedback updates
+HFL_NEXT_TF_INTERVAL = 1200  # 20 minutes for creating next Text Feedback tasks
+HFL_TASK_DEADLINE = 5 * 60 * 60  # 5 hours
+
 if get_config().fast_mode:
     print("Running in fast mode for testing purposes...")
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
@@ -81,7 +88,14 @@ if get_config().fast_mode:
     VALIDATOR_STATUS = 1200
     MINER_STATUS = 1200
     DOJO_TASK_MONITORING = 15
-    SF_TASK_CREATION_INTERVAL = 30
+
+    # Fast mode HFL intervals (roughly 1/10th of normal mode)
+    HFL_TF_CREATE_INTERVAL = 360  # 6 minutes
+    HFL_TF_UPDATE_INTERVAL = 90  # 1.5 minutes
+    HFL_SF_CREATE_INTERVAL = 80  # 80 seconds
+    HFL_SF_UPDATE_INTERVAL = 70  # 70 seconds
+    HFL_NEXT_TF_INTERVAL = 120  # 2 minutes
+    HFL_TASK_DEADLINE = 180  # 3 minutes
 
 
 def get_dojo_api_base_url() -> str:

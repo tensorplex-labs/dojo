@@ -7,37 +7,18 @@ from bittensor.core.chain_data.axon_info import AxonInfo
 from bittensor.utils.btlogging import logging as logger
 
 from commons.dataset.synthetic import SyntheticAPI
-from commons.dataset.types import HumanFeedbackResponse
 from commons.hfl_heplers import HFLManager
 from commons.human_feedback.utils import (
     create_initial_miner_scores,
     map_human_feedback_to_task_synapse,
 )
 from commons.orm import ORM
-from commons.utils import datetime_as_utc
+from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
-from database.prisma.types import HFLStateUpdateInput
-from dojo.protocol import ScoreFeedbackEvent, TaskSynapseObject
+from database.prisma.types import HFLStateUpdateInput, ValidatorTaskUpdateInput
+from dojo.protocol import ScoreFeedbackEvent, TaskSynapseObject, TextFeedbackEvent
 from neurons.validator import Validator
-
-
-async def get_improved_task_from_synthetic_api(
-    syn_req_id: str,
-) -> HumanFeedbackResponse | None:
-    """
-    Get improved task from synthetic API based on request ID as a HumanFeedbackResponse.
-
-    Args:
-        syn_req_id: Synthetic API request ID
-
-    Returns:
-        HumanFeedbackResponse object or None if not found/error
-    """
-    response = await SyntheticAPI.get_improved_task_raw(syn_req_id)
-    # TODO: Remove this
-    logger.info(f"Response from synthetic API +++++++++++++++: {response}")
-    return response
 
 
 async def create_score_feedback_task(
@@ -62,11 +43,17 @@ async def create_score_feedback_task(
             return None
 
         # Get improved task from synthetic API (raw response)
-        improved_task_data: (
-            HumanFeedbackResponse | None
-        ) = await get_improved_task_from_synthetic_api(
+        success, improved_task_data = await SyntheticAPI.get_improved_task(
             hfl_state.current_synthetic_req_id
         )
+
+        if not success:
+            await handle_synthetic_generation_failure(
+                tf_task_id=tf_task_id,
+                hfl_state=hfl_state,
+                synthetic_req_id=hfl_state.current_synthetic_req_id,
+            )
+            return None
 
         if not improved_task_data:
             logger.info(
@@ -125,6 +112,8 @@ async def create_score_feedback_task(
                         completion.model, completion.model
                     )
 
+        # Insert SCORE_FEEDBACK task type to database
+        task_synapse.task_type = TaskTypeEnum.SCORE_FEEDBACK
         # TODO: investigate if sf_task is save even we got HFL request failed
         # Save SF task and update HFL state
         validator_task, updated_hfl_state = await ORM.save_sf_task(
@@ -356,3 +345,88 @@ async def send_hfl_request(
         return None
 
     return valid_miner_responses
+
+
+async def handle_synthetic_generation_failure(
+    tf_task_id: str, hfl_state: HFLState, synthetic_req_id: str
+) -> None:
+    """
+    Handle synthetic generation failure by updating HFL state and task expiration.
+
+    Args:
+        tf_task_id: ID of the text feedback task
+        hfl_state: Current HFL state
+        synthetic_req_id: Synthetic request ID that failed
+    """
+    try:
+        # Get current retry count
+        current_retry_count = hfl_state.syn_retry_count or 0
+        MAX_RETRY_ATTEMPTS = 5
+
+        # Prepare event data
+        event_timestamp = datetime_as_utc(datetime.now(timezone.utc))
+
+        if current_retry_count >= MAX_RETRY_ATTEMPTS:
+            # If we've exceeded max retries, mark as failed
+            event_data = TextFeedbackEvent(
+                type=HFLStatusEnum.TF_FAILED,
+                task_id=tf_task_id,
+                iteration=hfl_state.current_iteration,
+                timestamp=event_timestamp,
+                syn_req_id=synthetic_req_id,
+            )
+
+            await ORM.update_hfl_state_and_task(
+                hfl_state_id=hfl_state.id,
+                validator_task_id=tf_task_id,
+                state_updates=HFLStateUpdateInput(
+                    status=HFLStatusEnum.TF_FAILED,
+                    syn_retry_count=current_retry_count + 1,
+                ),
+                task_updates={},  # No task updates needed for failed state
+                event_data=event_data,
+            )
+
+            logger.error(
+                f"Task {tf_task_id} failed after {MAX_RETRY_ATTEMPTS} synthetic generation attempts"
+            )
+        else:
+            # Otherwise, increment retry count and move back to TF_PENDING
+            event_data = TextFeedbackEvent(
+                type=HFLStatusEnum.TF_PENDING,
+                task_id=tf_task_id,
+                iteration=hfl_state.current_iteration,
+                timestamp=event_timestamp,
+                syn_req_id=synthetic_req_id,
+            )
+
+            # Calculate new expiration time
+            new_expire_time = set_expire_time(900)
+
+            await ORM.update_hfl_state_and_task(
+                hfl_state_id=hfl_state.id,
+                validator_task_id=tf_task_id,
+                state_updates=HFLStateUpdateInput(
+                    status=HFLStatusEnum.TF_PENDING,
+                    syn_retry_count=current_retry_count + 1,
+                    current_synthetic_req_id=None,
+                ),
+                task_updates=ValidatorTaskUpdateInput(
+                    expire_at=iso8601_str_to_datetime(new_expire_time),
+                    is_processed=False,  # Make sure the task gets picked up again
+                ),
+                event_data=event_data,
+            )
+
+            logger.info(
+                f"Moved task {tf_task_id} back to TF_PENDING for retry (attempt {current_retry_count + 1}/{MAX_RETRY_ATTEMPTS})"
+            )
+    except Exception as e:
+        logger.error(
+            f"Failed to handle synthetic generation failure for task {tf_task_id}: {e}"
+        )
+        logger.debug(f"Traceback: {traceback.format_exc()}")
+
+    logger.error(
+        f"Failed to get improved task for synthetic request ID: {synthetic_req_id}"
+    )

@@ -49,11 +49,11 @@ class FeedbackLoop:
         """Continuously processes new feedback loop iterations."""
         while True:
             try:
-                await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+                await asyncio.sleep(dojo.HFL_TF_CREATE_INTERVAL)
                 await self._start_feedback_loop(validator)
             except Exception as e:
                 logger.error(f"Error in start_feedback_loop: {e}")
-                await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+                await asyncio.sleep(dojo.HFL_TF_CREATE_INTERVAL)
 
     async def _start_feedback_loop(self, validator: Validator):
         """
@@ -216,7 +216,7 @@ class FeedbackLoop:
         """
         while True:
             try:
-                await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+                await asyncio.sleep(dojo.HFL_TF_UPDATE_INTERVAL)
                 selected_responses_by_task = await self._update_tf_task_results(
                     validator
                 )
@@ -229,7 +229,7 @@ class FeedbackLoop:
                     logger.info(f"Task {task_id}: Selected miners {miner_info}")
             except Exception as e:
                 logger.error(f"Error in update_text_feedback_results: {e}")
-                await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+                await asyncio.sleep(dojo.HFL_TF_UPDATE_INTERVAL)
 
     async def _update_tf_task_results(
         self, validator: Validator
@@ -465,12 +465,12 @@ class FeedbackLoop:
         """Continuously poll for completed text feedback tasks and process synthetic improvements."""
         while True:
             try:
-                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await asyncio.sleep(dojo.HFL_SF_CREATE_INTERVAL)
                 await self._create_sf_tasks(validator)
             except Exception as e:
                 logger.error(f"Error in create_sf_tasks: {str(e)}")
                 logger.debug(f"Traceback: {traceback.format_exc()}")
-                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await asyncio.sleep(dojo.HFL_SF_CREATE_INTERVAL)
 
     async def _create_sf_tasks(self, validator: Validator):
         """
@@ -535,12 +535,12 @@ class FeedbackLoop:
         while True:
             try:
                 # TODO: Use separate interval for SF task updates
-                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await asyncio.sleep(dojo.HFL_SF_UPDATE_INTERVAL)
                 await self._update_sf_task_results(validator)
             except Exception as e:
                 logger.error(f"Error in update_sf_task_results: {str(e)}")
                 logger.debug(f"Traceback: {traceback.format_exc()}")
-                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await asyncio.sleep(dojo.HFL_SF_UPDATE_INTERVAL)
 
     async def _update_sf_task_results(self, validator: Validator):
         """
@@ -605,12 +605,12 @@ class FeedbackLoop:
         """Continuously poll for HFL states that should continue to the next iteration."""
         while True:
             try:
-                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await asyncio.sleep(dojo.HFL_NEXT_TF_INTERVAL)
                 await self._create_next_tf_tasks(validator)
             except Exception as e:
                 logger.error(f"Error in create_next_tf_tasks: {str(e)}")
                 logger.debug(f"Traceback: {traceback.format_exc()}")
-                await asyncio.sleep(dojo.SF_TASK_CREATION_INTERVAL)
+                await asyncio.sleep(dojo.HFL_NEXT_TF_INTERVAL)
 
     async def _create_next_tf_tasks(self, validator: Validator):
         """

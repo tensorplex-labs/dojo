@@ -4,7 +4,6 @@ import traceback
 
 import aiohttp
 from bittensor.utils.btlogging import logging as logger
-from pydantic import ValidationError
 from tenacity import (
     AsyncRetrying,
     RetryError,
@@ -117,7 +116,7 @@ class SyntheticAPI:
             )
         except Exception as e:
             logger.error(f"Error sending human feedback request: {str(e)}")
-            raise SyntheticGenerationError(f"Error: {str(e)}")
+            raise
 
     @classmethod
     async def get_qa(cls) -> SyntheticQA | None:
@@ -170,125 +169,48 @@ class SyntheticAPI:
             raise
 
     @classmethod
-    async def get_improved_task(cls, hf_id: str) -> HumanFeedbackResponse | None:
+    async def get_improved_task(
+        cls, hf_id: str
+    ) -> tuple[bool, HumanFeedbackResponse | None]:
         """
-        Retrieve human feedback data from Redis using the request ID.
+        Retrieve human feedback data from Redis and map to HumanFeedbackResponse.
 
         Args:
             hf_id (str): The human feedback request ID to query
 
         Returns:
-            Optional[HumanFeedbackResponse]: The human feedback response if found, None if not found or error
+            tuple[bool, HumanFeedbackResponse | None]: A tuple containing:
+                - success: True if request was acknowledged, False if API explicitly failed
+                - The human feedback response if available, None if not ready yet
 
         Raises:
-            Exception: If there's an error accessing Redis
+            Various exceptions for network, validation, or internal errors
         """
         await cls.init_session()
         if cls._cache is None:
-            raise FatalSyntheticGenerationError("Failed to initialize session")
+            raise FeedbackImprovementError("Redis cache not initialized")
 
-        try:
-            # The key format is "synthetic:hf:{hf_id}"
-            key = f"synthetic:hf:{hf_id}"
+        # The key format is "synthetic:hf:{hf_id}"
+        key = f"synthetic:hf:{hf_id}"
 
-            # Get the data from Redis
-            data = await cls._cache.get(key)
+        # Get the data from Redis
+        data = await cls._cache.get(key)
 
-            logger.info(f"Retrieved human feedback data for ID: {hf_id}, data: {data}")
+        # No data yet - task is still being processed
+        if not data:
+            logger.info(f"Task improvement not found in Redis: {hf_id}")
+            return True, None  # Success=True but data=None means "still processing"
 
-            if not data:
-                logger.warning(f"No human feedback data found for ID: {hf_id}")
-                return None
+        # Decode and parse the JSON data
+        raw_response = json.loads(data.decode("utf-8"))
 
-            # Decode and parse the JSON data
-            response_data = json.loads(data.decode("utf-8"))
+        # Check if success flag is explicitly False - API reported failure
+        if raw_response.get("success") is False:
+            error_message = raw_response.get("message", "Unknown error")
+            logger.error(f"Error in synthetic API response: {error_message}")
+            return False, None  # Explicit failure from API
 
-            # Convert to HumanFeedbackResponse model
-            return HumanFeedbackResponse.model_validate(response_data)
-
-        except Exception as e:
-            logger.error(f"Error retrieving human feedback for ID {hf_id}: {str(e)}")
-            raise
-
-    @classmethod
-    async def get_improved_task_raw(cls, hf_id: str) -> HumanFeedbackResponse | None:
-        """
-        Retrieve human feedback data from Redis and map to HumanFeedbackResponse with correct handling
-        of completion_id field.
-
-        Args:
-            hf_id (str): The human feedback request ID to query
-
-        Returns:
-            Optional[HumanFeedbackResponse]: The human feedback response if found and valid,
-                                            None if not found or error occurred
-        """
-        await cls.init_session()
-        if cls._cache is None:
-            raise FatalSyntheticGenerationError("Failed to initialize session")
-
-        try:
-            # The key format is "synthetic:hf:{hf_id}"
-            key = f"synthetic:hf:{hf_id}"
-
-            # Get the data from Redis
-            data = await cls._cache.get(key)
-
-            # TODO: Remove this
-            logger.info(f"Retrieved raw human feedback data for ID: {hf_id}")
-
-            if not data:
-                logger.warning(f"No human feedback data found for ID: {hf_id}")
-                return None
-
-            # TODO: Remove this
-            logger.info(f"Raw response +++++++++=====: {data}")
-            # Decode and parse the JSON data
-            raw_response = json.loads(data.decode("utf-8"))
-            logger.info(f"after decoding +++++++++=====: {raw_response}")
-
-            # Check if the response indicates an error
-            if not raw_response.get("success", True):
-                error_message = raw_response.get("message", "Unknown error")
-                logger.error(f"Error in synthetic API response: {error_message}")
-                raise FeedbackImprovementError(f"API error: {error_message}")
-
-            # Manually construct the HumanFeedbackResponse object
-            try:
-                # Prepare human feedback tasks with completion_id handling
-                # human_feedback_tasks = []
-
-                # for task_data in raw_response.get("human_feedback_tasks", []):
-                #     # Create the task with all required fields
-                #     # If completion_id is missing, it will use the default_factory
-                #     task = HumanFeedbackTask(
-                #         miner_hotkey=task_data.get("miner_hotkey", ""),
-                #         miner_response_id=task_data.get("miner_response_id", ""),
-                #         feedback=task_data.get("feedback", ""),
-                #         model=task_data.get("model", "unknown"),
-                #         completion_id=get_new_uuid(),
-                #         generated_code=CodeAnswer.model_validate_json(
-                #             task_data.get("generated_code", None)
-                #         ),
-                #     )
-                #     human_feedback_tasks.append(task)
-
-                # Create and return the complete response object
-                return map_human_feedback_response(raw_response)
-
-            except ValidationError as e:
-                logger.error(f"Failed to validate response data: {e}")
-                raise FeedbackImprovementError(f"Validation error: {e}")
-
-        except FeedbackImprovementError as e:
-            logger.error(f"Error getting improved task for ID {hf_id}: {e}")
-            return None
-        except (RetryError, ValueError) as e:
-            logger.error(f"Error getting improved task for ID {hf_id}: {e}")
-            return None
-        except Exception as e:
-            logger.error(
-                f"Error retrieving raw human feedback for ID {hf_id}: {str(e)}"
-            )
-            logger.debug(f"Traceback: {traceback.format_exc()}")
-            return None
+        # Map and return the response if available
+        response_obj = map_human_feedback_response(raw_response)
+        logger.info(f"Successfully retrieved improved task for ID: {hf_id}")
+        return True, response_obj  # Success with data

@@ -77,9 +77,7 @@ async def create_text_feedback_task(
             previous_task_id=validator_task.task_id,
             prompt=prompt,
             task_type=TaskTypeEnum.TEXT_FEEDBACK,
-            expire_at=set_expire_time(
-                int(dojo.TASK_DEADLINE / 2)
-            ),  # Half the deadline for TF
+            expire_at=set_expire_time(int(dojo.HFL_TASK_DEADLINE)),
             completion_responses=[
                 selected_completion
             ],  # Only include the selected completion
@@ -272,6 +270,12 @@ async def send_text_feedback_to_synthetic_api(
             f"Sending {len(miner_feedback)} feedback responses to synthetic API"
         )
         syn_req_id = await SyntheticAPI.send_text_feedback(text_feedback_request)
+
+        if not syn_req_id:
+            logger.error(
+                f"Failed to send text feedback to synthetic API for task {validator_task_id}"
+            )
+            return None
 
         # Update HFL state with the synthetic request ID
         hfl_state = await HFLManager.update_state(

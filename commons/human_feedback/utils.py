@@ -16,7 +16,7 @@ from database.prisma.types import (
     MinerScoreWhereInput,
     ValidatorTaskInclude,
 )
-from dojo import TASK_DEADLINE
+from dojo import HFL_TASK_DEADLINE
 from dojo.protocol import (
     CodeAnswer,
     CompletionResponse,
@@ -131,7 +131,7 @@ def map_human_feedback_to_task_synapse(
             task_id=get_new_uuid(),
             prompt=response_data.base_prompt,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
-            expire_at=set_expire_time(TASK_DEADLINE),
+            expire_at=set_expire_time(HFL_TASK_DEADLINE),
         )
 
         # Map the completion responses - create proper CompletionResponse objects

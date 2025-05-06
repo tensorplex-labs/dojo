@@ -226,6 +226,7 @@ model HFLState {
     current_task_id          String // current task in the process
     current_iteration        Int             @default(1)
     tf_retry_count           Int             @default(0)
+    syn_retry_count          Int             @default(0)
     current_synthetic_req_id String? // Null when not in synthetic phase
     selected_completion_id   String? // ID of the completion that was selected for feedback
     status                   HFLStatusEnum // Current state of the HFL process (e.g., TF_PENDING, TF_COMPLETE, SF_PENDING)

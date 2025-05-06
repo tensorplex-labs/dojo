@@ -37,11 +37,13 @@ from database.prisma.types import (
     MinerScoreCreateInput,
     MinerScoreUpdateInput,
     ValidatorTaskInclude,
+    ValidatorTaskUpdateInput,
     ValidatorTaskWhereInput,
 )
 from dojo import TASK_DEADLINE
 from dojo.protocol import (
     DendriteQueryResponse,
+    HFLEvent,
     ScoreFeedbackEvent,
     Scores,
     TaskResult,
@@ -1255,52 +1257,6 @@ class ORM:
             logger.error(f"Failed to get HFL State with current task id: {task_id}")
         return None
 
-    # @staticmethod
-    # async def get_original_or_parent_sf_task(sf_task_id: str):
-    #     """
-    #     Get the original or parent task for scoring purposes.
-
-    #     ┌─────────────┐       ┌──────┐       ┌──────┐      ┌──────┐     ┌──────┐
-    #     │Original Task│──────▶│ TF_1 │──────▶│ SF_1 │─────▶│ TF_2 │────▶│ SF_2 │
-    #     └─────────────┘       └──────┘       └──────┘      └──────┘     └──────┘
-    #     """
-    #     hfl_state = await HFLState.prisma().find_first(
-    #         where={"status": HFLStatusEnum.SF_COMPLETED, "current_task_id": sf_task_id},
-    #         include={"ValidatorTask": True},
-    #     )
-    #     if not hfl_state:
-    #         return None
-    #     if hfl_state.current_iteration == 1:
-    #         original_task = await ValidatorTask.prisma().find_first(
-    #             where={"id": hfl_state.original_task_id}
-    #         )
-    #         if not original_task:
-    #             logger.error(f"Original task not found for SF task {sf_task_id}")
-    #         return original_task
-
-    #     # iterate through states to get original task
-    #     events = hfl_state.events[::-1]
-    #     for idx, event in enumerate(events):
-    #         iteration_num = event["iteration_num"]
-    #         if iteration_num != hfl_state.current_iteration:
-    #             continue
-    #         if event["event_type"] == HFLStatusEnum.SF_COMPLETED:
-    #             # find the previous task by index
-    #             # TODO: possible indecerror? add error handling
-    #             prev_event = events[idx - 2]
-    #             prev_event_dict = json.loads(prev_event)
-    #             assert prev_event_dict.get("status") == HFLStatusEnum.TF_COMPLETED
-
-    #             prev_task = await ValidatorTask.prisma().find_first(
-    #                 where={"id": prev_event_dict.get("task_id")}
-    #             )
-    #             if not prev_task:
-    #                 logger.error(f"Original task not found for SF task {sf_task_id}")
-
-    #             return prev_task
-
-    #     return None
-
     @staticmethod
     async def get_original_or_parent_sf_task(sf_task_id: str) -> ValidatorTask | None:
         """
@@ -1673,6 +1629,44 @@ class ORM:
         except Exception as e:
             logger.error(f"Error updating HFL scores: {e}")
             return False, []
+
+    @staticmethod
+    async def update_hfl_state_and_task(
+        hfl_state_id: str,
+        validator_task_id: str,
+        state_updates: HFLStateUpdateInput,
+        task_updates: ValidatorTaskUpdateInput,
+        event_data: HFLEvent | None = None,
+    ) -> HFLState:
+        """
+        Update HFL state and validator task in a single transaction.
+
+        Args:
+            hfl_state_id: ID of the HFL state to update
+            validator_task_id: ID of the validator task to update
+            state_updates: HFLStateUpdateInput of HFL state updates
+            task_updates: ValidatorTaskUpdateInput of validator task updates
+            event_data: Optional event data to append to HFL state events
+
+        Returns:
+            Updated HFL state
+        """
+        async with prisma.tx() as tx:
+            # Update HFL state using HFLManager (which handles events and state transitions)
+            updated_state = await HFLManager.update_state(
+                hfl_state_id=hfl_state_id,
+                updates=state_updates,
+                event_data=event_data,
+                tx=tx,  # Pass the transaction to ensure both updates happen atomically
+            )
+
+            # Update validator task if there are updates
+            if task_updates:
+                await tx.validatortask.update(
+                    where={"id": validator_task_id}, data=task_updates
+                )
+
+            return updated_state
 
 
 # ---------------------------------------------------------------------------- #
