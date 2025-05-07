@@ -447,7 +447,7 @@ async def should_continue_hfl(
         #     # Continue with other checks if improvement calculation fails
 
         # If no stopping conditions met, continue
-        return True, None
+        return True, "no_stopping_conditions_met"
 
     except Exception as e:
         logger.error(f"Error in should_continue_hfl: {e}")

@@ -28,6 +28,7 @@ from commons.human_feedback.utils import (
     get_time_window_for_tasks,
 )
 from commons.orm import ORM
+from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import MinerResponse
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskInclude
@@ -72,9 +73,9 @@ class FeedbackLoop:
 
         result = await self.select_validator_task()
         if result:
-            selected_task, selected_completion = result
+            selected_task, selected_completion_id = result
             text_criteria_task = await create_text_feedback_task(
-                selected_task, selected_completion
+                selected_task, selected_completion_id
             )
             if not text_criteria_task:
                 logger.error(
@@ -102,7 +103,7 @@ class FeedbackLoop:
                 miner_responses=miner_responses,
                 previous_task_id=selected_task.task_id,
                 original_task_id=selected_task.task_id,
-                selected_completion_id=selected_completion,
+                selected_completion_id=selected_completion_id,
             )
 
             if not validator_task:
@@ -412,7 +413,9 @@ class FeedbackLoop:
                             f"Using available {response_count} responses."
                         )
                         if response_count == 0:
-                            logger.warning(f"Task {task.id} has no responses, skipping")
+                            logger.warning(
+                                f"Task {task.id} has no responses after {MAX_RETRY_ATTEMPTS} attempts, ending HFL"
+                            )
                             await HFLManager.update_state(
                                 hfl_state_id=task.HFLState.id,
                                 updates=HFLStateUpdateInput(
@@ -534,7 +537,6 @@ class FeedbackLoop:
         """
         while True:
             try:
-                # TODO: Use separate interval for SF task updates
                 await asyncio.sleep(dojo.HFL_SF_UPDATE_INTERVAL)
                 await self._update_sf_task_results(validator)
             except Exception as e:
@@ -572,7 +574,12 @@ class FeedbackLoop:
                 expire_to=expire_to,
                 batch_size=10,
                 include_options=ValidatorTaskInclude(
-                    {"HFLState": True, "miner_responses": True}
+                    {
+                        "HFLState": True,
+                        "miner_responses": {
+                            "where": {"task_result": {"equals": Json("{}")}}
+                        },
+                    }
                 ),
             ):
                 if not sf_tasks_batch:
@@ -648,6 +655,11 @@ class FeedbackLoop:
                         task_id=sf_task.id,
                     )
 
+                    # TODO: Remove this
+                    logger.info(
+                        f"Completion percentages for SF task {sf_task.id}: {completion_percentages}"
+                    )
+
                     if not completion_percentages:
                         logger.error(
                             f"No completion percentages found for SF task {sf_task.id}"
@@ -659,6 +671,11 @@ class FeedbackLoop:
                         max(completion_percentages.items(), key=lambda x: x[1])[0]
                         if completion_percentages
                         else None
+                    )
+
+                    # TODO: Remove this
+                    logger.info(
+                        f"Best completion id for SF task {sf_task.id}: {best_completion_id}"
                     )
 
                     if not best_completion_id:

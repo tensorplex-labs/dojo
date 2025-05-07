@@ -287,6 +287,7 @@ class HFLEvent(BaseModel):
     task_id: str = Field(description="ID of the task")
     syn_req_id: str = Field(description="ID of the synthetic request", default="")
     iteration: int = Field(description="Iteration of the event", default=0)
+    message: str = Field(description="Message of the event", default="")
     timestamp: datetime = Field(
         description="Timestamp of the event",
         default_factory=lambda: datetime.now(timezone.utc),

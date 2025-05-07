@@ -161,11 +161,10 @@ async def process_score_feedback_task(
         # Process each miner response
         success_count = 0
         for miner_response in sf_task.miner_responses:
-            if (
-                not miner_response.hotkey
-                or not miner_response.dojo_task_id
-                or miner_response.task_result  # skip if miner response already has task results
-            ):
+            if not miner_response.hotkey or not miner_response.dojo_task_id:
+                logger.warning(
+                    f"Skipping miner response {miner_response.id} due to missing hotkey or dojo task id, hotkey: {miner_response.hotkey}, dojo task id: {miner_response.dojo_task_id}"
+                )
                 continue
 
             # Get task results from miner
@@ -199,6 +198,10 @@ async def process_score_feedback_task(
 
             if score_update_success:
                 success_count += 1
+
+        if success_count == 0:
+            logger.debug(f"No miner task results are updated for {sf_task.id}")
+            return False
 
         # Update HFL state to SF_COMPLETED
         event = ScoreFeedbackEvent(

@@ -29,6 +29,7 @@ from commons.exceptions import (
     SyntheticGenerationError,
 )
 from commons.hfl_heplers import HFLManager
+from commons.human_feedback.utils import should_continue_hfl
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager
 from commons.orm import ORM
@@ -43,7 +44,8 @@ from commons.utils import (
     set_expire_time,
 )
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
-from database.prisma.models import ValidatorTask
+from database.prisma.models import HFLState, ValidatorTask
+from database.prisma.types import HFLStateUpdateInput
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.chain import parse_block_headers
 from dojo.protocol import (
@@ -58,6 +60,7 @@ from dojo.protocol import (
     TaskResult,
     TaskResultRequest,
     TaskSynapseObject,
+    TextFeedbackEvent,
 )
 from dojo.utils.config import get_config
 from dojo.utils.uids import extract_miner_uids, is_miner
@@ -812,7 +815,7 @@ class Validator:
                 # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
                 now = datetime.now(timezone.utc)
                 # TODO: change back to 2 hours
-                expire_from = datetime_as_utc(now - timedelta(hours=16))
+                expire_from = datetime_as_utc(now - timedelta(hours=2))
                 expire_to = datetime_as_utc(now - timedelta(seconds=dojo.BUFFER_PERIOD))
 
                 logger.info(f" Current time: {now}")
@@ -909,6 +912,10 @@ class Validator:
                                         hotkey_to_sf_score,
                                     )
 
+                                    await self._decide_hfl_continuation(
+                                        sf_task.id, hfl_state
+                                    )
+
                                     # Mark as processed
                                     processed_request_ids.append(sf_task.id)
                                     # Get the parent TF task ID from the HFL state or task
@@ -930,6 +937,11 @@ class Validator:
 
                                     logger.info(
                                         f"Scored HFL task {sf_task.id}, hotkey to hfl score: {hotkey_to_hfl_scores}"
+                                    )
+
+                                else:
+                                    logger.warning(
+                                        f"HFL state for task {validator_task.task_id} is not ready for scoring yet. Status: {hfl_state.status}"
                                     )
                         except Exception as e:
                             logger.error(
@@ -1795,3 +1807,62 @@ class Validator:
             )
 
         return combined_score
+
+    async def _decide_hfl_continuation(self, sf_task_id: str, hfl_state: HFLState):
+        """
+        Decide whether to continue or end the HFL process after scoring.
+        Updates the HFL state accordingly.
+
+        Args:
+            sf_task_id: ID of the Score Feedback task that was scored
+            hfl_state: Current HFL state
+
+        Returns:
+            bool: True if the HFL will continue, False if it's completed
+        """
+        try:
+            # Determine whether to continue the HFL cycle
+            continue_hfl, reason = await should_continue_hfl(
+                hfl_state=hfl_state,
+                latest_sf_task_id=sf_task_id,
+                max_iterations=dojo.HFL_MAX_ITERATIONS,
+                consensus_threshold=90.0,
+            )
+
+            if continue_hfl:
+                # Update HFL state to TF_SCHEDULED
+                await HFLManager.update_state(
+                    hfl_state_id=hfl_state.id,
+                    updates=HFLStateUpdateInput(status=HFLStatusEnum.TF_SCHEDULED),
+                    event_data=TextFeedbackEvent(
+                        type=HFLStatusEnum.TF_SCHEDULED,
+                        task_id=sf_task_id,
+                        iteration=hfl_state.current_iteration,
+                        message=f"Continuing HFL: {reason}",
+                    ),
+                )
+                logger.info(
+                    f"HFL will continue to iteration {hfl_state.current_iteration + 1}: {reason}"
+                )
+            else:
+                # Update HFL state to HFL_COMPLETED
+                await HFLManager.update_state(
+                    hfl_state_id=hfl_state.id,
+                    updates=HFLStateUpdateInput(status=HFLStatusEnum.HFL_COMPLETED),
+                    event_data=TextFeedbackEvent(
+                        type=HFLStatusEnum.HFL_COMPLETED,
+                        task_id=sf_task_id,
+                        iteration=hfl_state.current_iteration,
+                        message=f"HFL completed: {reason}",
+                    ),
+                )
+                logger.info(
+                    f"HFL completed after iteration {hfl_state.current_iteration}: {reason}"
+                )
+
+            return continue_hfl
+
+        except Exception as e:
+            logger.error(f"Error deciding HFL continuation for task {sf_task_id}: {e}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+            return False  # Default to not continuing in case of error

@@ -39,8 +39,6 @@ def map_human_feedback_response(raw_response: dict) -> HumanFeedbackResponse:
     human_feedback_tasks = []
     for task_data in raw_response.get("human_feedback_tasks", []):
         # Decode any JSON-encoded fields
-        # TODO: Remove this
-        print(f"task_data +++++++++++++++++++++++: {task_data}")
         generated_code = (
             CodeAnswer.model_validate(task_data.get("generated_code", None))
             if task_data.get("generated_code", None)

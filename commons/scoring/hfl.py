@@ -1,4 +1,5 @@
 import copy
+import json
 from collections import defaultdict
 
 from bittensor.utils.btlogging import logging as logger
@@ -360,7 +361,6 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
     # Create a dictionary to store the sum of scores and the count of scores for each completion
     stats_by_completion_id: dict[str, dict[str, float]] = {}
 
-    # TODO: keep it like this until we remove the completion_id from schema
     cid_to_completion_id: dict[str, str] = {
         comp.id: comp.completion_id for comp in task.completions or []
     }
@@ -375,6 +375,7 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
                     logger.error(f"Score {score.id} has no criterion relation")
                     continue
 
+                # NOTE: cid is PK of completion, not completion_id
                 cid = score.criterion_relation.completion_id
                 completion_id = cid_to_completion_id[cid]
                 scores = Scores.model_validate_json(score.scores)
@@ -444,11 +445,29 @@ def filter_valid_miner_responses(
             continue
 
         # Check if task_result is required and present
-        if require_task_result and not response.task_result:
-            logger.debug(
-                f"Skipping miner response with hotkey: {response.hotkey} and id: {response.id}: missing task_result"
-            )
-            continue
+        if require_task_result:
+            task_result = response.task_result
+            # Handle string representation of JSON
+            if isinstance(task_result, str):
+                try:
+                    parsed_result = json.loads(task_result)
+                    if not parsed_result:  # Empty dict after parsing
+                        logger.debug(
+                            f"Skipping miner response with hotkey: {response.hotkey} and id: {response.id}: empty task_result after parsing"
+                        )
+                        continue
+                except json.JSONDecodeError:
+                    # If it's not valid JSON but require_task_result is True, skip it
+                    logger.debug(
+                        f"Skipping miner response with hotkey: {response.hotkey} and id: {response.id}: invalid JSON in task_result"
+                    )
+                    continue
+            # Handle native Python types
+            elif not task_result:
+                logger.debug(
+                    f"Skipping miner response with hotkey: {response.hotkey} and id: {response.id}: missing task_result"
+                )
+                continue
 
         # If we get here, the response is valid
         valid_responses.append(response)

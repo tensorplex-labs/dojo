@@ -91,7 +91,6 @@ def map_task_synapse_object_to_completions(
     completions: list[CompletionCreateInput] = []
     for resp in synapse.completion_responses:
         completion = CompletionCreateInput(
-            id=resp.completion_id,
             completion_id=resp.completion_id,
             validator_task_id=synapse.task_id,
             model=resp.model,

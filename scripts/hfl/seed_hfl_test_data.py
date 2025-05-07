@@ -697,9 +697,7 @@ async def create_tf_tasks(
                 "status": HFLStatusEnum.TF_PENDING,
                 "current_iteration": 1,
                 "tf_retry_count": retry_count,
-                "selected_completion_id": task_to_target_completion_id[
-                    previous_task.id
-                ],
+                "selected_completion_id": completion_id,  # TODO: KIV
                 "events": [
                     Json(
                         {
