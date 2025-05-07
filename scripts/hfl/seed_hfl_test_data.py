@@ -110,7 +110,7 @@ async def seed_test_data(
         await cleanup_test_data()  # No task_type parameter cleans up all tasks
 
     # Create validator tasks with completions and miner responses
-    created_tasks = await create_validator_tasks(
+    created_tasks, task_to_target_completion_id = await create_validator_tasks(
         num_tasks, num_completions, num_responses, target_percentage
     )
 
@@ -118,7 +118,7 @@ async def seed_test_data(
         f"Test data seeding completed successfully with {len(created_tasks)} tasks created"
     )
 
-    return created_tasks
+    return created_tasks, task_to_target_completion_id
 
 
 async def cleanup_test_data(task_type: TaskTypeEnum | None = None):
@@ -193,7 +193,7 @@ async def cleanup_test_data(task_type: TaskTypeEnum | None = None):
 
 async def create_validator_tasks(
     num_tasks: int, num_completions: int, num_responses: int, target_percentage: int
-) -> List[Any]:
+) -> tuple[List[Any], dict[str, str]]:
     """Create test validator tasks with completions, miner responses, and scores.
 
     Args:
@@ -206,6 +206,7 @@ async def create_validator_tasks(
         List of created validator tasks
     """
     created_tasks = []
+    task_to_target_completion_id = {}
 
     for i in range(num_tasks):
         # Create a task that expired recently
@@ -236,16 +237,16 @@ async def create_validator_tasks(
         completions = await create_completions(task.id, num_completions)
 
         # Create miner responses for this task with scores embedded in task_result
-        miner_responses = await create_miner_responses(
+        miner_responses, target_completion_id = await create_miner_responses(
             task.id, num_responses, completions, target_percentage
         )
-
+        task_to_target_completion_id[task.id] = target_completion_id
         # Create scores in the database from the miner response task_results
         await create_scores(task.id, completions, miner_responses)
 
         logger.info(f"Created test task {i+1}/{num_tasks} with ID: {task.id}")
 
-    return created_tasks
+    return created_tasks, task_to_target_completion_id
 
 
 async def create_completions(
@@ -323,7 +324,7 @@ async def create_miner_responses(
     num_responses: int,
     completions: List[Dict[str, Any]],
     target_percentage: int,
-) -> List[MinerResponse]:
+) -> tuple[List[MinerResponse], str]:
     """Create test miner responses for a validator task with scores for completions.
 
     Args:
@@ -340,6 +341,7 @@ async def create_miner_responses(
     # Choose which completion should be selected as "best"
     target_completion_index = random.randint(0, len(completions) - 1)
     target_completion = completions[target_completion_index]
+    target_completion_id = target_completion["completion_id"]
 
     # Calculate how many miners should score the target completion highest
     target_miners_count = int(num_responses * (target_percentage / 100))
@@ -423,7 +425,7 @@ async def create_miner_responses(
         f"should be scored highest by {target_miners_count}/{num_responses} miners ({target_percentage}%)"
     )
 
-    return miner_responses
+    return miner_responses, target_completion_id
 
 
 async def create_scores(
@@ -625,18 +627,17 @@ async def create_tf_tasks(
     """
     created_tasks = []
 
-    previous_task = await create_validator_tasks(
+    previous_task_list, task_to_target_completion_id = await create_validator_tasks(
         num_tasks=1,
         num_completions=4,
         num_responses=4,
         target_percentage=70,
     )
 
-    if not previous_task:
+    if not previous_task_list:
         raise ValueError("No previous task is created")
 
-    if previous_task:
-        previous_task = previous_task[0]
+    previous_task = previous_task_list[0]
 
     for i in range(num_tasks):
         # Create a task that expired recently (1 hour ago)
@@ -696,7 +697,9 @@ async def create_tf_tasks(
                 "status": HFLStatusEnum.TF_PENDING,
                 "current_iteration": 1,
                 "tf_retry_count": retry_count,
-                "selected_completion_id": completion_id,
+                "selected_completion_id": task_to_target_completion_id[
+                    previous_task.id
+                ],
                 "events": [
                     Json(
                         {

@@ -810,12 +810,14 @@ class Validator:
             try:
                 # Get tasks that expired between 2 hours ago and 30 minutes ago
                 # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
-                now = datetime.now()
-                expire_from = datetime_as_utc(now - timedelta(hours=2))
+                now = datetime.now(timezone.utc)
+                # TODO: change back to 2 hours
+                expire_from = datetime_as_utc(now - timedelta(hours=16))
                 expire_to = datetime_as_utc(now - timedelta(seconds=dojo.BUFFER_PERIOD))
 
+                logger.info(f" Current time: {now}")
                 logger.info(
-                    f"📝 performing scoring, context: {expire_from=}, {expire_to=}"
+                    f"📝 performing scoring, context: {expire_from}, {expire_to}"
                 )
                 processed_request_ids = []
 
@@ -834,70 +836,107 @@ class Validator:
 
                     for task in task_batch:
                         # Check if this is a regular task or an HFL task
-                        validator_task: TaskSynapseObject = task.validator_task
+                        try:
+                            validator_task: TaskSynapseObject = task.validator_task
 
-                        if validator_task.task_type == TaskTypeEnum.CODE_GENERATION:
-                            # Regular task flow
-                            processed_id, hotkey_to_score = await self._score_task(task)
-                            if processed_id:
-                                processed_request_ids.append(processed_id)
-                            for hotkey, score in hotkey_to_score.items():
-                                hotkey_to_synthetic_scores[hotkey].append(score)
-
-                        elif validator_task.task_type == TaskTypeEnum.SCORE_FEEDBACK:
-                            # SF task flow - need to check if it's ready for scoring
-                            task = await ORM.get_validator_task_by_id(
-                                validator_task.task_id
-                            )
-                            if not task:
-                                logger.warning(
-                                    f"Task {validator_task.task_id} not found"
+                            if validator_task.task_type == TaskTypeEnum.CODE_GENERATION:
+                                # Regular task flow
+                                processed_id, hotkey_to_score = await self._score_task(
+                                    task
                                 )
-                                continue
-
-                            hfl_state = await HFLManager.get_state_by_current_task_id(
-                                validator_task.task_id
-                            )
-                            if not hfl_state:
-                                logger.warning(
-                                    f"HFL state for task {validator_task.task_id} not found"
-                                )
-                                continue
-
-                            if hfl_state.status == HFLStatusEnum.SF_COMPLETED:
-                                # Calculate TF scores
-                                (
-                                    hotkey_to_score,
-                                    hotkey_to_tf_score,
-                                    hotkey_to_sf_score,
-                                ) = await hfl.score_hfl_tasks(task)
-
-                                # update miner scores in database
-                                await ORM.update_hfl_final_scores(
-                                    task.id,
-                                    hotkey_to_tf_score,
-                                    hotkey_to_sf_score,
-                                )
-
-                                # Mark as processed
-                                processed_request_ids.append(task.id)
-                                # Get the parent TF task ID from the HFL state or task
-                                tf_task_id = task.previous_task_id
-                                if tf_task_id:
-                                    processed_request_ids.append(tf_task_id)
-                                    logger.info(
-                                        f"Marking parent TF task {tf_task_id} as processed"
-                                    )
-                                else:
-                                    logger.warning(
-                                        f"No parent TF task found for SF task {task.id}"
-                                    )
+                                if processed_id:
+                                    processed_request_ids.append(processed_id)
                                 for hotkey, score in hotkey_to_score.items():
-                                    hotkey_to_hfl_scores[hotkey].append(score)
+                                    hotkey_to_synthetic_scores[hotkey].append(score)
 
-                                logger.info(
-                                    f"Scored HFL task {task.id}, hotkey to score: {hotkey_to_hfl_scores}"
+                            elif (
+                                validator_task.task_type == TaskTypeEnum.SCORE_FEEDBACK
+                            ):
+                                # SF task flow - need to check if it's ready for scoring
+                                sf_task = await ORM.get_validator_task_by_id(
+                                    validator_task.task_id,
+                                    include={
+                                        "completions": True,
+                                        "miner_responses": {
+                                            "include": {
+                                                "scores": {
+                                                    "include": {
+                                                        "criterion_relation": True
+                                                    }
+                                                }
+                                            }
+                                        },
+                                    },
                                 )
+                                if not sf_task:
+                                    logger.warning(
+                                        f"Task {validator_task.task_id} not found"
+                                    )
+                                    continue
+
+                                hfl_state = (
+                                    await HFLManager.get_state_by_current_task_id(
+                                        validator_task.task_id
+                                    )
+                                )
+                                if not hfl_state:
+                                    logger.warning(
+                                        f"HFL state for task {validator_task.task_id} not found"
+                                    )
+                                    continue
+
+                                if hfl_state.status == HFLStatusEnum.SF_COMPLETED:
+                                    # Calculate TF scores
+                                    (
+                                        hotkey_to_weighted_score,
+                                        hotkey_to_tf_score,
+                                        hotkey_to_sf_score,
+                                    ) = await hfl.score_hfl_tasks(sf_task)
+
+                                    logger.info(
+                                        f"Scored HFL task {sf_task.id}, hotkey to score: {hotkey_to_weighted_score}"
+                                    )
+                                    logger.info(
+                                        f"Scored HFL task {sf_task.id}, hotkey to tf score: {hotkey_to_tf_score}"
+                                    )
+                                    logger.info(
+                                        f"Scored HFL task {sf_task.id}, hotkey to sf score: {hotkey_to_sf_score}"
+                                    )
+                                    # update miner scores in database
+                                    await ORM.update_hfl_final_scores(
+                                        sf_task.id,
+                                        hotkey_to_tf_score,
+                                        hotkey_to_sf_score,
+                                    )
+
+                                    # Mark as processed
+                                    processed_request_ids.append(sf_task.id)
+                                    # Get the parent TF task ID from the HFL state or task
+                                    tf_task_id = sf_task.previous_task_id
+                                    if tf_task_id:
+                                        processed_request_ids.append(tf_task_id)
+                                        logger.info(
+                                            f"Marking parent TF task {tf_task_id} as processed"
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"No parent TF task found for SF task {sf_task.id}"
+                                        )
+                                    for (
+                                        hotkey,
+                                        score,
+                                    ) in hotkey_to_weighted_score.items():
+                                        hotkey_to_hfl_scores[hotkey].append(score)
+
+                                    logger.info(
+                                        f"Scored HFL task {sf_task.id}, hotkey to hfl score: {hotkey_to_hfl_scores}"
+                                    )
+                        except Exception as e:
+                            logger.error(
+                                f"Error in scoring task {task.validator_task.task_id}: {e}"
+                            )
+                            traceback.print_exc()
+                            continue
 
                 if processed_request_ids:
                     await ORM.mark_validator_task_as_processed(processed_request_ids)

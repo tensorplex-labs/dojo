@@ -56,7 +56,7 @@ async def create_score_feedback_task(
             return None
 
         if not improved_task_data:
-            logger.info(
+            logger.warning(
                 f"No improved task data available yet for {hfl_state.current_synthetic_req_id}. "
                 f"Will try again in next cycle."
             )
@@ -161,7 +161,11 @@ async def process_score_feedback_task(
         # Process each miner response
         success_count = 0
         for miner_response in sf_task.miner_responses:
-            if not miner_response.hotkey or not miner_response.dojo_task_id:
+            if (
+                not miner_response.hotkey
+                or not miner_response.dojo_task_id
+                or miner_response.task_result  # skip if miner response already has task results
+            ):
                 continue
 
             # Get task results from miner

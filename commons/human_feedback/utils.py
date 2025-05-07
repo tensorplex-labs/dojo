@@ -139,6 +139,7 @@ def map_human_feedback_to_task_synapse(
 
         # First add the original (base) code as a completion for reference
         original_completion = CodeAnswer.model_validate(response_data.base_code)
+        # create original completion
         completion_responses.append(
             CompletionResponse(
                 model="original",  # Use a default model name for base code
@@ -165,7 +166,7 @@ def map_human_feedback_to_task_synapse(
                         if hasattr(feedback_task, "model")
                         else "unknown",
                         completion=feedback_task.generated_code,
-                        completion_id=get_new_uuid(),
+                        completion_id=feedback_task.completion_id,
                         criteria_types=[
                             ScoreCriteria(
                                 min=1.0,
@@ -759,10 +760,10 @@ async def create_initial_miner_scores(
                             "create": MinerScoreCreateInput(
                                 miner_response_id=db_miner_response.id,
                                 criterion_id=criterion.id,
-                                scores=Json(scores_data),
+                                scores=Json(json.dumps(scores_data)),
                             ),
                             "update": MinerScoreUpdateInput(
-                                scores=Json(scores_data),
+                                scores=Json(json.dumps(scores_data)),
                             ),
                         },
                     )

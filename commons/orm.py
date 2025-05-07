@@ -1277,7 +1277,10 @@ class ORM:
         try:
             # First, get the current SF task with HFL state
             current_sf_task = await ValidatorTask.prisma().find_unique(
-                where={"id": sf_task_id}, include={"HFLState": True, "prev_task": True}
+                where={"id": sf_task_id},
+                include={
+                    "HFLState": True,
+                },
             )
 
             if not current_sf_task:
@@ -1288,6 +1291,7 @@ class ORM:
                 logger.error(f"SF task {sf_task_id} has no HFL state")
                 return None
 
+            # TODO: is this check necessary?
             if current_sf_task.HFLState.status != HFLStatusEnum.SF_COMPLETED:
                 logger.error(
                     f"SF task {sf_task_id} is not completed yet {current_sf_task.HFLState.status}"
@@ -1301,7 +1305,15 @@ class ORM:
                 # For first iteration, get the original task directly from HFL state
                 original_task_id = current_sf_task.HFLState.original_task_id
                 original_task = await ValidatorTask.prisma().find_unique(
-                    where={"id": original_task_id}
+                    where={"id": original_task_id},
+                    include={
+                        "completions": True,
+                        "miner_responses": {
+                            "include": {
+                                "scores": {"include": {"criterion_relation": True}}
+                            }
+                        },
+                    },
                 )
 
                 logger.info(
@@ -1319,7 +1331,15 @@ class ORM:
                 # Find the task whose next_task_id points to our TF task
                 # This is our previous SF task
                 previous_sf_task = await ValidatorTask.prisma().find_first(
-                    where={"next_task_id": tf_task_id}
+                    where={"next_task_id": tf_task_id},
+                    include={
+                        "completions": True,
+                        "miner_responses": {
+                            "include": {
+                                "scores": {"include": {"criterion_relation": True}}
+                            }
+                        },
+                    },
                 )
 
                 if previous_sf_task:

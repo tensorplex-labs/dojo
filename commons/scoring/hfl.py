@@ -2,6 +2,7 @@ import copy
 from collections import defaultdict
 
 from bittensor.utils.btlogging import logging as logger
+from pydantic import ValidationError
 
 from commons.orm import ORM
 from commons.stats import calculate_icc
@@ -23,30 +24,45 @@ async def score_hfl_tasks(
     task: ValidatorTask,
 ) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
     """MAIN DRIVER FUNCTION TO SCORE HFL TASKS"""
+    hotkey_to_score: dict[str, float] = {}
+    hotkey_to_tf_score: dict[str, float] = {}
+    hotkey_to_sf_score: dict[str, float] = {}
 
-    # average across a few?
-    hotkey_to_score: dict[str, float] = defaultdict(float)
+    try:
+        if not task.miner_responses:
+            logger.warning(
+                f"Task with id: {task.id} has no miner responses for scoring"
+            )
+            return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
 
-    # NOTE: we can only determine the score for a TF_TASK after SF_TASK is
-    # completed by comparing the increment/decrement in the ratings from miners
-    hotkey_to_tf_score = await _calc_tf_score(task)
-    if not hotkey_to_tf_score:
-        raise ValueError(f"Failed to calculate TF score for task {task.id}")
+        # Filter valid miner responses
+        task.miner_responses = filter_valid_miner_responses(task.miner_responses)
+        if not task.miner_responses:
+            logger.warning(f"Task with id: {task.id} has no valid miner responses")
+            return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
 
-    hotkey_to_sf_score = await _calc_sf_score(task)
+        # Rest of your scoring logic
+        hotkey_to_tf_score = await _calc_tf_score(task)
+        if not hotkey_to_tf_score:
+            logger.warning(f"Failed to calculate TF score for task {task.id}")
+            return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
 
-    for hotkey, tf_score in hotkey_to_tf_score.items():
-        hotkey_to_score[hotkey] = (
-            TF_WEIGHTS * tf_score + SF_WEIGHT * hotkey_to_sf_score.get(hotkey, 0.0)
-        )
+        hotkey_to_sf_score = await _calc_sf_score(task)
 
-    return dict(hotkey_to_score), hotkey_to_tf_score, hotkey_to_sf_score
+        for hotkey, tf_score in hotkey_to_tf_score.items():
+            hotkey_to_score[hotkey] = (
+                TF_WEIGHTS * tf_score + SF_WEIGHT * hotkey_to_sf_score.get(hotkey, 0.0)
+            )
+
+        return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
+    except Exception as e:
+        logger.error(f"Error in score_hfl_tasks for task {task.id}: {e}")
+        return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
 
 
 @staticmethod
 async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
     """Calculate SF Score, which is used when we don't have ground truth for the score feedback task.
-
     Args:
         task (ValidatorTask): Task to score
 
@@ -87,7 +103,7 @@ def _validate_task(task: ValidatorTask, hfl_state: HFLState) -> None:
     Returns:
         None:
     """
-    if not hfl_state.ValidatorTask or hfl_state.status == HFLStatusEnum.SF_COMPLETED:
+    if hfl_state.status != HFLStatusEnum.SF_COMPLETED:
         raise Exception("HFL State not ready for scoring")
     if not task.completions:
         raise Exception("Task completions not found")
@@ -125,6 +141,8 @@ async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
 
     # Calculate score changes for each completion
     sf_cid_to_scores_delta = await _calc_score_deltas(sf_task)
+    # TODO: remove this
+    logger.info(f"sf cid to scores delta: {sf_cid_to_scores_delta}")
 
     # Get direct mapping from SF completions to the single miner response that created it
     sf_cid_to_miner_response = await _get_sf_completion_to_miner_response(sf_task)
@@ -138,7 +156,9 @@ async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
         # Get the specific miner response that led to this completion
         miner_response = sf_cid_to_miner_response.get(completion_id)
         if not miner_response:
-            logger.debug(f"No miner response found for SF completion {completion_id}")
+            logger.debug(
+                f"No miner response found for SF completion {completion_id}, this might be original response"
+            )
             continue
 
         # Get score delta for this completion
@@ -170,11 +190,23 @@ async def _calc_score_deltas(sf_task: ValidatorTask) -> dict[str, float]:
         logger.error(f"Previous task not found for SF task {sf_task.id}")
         return {}
 
+    if not previous_task.miner_responses:
+        logger.error(f"Previous task {previous_task.id} has no miner responses")
+        return {}
+
+    previous_task.miner_responses = filter_valid_miner_responses(
+        previous_task.miner_responses, require_scores=True, require_task_result=True
+    )
+
     # Calculate average scores for each completion in the previous task
     prev_completion_scores = await _calc_avg_score_by_completion_id(previous_task)
+    logger.info(
+        f"prev completion scores for task: {previous_task.id} {prev_completion_scores}"
+    )
 
     # Calculate average scores for each completion in the current SF task
     sf_completion_scores = await _calc_avg_score_by_completion_id(sf_task)
+    logger.info(f"sf completion scores for task: {sf_task.id} {sf_completion_scores}")
 
     # Get HFL state to get the selected completion ID
     hfl_state = await ORM.get_hfl_state_by_current_task_id(sf_task.id)
@@ -291,7 +323,10 @@ def ensure_miner_response_order(validator_task: ValidatorTask) -> ValidatorTask:
     # For each miner response, sort completions in-place based on validator_task.completions order
     for miner_response in task_copy.miner_responses or []:
         if not miner_response.scores:
-            raise ValueError("Miner response must have scores for scoring")
+            logger.debug(
+                f"Miner response with hotkey: {miner_response.hotkey} has no scores"
+            )
+            continue
 
         # Sort miner scores based on order from validator's completions
         def get_order(score: MinerScore) -> int:
@@ -312,7 +347,7 @@ def ensure_miner_response_order(validator_task: ValidatorTask) -> ValidatorTask:
 
 
 async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, float]:
-    if not task or not task.completions:
+    if not task.completions:
         raise ValueError(f"Task with id: {task.id} must have completions for scoring")
     if not task.miner_responses:
         raise ValueError(
@@ -325,8 +360,13 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
     # Create a dictionary to store the sum of scores and the count of scores for each completion
     stats_by_completion_id: dict[str, dict[str, float]] = {}
 
+    # TODO: keep it like this until we remove the completion_id from schema
+    cid_to_completion_id: dict[str, str] = {
+        comp.id: comp.completion_id for comp in task.completions or []
+    }
+
     for miner_response in task.miner_responses or []:
-        if miner_response.scores is None:
+        if not miner_response.scores:
             logger.error(f"Miner response {miner_response.id} has no scores")
             continue
         try:
@@ -335,7 +375,8 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
                     logger.error(f"Score {score.id} has no criterion relation")
                     continue
 
-                completion_id = score.criterion_relation.completion_id
+                cid = score.criterion_relation.completion_id
+                completion_id = cid_to_completion_id[cid]
                 scores = Scores.model_validate_json(score.scores)
                 if completion_id not in stats_by_completion_id:
                     stats_by_completion_id[completion_id] = {"sum": 0, "count": 0}
@@ -349,6 +390,11 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
                 stats_by_completion_id[completion_id]["sum"] += scores.raw_score
                 stats_by_completion_id[completion_id]["count"] += 1
 
+        except ValidationError as e:
+            logger.warning(
+                f"Score data validation failed for miner {miner_response.hotkey}: {e}"
+            )
+            continue
         except Exception as e:
             logger.error(f"Error calculating average score: {e}")
             continue
@@ -361,3 +407,50 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
         logger.info(f"Completion {completion_id}: Average score = {average_score}")
 
     return cid_to_avg_score
+
+
+def filter_valid_miner_responses(
+    miner_responses: list[MinerResponse],
+    require_scores: bool = True,
+    require_task_result: bool = False,
+) -> list[MinerResponse]:
+    """
+    Filter a list of miner responses to include only valid ones.
+
+    Args:
+        miner_responses: List of miner responses to filter
+        require_scores: Whether to require scores to be present
+        require_task_result: Whether to require task_result to be present
+        logger: Optional logger to record filtering decisions
+
+    Returns:
+        List of valid miner responses
+    """
+    if not miner_responses:
+        return []
+
+    valid_responses = []
+
+    for response in miner_responses:
+        # Skip responses without hotkey
+        if not response.hotkey or not response.dojo_task_id:
+            continue
+
+        # Check if scores are required and present
+        if require_scores and not response.scores:
+            logger.debug(
+                f"Skipping miner response with hotkey: {response.hotkey} and id: {response.id}: missing scores"
+            )
+            continue
+
+        # Check if task_result is required and present
+        if require_task_result and not response.task_result:
+            logger.debug(
+                f"Skipping miner response with hotkey: {response.hotkey} and id: {response.id}: missing task_result"
+            )
+            continue
+
+        # If we get here, the response is valid
+        valid_responses.append(response)
+
+    return valid_responses
