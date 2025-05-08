@@ -1580,16 +1580,14 @@ class Validator(aobject):
 
     async def _retrieve_axons(self, uids: list[int] = []) -> List[bt.AxonInfo]:
         # Return miner UIDs based on stakes
+        logger.debug(f"Retrieving axons for uids: {uids}")
 
         axons: list[bt.AxonInfo] = []
-
         for uid, axon in enumerate(self.metagraph.axons):
             if uids and uid not in uids:
-                logger.debug(f"UID {uid} not in selected UIDs {uids} skipping")
                 continue
 
             if not axon.ip or not axon.port:
-                logger.debug(f"Missing IP or port for axon: {axon} skipping")
                 continue
 
             hotkey = self.metagraph.hotkeys[uid]
