@@ -79,10 +79,12 @@ services:
     env_file:
       - .env
     expose:
-      - $KAMI_API_PORT
+      - $KAMI_PORT
     logging: *default-logging
     volumes:
       - ${BITTENSOR_DIR}:${BITTENSOR_DIR}
+    networks:
+      - subtensor
 
   watchtower:
     container_name: watchtower
