@@ -79,6 +79,8 @@ services:
     expose:
       - $KAMI_API_PORT
     logging: *default-logging
+    volumes:
+      - ${BITTENSOR_DIR}:${BITTENSOR_DIR}
 
   watchtower:
     container_name: watchtower
