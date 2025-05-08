@@ -20,8 +20,15 @@ class Kami:
     Kami is a class that handles the connection to the Kami API.
     """
 
-    def __init__(self, url: str = "http://localhost:3000"):
-        self.url = os.getenv("KAMI_API_URL", url).rstrip("/")
+    def __init__(self):
+        kami_host = os.getenv("KAMI_HOST")
+        kami_port = os.getenv("KAMI_PORT")
+        if kami_host is None:
+            raise ValueError("Require KAMI_HOST to be set in environment variables")
+        if kami_port is None:
+            raise ValueError("Require KAMI_PORT to be set in environment variables")
+
+        self.url = f"http://{kami_host}:{kami_port}"
         self.session: aiohttp.ClientSession | None = None
         self.headers = {
             "Content-Type": "application/json",

@@ -104,10 +104,7 @@ class Validator(aobject):
         self._block_check_attempts = 0
         self._connection_lock = asyncio.Lock()
 
-        self.kami_url = os.getenv("KAMI_API_URL")
-        if self.kami_url is None:
-            raise ValueError("Require KAMI_API_URL to be set in environment variables")
-        self.kami = Kami(self.kami_url)
+        self.kami = Kami()
 
         self.loop = asyncio.get_event_loop()
         self.config = ObjectManager.get_config()
