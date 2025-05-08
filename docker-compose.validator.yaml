@@ -105,6 +105,7 @@ services:
     networks:
       - dojo-validator
       - subtensor
+      - kami
     depends_on:
       synthetic-api:
         condition: service_healthy

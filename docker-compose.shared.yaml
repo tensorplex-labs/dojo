@@ -5,6 +5,8 @@ x-logging: &default-logging
 networks:
   subtensor:
     name: subtensor
+  kami:
+    name: kami
 
 services:
   btcli:
