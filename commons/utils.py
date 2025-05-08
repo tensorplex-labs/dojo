@@ -124,8 +124,8 @@ def _terminal_plot(
     plotext.ticks_style("bold")
     plotext.grid(horizontal=True, vertical=True)
     plotext.plotsize(
-        width=int(plotext.terminal_width() * 0.95),
-        height=int(plotext.terminal_height() * 0.95),
+        width=int(plotext.terminal_width() * 0.75),
+        height=int(plotext.terminal_height() * 0.75),
     )
     plotext.canvas_color(color=None)
     plotext.theme("clear")

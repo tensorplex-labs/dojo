@@ -123,6 +123,8 @@ async def fetch_miner_feedback_for_task(
 
     # Filter out miner responses that have already been given feedback
     for resp in valid_miner_responses:
+        # TODO: remove this
+        logger.debug(f"Miner response: +++++++++++++++++++++++ {resp}")
         # Extract feedback text directly from the task_result
         feedback_text = extract_text_feedback_from_results(resp.task_result)
         if feedback_text and feedback_text != "":
@@ -139,9 +141,13 @@ async def fetch_miner_feedback_for_task(
             logger.debug(f"Using existing feedback from miner {resp.hotkey}")
         else:
             # No valid feedback, need to fetch
+            logger.info(f"No feedback from miner {resp.hotkey}")
             responses_needing_fetch.append(resp)
 
     if not responses_needing_fetch:
+        logger.info(
+            "No miner responses needing fetch, have already fetched all feedback"
+        )
         return miner_feedbacks, valid_responses
 
     logger.info(f"Miner Feedback: {miner_feedbacks}")
@@ -175,6 +181,7 @@ async def fetch_miner_feedback_for_task(
 
         miner_response = responses_needing_fetch[i]
 
+        logger.info(f"result from miners........ {result}")
         # Update the database with fresh results
         success = await ORM.update_miner_task_results(
             miner_hotkey=miner_response.hotkey,

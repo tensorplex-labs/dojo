@@ -151,6 +151,7 @@ class Validator:
             axons=axons, synapse=synapse, deserialize=False, timeout=30
         )
 
+    # TODO: move to commonly used function
     def obfuscate_model_names(
         self, completion_responses: list[CompletionResponse]
     ) -> tuple[dict[str, str], list[CompletionResponse]]:
@@ -163,6 +164,27 @@ class Validator:
             completion.model = completion.completion_id
             obfuscated_model_to_model[completion.completion_id] = original_model
         return obfuscated_model_to_model, completion_responses
+
+    # TODO: move to commonly used function
+    def deobfuscate_model_names(
+        self,
+        completion_responses: list[CompletionResponse],
+        obfuscated_model_to_model: dict[str, str],
+    ):
+        """Deobfuscate model names for both external requests and synthetic requests."""
+        for completion in completion_responses:
+            # Get the current obfuscated name from the model field
+            obfuscated_name = completion.model
+
+            # Look up the original model name
+            if obfuscated_name in obfuscated_model_to_model:
+                completion.model = obfuscated_model_to_model[obfuscated_name]
+            else:
+                logger.warning(
+                    f"Could not deobfuscate model name: {obfuscated_name} not found in mapping"
+                )
+
+        return completion_responses
 
     @staticmethod
     async def _obfuscate_completion_files(
@@ -416,57 +438,86 @@ class Validator:
         hotkey_to_hfl_scores: dict[str, float],
     ):
         """
-        Performs exponential moving average on the scores based on the rewards received from the miners,
-        after setting the self.synthetic_score and self.hfl_scores variables here, `set_weights` will be called to set the weights on chain.
+        Performs exponential moving average on the scores based on the rewards received from the miners.
+        Updates synthetic and HFL scores independently.
         """
-        if not hotkey_to_synthetic_scores or not hotkey_to_hfl_scores:
-            logger.warning("hotkey_to_scores is empty, skipping score update")
-            return
+        # Update synthetic scores if available
+        if hotkey_to_synthetic_scores:
+            await self._update_score_type(
+                score_type="synthetic",
+                hotkey_to_scores=hotkey_to_synthetic_scores,
+                current_scores=self.synthetic_score,
+                moving_average_alpha=self.config.neuron.moving_average_alpha,
+            )
+        else:
+            logger.warning(
+                "hotkey_to_synthetic_scores is empty, skipping synthetic score update"
+            )
 
+        # Update HFL scores if available
+        if hotkey_to_hfl_scores:
+            await self._update_score_type(
+                score_type="hfl",
+                hotkey_to_scores=hotkey_to_hfl_scores,
+                current_scores=self.hfl_scores,
+                moving_average_alpha=self.config.weights.hfl_ema_alpha,
+            )
+        else:
+            logger.warning("hotkey_to_hfl_scores is empty, skipping HFL score update")
+
+    async def _update_score_type(
+        self,
+        score_type: str,
+        hotkey_to_scores: dict[str, float],
+        current_scores: torch.Tensor,
+        moving_average_alpha: float,
+    ) -> None:
+        """
+        Updates a specific type of score using exponential moving average.
+
+        Args:
+            score_type: Type of score being updated ("synthetic" or "hfl")
+            hotkey_to_scores: Dictionary mapping hotkeys to their scores
+            current_scores: Current tensor of scores to be updated
+            moving_average_alpha: Alpha value for the exponential moving average
+        """
         hotkeys: list[str] = self.metagraph.hotkeys
+
+        # Calculate incentives based on scores
         existing_incentives, new_incentives = self._calculate_incentives(
             metagraph_hotkeys=hotkeys,
-            hotkey_to_scores=hotkey_to_synthetic_scores,
-            scores_tensor=self.synthetic_score,
+            hotkey_to_scores=hotkey_to_scores,
+            scores_tensor=current_scores,
         )
 
-        existing_hfl_incentives, new_hfl_incentives = self._calculate_incentives(
-            metagraph_hotkeys=hotkeys,
-            hotkey_to_scores=hotkey_to_hfl_scores,
-            scores_tensor=self.hfl_scores,
-        )
+        logger.info(f"Incentives for {score_type} tasks: {new_incentives.tolist()}")
 
-        logger.info(f"Incentives for synthetic tasks: {new_incentives}")
-        logger.info(f"Incentives for HFL tasks: {new_hfl_incentives}")
-
-        # Update scores with rewards produced by this step.
+        # Update scores with lock protection
         async with self._scores_alock:
             _terminal_plot(
-                f"scores before update, block: {self.block}",
-                self.synthetic_score.numpy(),
+                f"{score_type} scores before update, block: {self.block}",
+                current_scores.numpy(),
             )
 
-            alpha: float = self.config.neuron.moving_average_alpha
-            self.synthetic_score = (
-                alpha * new_incentives + (1 - alpha) * existing_incentives
+            # Apply exponential moving average
+            updated_scores = (
+                moving_average_alpha * new_incentives
+                + (1 - moving_average_alpha) * existing_incentives
             )
-            self.synthetic_score = torch.clamp(self.synthetic_score, min=0.0)
+            updated_scores = torch.clamp(updated_scores, min=0.0)
+
             _terminal_plot(
-                f"scores after update, block: {self.block}",
-                self.synthetic_score.numpy(),
+                f"{score_type} scores after update, block: {self.block}",
+                updated_scores.numpy(),
             )
 
-            beta: float = self.config.weights.hfl_ema_alpha
-            self.hfl_scores = (
-                beta * new_hfl_incentives + (1 - beta) * existing_hfl_incentives
-            )
-            self.hfl_scores = torch.clamp(self.hfl_scores, min=0.0)
-            _terminal_plot(
-                f"scores after update, block: {self.block}", self.hfl_scores.numpy()
-            )
+            # Update the appropriate score tensor
+            if score_type == "synthetic":
+                self.synthetic_score = updated_scores
+            else:  # score_type == "hfl"
+                self.hfl_scores = updated_scores
 
-        logger.info(f"Updated scores: {self.synthetic_score}")
-        logger.info(f"Updated HFL scores: {self.hfl_scores}")
+        logger.info(f"Updated {score_type} scores: {updated_scores.tolist()}")
 
     async def save_state(
         self,
@@ -979,6 +1030,8 @@ class Validator:
                 }
                 logger.info(
                     f"📝 Got hotkey to score across synthetic tasks between expire_at from:{expire_from} and expire_at to:{expire_to}: {final_hotkey_to_synthetic_score}"
+                )
+                logger.info(
                     f"📝 Got hotkey to score across HFL tasks between expire_at from:{expire_from} and expire_at to:{expire_to}: {final_hotkey_to_hfl_score}"
                 )
 

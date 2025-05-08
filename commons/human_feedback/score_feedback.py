@@ -105,12 +105,10 @@ async def create_score_feedback_task(
             return None
 
         # deobfuscate model names
-        for response in miner_responses:
-            if response.completion_responses:
-                for completion in response.completion_responses:
-                    completion.model = obfuscated_model_to_model.get(
-                        completion.model, completion.model
-                    )
+        task_synapse.completion_responses = validator.deobfuscate_model_names(
+            task_synapse.completion_responses or [],
+            obfuscated_model_to_model,
+        )
 
         # Insert SCORE_FEEDBACK task type to database
         task_synapse.task_type = TaskTypeEnum.SCORE_FEEDBACK

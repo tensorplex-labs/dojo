@@ -90,7 +90,7 @@ if get_config().fast_mode:
     DOJO_TASK_MONITORING = 15
 
     # Fast mode HFL intervals (roughly 1/10th of normal mode)
-    HFL_TF_CREATE_INTERVAL = 360  # 6 minutes
+    HFL_TF_CREATE_INTERVAL = 180  # 3 minutes
     HFL_TF_UPDATE_INTERVAL = 90  # 1.5 minutes
     HFL_SF_CREATE_INTERVAL = 80  # 80 seconds
     HFL_SF_UPDATE_INTERVAL = 70  # 70 seconds

@@ -648,14 +648,14 @@ async def create_initial_miner_scores(
             return False
 
         # Step 2: Get the SF task with completions and criteria
-        sf_task = await ValidatorTask.prisma().find_unique(
+        validator_task = await ValidatorTask.prisma().find_unique(
             where={"id": validator_task_id},
             include=ValidatorTaskInclude(
                 {"completions": {"include": {"criterion": True}}}
             ),
         )
 
-        if not sf_task or not sf_task.completions:
+        if not validator_task or not validator_task.completions:
             logger.error(f"No completions found for SF task {validator_task_id}")
             return False
 
@@ -685,7 +685,7 @@ async def create_initial_miner_scores(
         # Step 5: Create mapping from completion_id and criterion type to criterion object
         # Example: {"completion_123": {"score": <Criterion object>, "text": <Criterion object>}}
         completion_criteria_map: dict[str, dict[str, Criterion]] = {}
-        for completion in sf_task.completions:
+        for completion in validator_task.completions:
             completion_id = completion.completion_id
             completion_criteria_map[completion_id] = {}
 
@@ -704,6 +704,10 @@ async def create_initial_miner_scores(
             updates_count = 0
 
             # Process each model's criteria values
+            logger.info(
+                f"Processing model criteria values: {model_criteria_type_to_values}"
+            )
+            logger.info(f"Completion criteria map: {completion_criteria_map}")
             for model_id, criteria_values in model_criteria_type_to_values.items():
                 if model_id not in completion_criteria_map:
                     logger.warning(f"No matching completion found for model {model_id}")

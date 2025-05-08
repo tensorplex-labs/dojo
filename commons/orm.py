@@ -1110,6 +1110,13 @@ class ORM:
             if not updated_hfl_state:
                 raise ValueError(f"Failed to update HFL state with ID {hfl_state.id}")
 
+            # TODO: remove this
+            logger.info(
+                f"completion-id {[c for comp in validator_task.completion_responses or [] for c in comp.completion_id]}"
+            )
+            logger.info(
+                f"Creating completion relations: human_feedback_response={human_feedback_response}"
+            )
             completion_relations = [
                 HFLCompletionRelationCreateWithoutRelationsInput(
                     miner_response_id=feedback_task.miner_response_id,

@@ -152,7 +152,7 @@ async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
 
     # Process each completion in the SF task
     for completion in sf_task.completions or []:
-        completion_id = completion.id
+        completion_id = completion.completion_id
 
         # Get the specific miner response that led to this completion
         miner_response = sf_cid_to_miner_response.get(completion_id)

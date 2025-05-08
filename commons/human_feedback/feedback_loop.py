@@ -83,6 +83,12 @@ class FeedbackLoop:
                 )
                 return
 
+            obfuscated_model_to_model, selected_task.completion_responses = (
+                validator.obfuscate_model_names(
+                    selected_task.completion_responses or []
+                )
+            )
+
             miner_responses = await send_hfl_request(
                 validator=validator,
                 synapse=text_criteria_task,
@@ -97,6 +103,12 @@ class FeedbackLoop:
                     f"Failed to send HFL request for task {text_criteria_task.task_id}"
                 )
                 return
+
+            # deobfuscate model names
+            text_criteria_task.completion_responses = validator.deobfuscate_model_names(
+                text_criteria_task.completion_responses or [],
+                obfuscated_model_to_model,
+            )
 
             validator_task, hfl_state = await ORM.save_tf_task(
                 validator_task=text_criteria_task,
@@ -259,7 +271,7 @@ class FeedbackLoop:
 
             # Set time window for expired tasks
             expire_from, expire_to = get_time_window_for_tasks(
-                hours_ago_start=2, hours_ago_end=0
+                hours_ago_start=10, hours_ago_end=0
             )
 
             # Process TF_PENDING tasks in batches
@@ -631,6 +643,12 @@ class FeedbackLoop:
             - Update HFL state to TF_PENDING
         """
         try:
+            if not validator._active_miner_uids:
+                logger.warning(
+                    f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                )
+                return
+
             # Get tasks with TF_SCHEDULED status in batches
             async for scheduled_tasks_batch, _ in ORM.get_tasks_by_hfl_status(
                 status=HFLStatusEnum.TF_SCHEDULED,
