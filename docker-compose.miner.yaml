@@ -48,3 +48,12 @@ services:
       - dojo-platform
       - subtensor
     logging: *default-logging
+    depends_on:
+      - kami
+
+  kami:
+    extends:
+      file: docker-compose.shared.yaml
+      service: kami
+    networks:
+      - subtensor
