@@ -959,8 +959,8 @@ class Validator:
                                     # update miner scores in database
                                     await ORM.update_hfl_final_scores(
                                         sf_task.id,
-                                        hotkey_to_tf_score,
                                         hotkey_to_sf_score,
+                                        hotkey_to_tf_score,
                                     )
 
                                     await self._decide_hfl_continuation(

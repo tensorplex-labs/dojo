@@ -24,7 +24,7 @@ from database.mappers import (
     map_validator_task_to_task_synapse_object,
 )
 from database.prisma import Json
-from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
+from database.prisma.enums import CriteriaTypeEnum, HFLStatusEnum, TaskTypeEnum
 from database.prisma.errors import PrismaError
 from database.prisma.models import GroundTruth, HFLState, ValidatorTask
 from database.prisma.types import (
@@ -1513,10 +1513,8 @@ class ORM:
                 logger.error(f"No SF task found with ID {sf_task_id}")
                 return False, []
 
-            # Find original or parent task for updating TF scores
-            previous_task = await ORM.get_original_or_parent_sf_task(sf_task_id)
-            if not previous_task:
-                logger.error(f"Previous task not found for SF task {sf_task_id}")
+            if not sf_task.previous_task_id:
+                logger.error(f"SF task {sf_task_id} has no previous task ID")
                 return False, []
 
             # Get all miner responses for SF task
@@ -1531,7 +1529,7 @@ class ORM:
             # Get all miner responses for parent/original task
             parent_miner_responses = await prisma.minerresponse.find_many(
                 where={
-                    "validator_task_id": previous_task.id,
+                    "validator_task_id": sf_task.previous_task_id,
                     "hotkey": {"in": list(hotkey_to_tf_scores.keys())},
                 },
                 include={"scores": {"include": {"criterion_relation": True}}},
@@ -1559,11 +1557,11 @@ class ORM:
                                     criterion = score_record.criterion_relation
                                     if (
                                         criterion
-                                        and criterion.criteria_type.lower() == "score"
+                                        and criterion.criteria_type
+                                        == CriteriaTypeEnum.SCORE
                                     ):
                                         # Parse existing scores
                                         scores_data = json.loads(score_record.scores)
-
                                         # Update with the SF component (ICC)
                                         if isinstance(scores_data, dict):
                                             # Update appropriate fields in Scores model
@@ -1582,7 +1580,6 @@ class ORM:
                                                     )
                                                 },
                                             )
-                                            break
 
                         # If we make it here, break the retry loop
                         break
@@ -1615,7 +1612,10 @@ class ORM:
                                     criterion = score_record.criterion_relation
                                     if criterion:
                                         # Find appropriate type for updating
-                                        if criterion.criteria_type.lower() == "text":
+                                        if (
+                                            criterion.criteria_type
+                                            == CriteriaTypeEnum.TEXT
+                                        ):
                                             # For text feedback, use TextFeedbackScore model
                                             scores_data = json.loads(
                                                 score_record.scores
@@ -1637,7 +1637,6 @@ class ORM:
                                                         )
                                                     },
                                                 )
-                                                break
 
                         # If we make it here, break the retry loop
                         break
