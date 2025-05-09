@@ -75,7 +75,7 @@ services:
 
   kami:
     container_name: kami
-    image: ghcr.io/tensorplex-labs/dojo-chain-api:main
+    image: ghcr.io/tensorplex-labs/kami:main
     env_file:
       - .env
     expose:
