@@ -7,6 +7,8 @@ networks:
     driver: bridge
   dojo-platform:
     name: dojo-platform
+  kami:
+    name: kami
   # Applicable only for sidecar and miner service
   subtensor:
     name: subtensor
@@ -46,6 +48,7 @@ services:
     networks:
       - dojo-miner
       - dojo-platform
+      - kami
       - subtensor
     logging: *default-logging
     depends_on:
