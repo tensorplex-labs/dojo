@@ -1133,13 +1133,6 @@ class ORM:
             if not updated_hfl_state:
                 raise ValueError(f"Failed to update HFL state with ID {hfl_state.id}")
 
-            # TODO: remove this
-            logger.info(
-                f"completion-id {[c for comp in validator_task.completion_responses or [] for c in comp.completion_id]}"
-            )
-            logger.info(
-                f"Creating completion relations: human_feedback_response={human_feedback_response}"
-            )
             completion_relations = [
                 HFLCompletionRelationCreateWithoutRelationsInput(
                     miner_response_id=feedback_task.miner_response_id,
@@ -1147,10 +1140,6 @@ class ORM:
                 )
                 for feedback_task in human_feedback_response.human_feedback_tasks
             ]
-
-            logger.info(
-                f"Creating completion relations: completion_relations={completion_relations}"
-            )
 
             await tx.hflcompletionrelation.create_many(data=completion_relations)
 
@@ -1830,105 +1819,6 @@ async def test_get_num_processed_tasks():
     finally:
         # Always disconnect when done
         await disconnect_db()
-
-
-# TODO: Update this test
-# async def test_save_task():
-#     """Test function for save_task."""
-#     from database.client import connect_db, disconnect_db
-#     from datetime import datetime, timezone
-#     from dojo.protocol import TaskType, CodeAnswer, CompletionResponses, FileObject
-
-#     # Connect to database first
-#     await connect_db()
-
-#     try:
-#         orm = ORM()
-
-#         # Create test validator task
-#         test_validator_task = ValidatorTask(
-#             prompt="Test prompt",
-#             task_type=TaskType.CODE_GENERATION.value,
-#             expire_at=datetime_as_utc(datetime.now(timezone.utc)),
-#             completions=[
-#                 Completion(
-#                     model="model1",
-#                     completion=CodeAnswer(
-#                         files=[
-#                             FileObject(
-#                                 filename="fibonacci.py",
-#                                 content="""def fibonacci(n):
-#                                         if n <= 1:
-#                                             return n
-#                                         return fibonacci(n-1) + fibonacci(n-2)""",
-#                                 language="python",
-#                             )
-#                         ]
-#                     ),
-#                     criterion=[],
-#                 ),
-#                 Completion(
-#                     model="model2",
-#                     completion=CodeAnswer(
-#                         files=[
-#                             FileObject(
-#                                 filename="fibonacci.py",
-#                                 content="""def fibonacci(n):
-#                                         a, b = 0, 1
-#                                         for _ in range(n):
-#                                             a, b = b, a + b
-#                                         return a""",
-#                                 language="python",
-#                             )
-#                         ]
-#                     ),
-#                     criterion=[],
-#                 ),
-#             ],
-#         )
-
-#         # Create test miner responses
-#         test_miner_responses = [
-#             MinerResponse(
-#                 dojo_task_id="test_task_1",
-#                 hotkey="test_hotkey_1",
-#                 coldkey="test_coldkey_1",
-#                 task_result=CompletionResponses(responses=[{"model1": 1, "model2": 2}]),
-#             )
-#         ]
-
-#         # Create test ground truth
-#         test_ground_truth = {"model1": 1, "model2": 2}
-
-#         # Save the task
-#         created_task = await orm.save_task(
-#             test_validator_task, test_miner_responses, test_ground_truth
-#         )
-
-#         if created_task:
-#             logger.success(f"Successfully created task with ID: {created_task.id}")
-
-#             # Verify the saved data
-#             saved_task = await ValidatorTask.prisma().find_unique(
-#                 where={"id": created_task.id},
-#                 include={
-#                     "completions": True,
-#                     "miner_responses": True,
-#                     "GroundTruth": True,
-#                 },
-#             )
-
-#             logger.info(f"Number of completions: {len(saved_task.completions)}")
-#             logger.info(f"Number of miner responses: {len(saved_task.miner_responses)}")
-#             logger.info(f"Number of ground truths: {len(saved_task.GroundTruth)}")
-#         else:
-#             logger.error("Failed to create task")
-
-#     except Exception as e:
-#         logger.error(f"An error occurred: {e}")
-#     finally:
-#         # Always disconnect when done
-#         await disconnect_db()
 
 
 if __name__ == "__main__":

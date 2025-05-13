@@ -82,9 +82,6 @@ async def create_score_feedback_task(
         # Send to miners as CODE_GENERATION
         task_synapse.task_type = TaskTypeEnum.CODE_GENERATION
 
-        # TODO: Remove this
-        logger.info(f"Task synapse+++++++++++++++++++++++++++++++++: {task_synapse}")
-
         obfuscated_model_to_model, completion_responses = (
             validator.obfuscate_model_names(task_synapse.completion_responses)
         )
@@ -120,7 +117,7 @@ async def create_score_feedback_task(
 
         # Insert SCORE_FEEDBACK task type to database
         task_synapse.task_type = TaskTypeEnum.SCORE_FEEDBACK
-        # TODO: investigate if sf_task is save even we got HFL request failed
+
         # Save SF task and update HFL state
         validator_task, updated_hfl_state = await ORM.save_sf_task(
             validator_task=task_synapse,

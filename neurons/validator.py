@@ -435,7 +435,7 @@ class Validator:
         ), "Existing incentives and new incentives must have same shape for consistency"
         return existing_incentives, new_incentives
 
-    async def update_scores(
+    async def update_scores_tensor(
         self,
         hotkey_to_synthetic_scores: dict[str, float],
         hotkey_to_hfl_scores: dict[str, float],
@@ -869,7 +869,6 @@ class Validator:
                 # Get tasks that expired between 2 hours ago and 30 minutes ago
                 # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
                 now = datetime.now(timezone.utc)
-                # TODO: change back to 2 hours
                 expire_from = datetime_as_utc(now - timedelta(hours=2))
                 expire_to = datetime_as_utc(now - timedelta(seconds=dojo.BUFFER_PERIOD))
 
@@ -943,76 +942,74 @@ class Validator:
                                     )
                                     continue
 
-                                if hfl_state.status == HFLStatusEnum.SF_COMPLETED:
-                                    # Calculate TF scores
-                                    (
-                                        hotkey_to_weighted_score,
-                                        hotkey_to_tf_score,
-                                        hotkey_to_sf_score,
-                                    ) = await hfl.score_hfl_tasks(sf_task)
-
-                                    logger.info(
-                                        f"Scored HFL task {sf_task.id}, hotkey to score: {hotkey_to_weighted_score}"
-                                    )
-                                    logger.info(
-                                        f"Scored HFL task {sf_task.id}, hotkey to tf score: {hotkey_to_tf_score}"
-                                    )
-                                    logger.info(
-                                        f"Scored HFL task {sf_task.id}, hotkey to sf score: {hotkey_to_sf_score}"
-                                    )
-                                    # update miner scores in database
-                                    await ORM.update_hfl_final_scores(
-                                        sf_task,
-                                        hotkey_to_sf_score,
-                                        hotkey_to_tf_score,
-                                    )
-                                    success = await self.send_scoring_result_to_miners(
-                                        sf_task.id
-                                    )
-                                    if not success:
-                                        logger.warning(
-                                            f"Failed to send scoring result to miners for task {sf_task.id}"
-                                        )
-
-                                    success = await self.send_scoring_result_to_miners(
-                                        sf_task.previous_task_id or ""
-                                    )
-                                    if not success:
-                                        logger.warning(
-                                            f"Failed to send scoring result to miners for task {sf_task.previous_task_id}"
-                                        )
-
-                                    await self._decide_hfl_continuation(
-                                        sf_task.id, hfl_state
-                                    )
-
-                                    # Mark as processed
-                                    processed_request_ids.append(sf_task.id)
-                                    # Get the parent TF task ID from the HFL state or task
-                                    tf_task_id = sf_task.previous_task_id
-                                    if tf_task_id:
-                                        processed_request_ids.append(tf_task_id)
-                                        logger.info(
-                                            f"Marking parent TF task {tf_task_id} as processed"
-                                        )
-                                    else:
-                                        logger.warning(
-                                            f"No parent TF task found for SF task {sf_task.id}"
-                                        )
-                                    for (
-                                        hotkey,
-                                        score,
-                                    ) in hotkey_to_weighted_score.items():
-                                        hotkey_to_hfl_scores[hotkey].append(score)
-
-                                    logger.info(
-                                        f"Scored HFL task {sf_task.id}, hotkey to hfl score: {hotkey_to_hfl_scores}"
-                                    )
-
-                                else:
+                                if hfl_state.status != HFLStatusEnum.SF_COMPLETED:
                                     logger.warning(
                                         f"HFL state for task {validator_task.task_id} is not ready for scoring yet. Status: {hfl_state.status}"
                                     )
+                                    continue
+
+                                # Calculate TF scores
+                                (
+                                    hotkey_to_weighted_score,
+                                    hotkey_to_tf_score,
+                                    hotkey_to_sf_score,
+                                ) = await hfl.score_hfl_tasks(sf_task)
+
+                                # TODO: remove this
+                                logger.info(
+                                    f"Scored HFL task {sf_task.id}, hotkey to score: {hotkey_to_weighted_score}"
+                                )
+                                logger.info(
+                                    f"Scored HFL task {sf_task.id}, hotkey to tf score: {hotkey_to_tf_score}"
+                                )
+                                logger.info(
+                                    f"Scored HFL task {sf_task.id}, hotkey to sf score: {hotkey_to_sf_score}"
+                                )
+                                # update miner scores in database
+                                await ORM.update_hfl_final_scores(
+                                    sf_task,
+                                    hotkey_to_sf_score,
+                                    hotkey_to_tf_score,
+                                )
+                                success = await self.send_scoring_result_to_miners(
+                                    sf_task.id
+                                )
+                                if not success:
+                                    logger.warning(
+                                        f"Failed to send scoring result to miners for task {sf_task.id}"
+                                    )
+
+                                success = await self.send_scoring_result_to_miners(
+                                    sf_task.previous_task_id or ""
+                                )
+                                if not success:
+                                    logger.warning(
+                                        f"Failed to send scoring result to miners for task {sf_task.previous_task_id}"
+                                    )
+
+                                await self._decide_hfl_continuation(
+                                    sf_task.id, hfl_state
+                                )
+
+                                # Mark as processed
+                                processed_request_ids.append(sf_task.id)
+                                # Get the parent TF task ID from the HFL state or task
+                                tf_task_id = sf_task.previous_task_id
+                                if tf_task_id:
+                                    processed_request_ids.append(tf_task_id)
+                                    logger.info(
+                                        f"Marking parent TF task {tf_task_id} as processed"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"No parent TF task found for SF task {sf_task.id}"
+                                    )
+                                for hotkey, score in hotkey_to_weighted_score.items():
+                                    hotkey_to_hfl_scores[hotkey].append(score)
+
+                                logger.info(
+                                    f"Scored HFL task {sf_task.id}, hotkey to hfl score: {hotkey_to_hfl_scores}"
+                                )
 
                         except Exception as e:
                             logger.error(
@@ -1055,7 +1052,7 @@ class Validator:
                     f"📝 Got hotkey to score across HFL tasks between expire_at from:{expire_from} and expire_at to:{expire_to}: {final_hotkey_to_hfl_score}"
                 )
 
-                await self.update_scores(
+                await self.update_scores_tensor(
                     hotkey_to_synthetic_scores=final_hotkey_to_synthetic_score,
                     hotkey_to_hfl_scores=final_hotkey_to_hfl_score,
                 )
@@ -1871,9 +1868,9 @@ class Validator:
         hfl_score_weight = 0.5
         async with self._scores_alock:
             # TODO: assignment of self.hfl_score
-            assert (
-                self.synthetic_score.shape == self.hfl_scores.shape
-            ), "Scores and HFL scores must be the same shape"
+            # assert (
+            #     self.synthetic_score.shape == self.hfl_scores.shape
+            # ), "Scores and HFL scores must be the same shape"
             combined_score = (
                 synthetic_score_weight * self.synthetic_score
                 + hfl_score_weight * self.hfl_scores

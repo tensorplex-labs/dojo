@@ -141,8 +141,8 @@ class FeedbackLoop:
             Tuple[TaskSynapseObject, str] | None: A tuple of (validator task, completion_id) if criteria are met;
         """
         expire_from, expire_to = get_time_window_for_tasks(
-            hours_ago_start=48, hours_ago_end=0
-        )  # TODO: change back to 1 hour
+            hours_ago_start=1, hours_ago_end=0
+        )
 
         eligible_tasks = []
         try:
@@ -673,11 +673,6 @@ class FeedbackLoop:
                         task_id=sf_task.id,
                     )
 
-                    # TODO: Remove this
-                    logger.info(
-                        f"Completion percentages for SF task {sf_task.id}: {completion_percentages}"
-                    )
-
                     if not completion_percentages:
                         logger.error(
                             f"No completion percentages found for SF task {sf_task.id}"
@@ -689,11 +684,6 @@ class FeedbackLoop:
                         max(completion_percentages.items(), key=lambda x: x[1])[0]
                         if completion_percentages
                         else None
-                    )
-
-                    # TODO: Remove this
-                    logger.info(
-                        f"Best completion id for SF task {sf_task.id}: {best_completion_id}"
                     )
 
                     if not best_completion_id:

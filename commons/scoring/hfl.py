@@ -144,7 +144,6 @@ async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
 
     # Calculate score changes for each completion
     sf_cid_to_scores_delta = await _calc_score_deltas(sf_task)
-    # TODO: remove this
     logger.info(f"sf cid to scores delta: {sf_cid_to_scores_delta}")
 
     # Get direct mapping from SF completions to the single miner response that created it

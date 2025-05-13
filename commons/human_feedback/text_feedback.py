@@ -123,8 +123,6 @@ async def fetch_miner_feedback_for_task(
 
     # Filter out miner responses that have already been given feedback
     for resp in valid_miner_responses:
-        # TODO: remove this
-        logger.debug(f"Miner response: +++++++++++++++++++++++ {resp}")
         # Extract feedback text directly from the task_result
         feedback_text = extract_text_feedback_from_results(resp.task_result)
         if feedback_text and feedback_text != "":
@@ -259,10 +257,6 @@ async def send_text_feedback_to_synthetic_api(
             return None
 
         # Get the completion from the original task
-        # TODO: remove this
-        logger.info(
-            f"Original task completions: {original_task.completions}, {hfl_state.original_task_id}"
-        )
         base_completion = original_task.completions[0].completion
 
         # Create the TextFeedbackRequest object

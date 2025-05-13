@@ -320,6 +320,7 @@ async def evaluate_miner_consensus(
         return {}, None, None
 
 
+# NOTE: Keep this function for now, but remove it from the should_continue_hfl function
 async def check_improvement_threshold(
     current_sf_task_id: str,
     previous_task_id: str,  # Could be a previous SF task or the original task
@@ -421,34 +422,6 @@ async def should_continue_hfl(
             )
             return False, "consensus_reached"
 
-        # TODO: KIV
-        # Condition 3: Improvement threshold reached; for example, 10% improvement over the previous task
-        # try:
-        #     # Get the previous task (original or parent SF) using existing ORM function
-        #     previous_task = await ORM.get_original_or_parent_sf_task(latest_sf_task_id)
-
-        #     if previous_task and previous_task.id:
-        #         # Use the specialized function to check improvement
-        #         meets_threshold, improvement = await check_improvement_threshold(
-        #             current_sf_task_id=latest_sf_task_id,
-        #             previous_task_id=previous_task.id,
-        #             min_improvement_percentage=min_improvement_percentage,
-        #         )
-
-        #         if not meets_threshold:
-        #             return (
-        #                 False,
-        #                 f"insufficient_improvement_{improvement:.1f}_percent",
-        #             )
-        #     else:
-        #         logger.warning(
-        #             f"Could not find previous task for SF task {latest_sf_task_id}"
-        #         )
-        # except Exception as e:
-        #     logger.error(f"Error checking improvement threshold: {e}")
-        #     # Continue with other checks if improvement calculation fails
-
-        # If no stopping conditions met, continue
         return True, "no_stopping_conditions_met"
 
     except Exception as e:

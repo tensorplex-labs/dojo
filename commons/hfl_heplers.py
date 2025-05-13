@@ -132,7 +132,7 @@ class HFLManager:
         tx=None,
     ) -> HFLState:
         """Handle transition to TF_PENDING."""
-        # TODO Add TF pending specific logic as needed
+        # NOTE: Add TF pending specific logic as needed
         return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
@@ -143,7 +143,7 @@ class HFLManager:
         tx=None,
     ) -> HFLState:
         """Handle transition to TF_COMPLETED."""
-        # TODO Add TF completion specific logic as needed
+        # NOTE: Add TF completion specific logic as needed
         return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
@@ -154,7 +154,7 @@ class HFLManager:
         tx=None,
     ) -> HFLState:
         """Handle transition to TF_FAILED."""
-        # TODO Add TF failed specific logic as needed
+        # NOTE: Add TF failed specific logic as needed
         return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
@@ -165,7 +165,7 @@ class HFLManager:
         tx=None,
     ) -> HFLState:
         """Handle transition to SF_PENDING."""
-        # TODO Add SF pending specific logic as needed
+        # NOTE: Add SF pending specific logic as needed
 
         if event_data:
             updates["current_synthetic_req_id"] = (
@@ -181,7 +181,7 @@ class HFLManager:
         tx=None,
     ) -> HFLState:
         """Handle transition to SF_COMPLETED."""
-        # TODO Add SF completion specific logic as needed
+        # NOTE: Add SF completion specific logic as needed
         return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
@@ -192,7 +192,7 @@ class HFLManager:
         tx=None,
     ) -> HFLState:
         """Handle transition to HFL_COMPLETED."""
-        # TODO Add HFL completion specific logic as needed
+        # NOTE: Add HFL completion specific logic as needed
         return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
