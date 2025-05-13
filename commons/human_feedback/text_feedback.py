@@ -176,7 +176,6 @@ async def fetch_miner_feedback_for_task(
 
         if not result:  # Empty or None result
             continue
-
         miner_response = responses_needing_fetch[i]
 
         logger.info(f"result from miners........ {result}")
@@ -208,6 +207,12 @@ async def fetch_miner_feedback_for_task(
 
         # Extract text feedback
         feedback_text = extract_text_feedback_from_results(result)
+
+        # WIP - sanitize miner feedback
+        if not await sanitize_miner_feedback(feedback_text):
+            logger.warning(f"Skipping feedback from miner {miner_response.hotkey}")
+            continue
+
         if feedback_text:
             miner_feedbacks.append(
                 MinerFeedback(
@@ -342,3 +347,29 @@ async def get_task_synapse_for_retry(task_id: str) -> TaskSynapseObject | None:
         logger.error(f"Error retrieving task {task_id}: {e}")
         logger.debug(f"Traceback: {traceback.format_exc()}")
         return None
+
+
+async def sanitize_miner_feedback(miner_feedback: str) -> bool:
+    """
+    validate and sanitize miner feedback
+
+    1. check for length
+    2. screen for blacklisted terms
+    3. call walledEval
+    """
+    import re
+
+    # 1. check for length
+    if len(miner_feedback) > 300:
+        return False
+    # 2. screen for blacklisted punctuation and terms
+    BLACKLISTED_CHARS = r"[<>/;`\']"
+    BLACKLISTED_WORDS = r"\b(ignore|script|eval|exec|decode|encode)\b"
+
+    if re.search(BLACKLISTED_CHARS, miner_feedback) or re.search(
+        BLACKLISTED_WORDS, miner_feedback, re.IGNORECASE
+    ):
+        return False
+
+    # 3. call walledEval
+    return True
