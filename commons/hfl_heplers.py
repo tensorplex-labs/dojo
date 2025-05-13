@@ -14,7 +14,6 @@ class HFLManager:
     async def create_state(
         previous_task_id: str,
         current_task_id: str,
-        original_task_id: str | None = None,
         status: HFLStatusEnum = HFLStatusEnum.TF_PENDING,
         selected_completion_id: str | None = None,
         tx=None,
@@ -39,25 +38,18 @@ class HFLManager:
 
         prisma_client = tx if tx else prisma
 
-        # Try to find an existing HFL state with the previous_task_id as current_task_id
-        existing_hfl = None
-        if not original_task_id:
-            existing_hfl = await prisma_client.hflstate.find_first(
-                where={"current_task_id": previous_task_id}
-            )
+        # First try to find existing HFL state regardless of original_task_id
+        existing_hfl = await prisma_client.hflstate.find_first(
+            where={"current_task_id": previous_task_id}
+        )
 
-            if existing_hfl:
-                # We found an existing HFL cycle, use its original_task_id
-                original_task_id = existing_hfl.original_task_id
-                current_iteration = existing_hfl.current_iteration + 1
-            else:
-                # We couldn't find an existing cycle - this is an error
-                raise ValueError(
-                    "For a new HFL process, original_task_id must be provided. "
-                    "For continuing an existing process, previous_task_id must belong to an existing HFL state."
-                )
+        if existing_hfl:
+            # Use the existing original_task_id and increment iteration
+            original_task_id = existing_hfl.original_task_id
+            current_iteration = existing_hfl.current_iteration + 1
         else:
-            # This is the first cycle
+            # No existing cycle found, then this is the first cycle
+            original_task_id = previous_task_id
             current_iteration = 1
 
         # Create the initial event with the correct iteration

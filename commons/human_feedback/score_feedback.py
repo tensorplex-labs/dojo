@@ -23,7 +23,7 @@ from neurons.validator import Validator
 
 async def create_score_feedback_task(
     validator: Validator,
-    tf_task_id: str,
+    tf_task: ValidatorTask,
     hfl_state: HFLState,
 ) -> ValidatorTask | None:
     """
@@ -42,6 +42,10 @@ async def create_score_feedback_task(
             logger.error(f"No synthetic request ID for HFL state {hfl_state.id}")
             return None
 
+        if not tf_task.completions:
+            logger.error(f"No completions found for TF task {tf_task.id}")
+            return None
+
         # Get improved task from synthetic API (raw response)
         success, improved_task_data = await SyntheticAPI.get_improved_task(
             hfl_state.current_synthetic_req_id
@@ -49,7 +53,7 @@ async def create_score_feedback_task(
 
         if not success:
             await handle_synthetic_generation_failure(
-                tf_task_id=tf_task_id,
+                tf_task_id=tf_task.id,
                 hfl_state=hfl_state,
                 synthetic_req_id=hfl_state.current_synthetic_req_id,
             )
@@ -63,7 +67,11 @@ async def create_score_feedback_task(
             return None
 
         # Map the raw response to a TaskSynapseObject
-        task_synapse = map_human_feedback_to_task_synapse(improved_task_data)
+        task_synapse = map_human_feedback_to_task_synapse(
+            improved_task_data,
+            original_model_name=tf_task.completions[0].model,
+            original_completion_id=tf_task.completions[0].completion_id,
+        )
 
         if not task_synapse or not task_synapse.completion_responses:
             logger.error(
@@ -86,13 +94,13 @@ async def create_score_feedback_task(
         # Get active miners for SF task
         active_miners = await get_active_miners_for_hfl(validator)
         if not active_miners:
-            logger.error(f"No active miners found for SF task for {tf_task_id}")
+            logger.error(f"No active miners found for SF task for {tf_task.id}")
             return None
 
         axons = [validator.metagraph.axons[miner_uid] for miner_uid in active_miners]
 
         # Send to miners
-        miner_responses = await send_hfl_request(
+        miner_responses: list[TaskSynapseObject] | None = await send_hfl_request(
             validator=validator,
             synapse=task_synapse,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
@@ -101,7 +109,7 @@ async def create_score_feedback_task(
         logger.info(f"Miner responses: {miner_responses}")
 
         if not miner_responses:
-            logger.error(f"Failed to send improved task to miners for {tf_task_id}")
+            logger.error(f"Failed to send improved task to miners for {tf_task.id}")
             return None
 
         # deobfuscate model names
@@ -118,15 +126,15 @@ async def create_score_feedback_task(
             validator_task=task_synapse,
             miner_responses=miner_responses,
             hfl_state=hfl_state,
-            previous_task_id=tf_task_id,
+            previous_task_id=tf_task.id,
             human_feedback_response=improved_task_data,
         )
 
         if not validator_task:
-            logger.error(f"Failed to save SF task for {tf_task_id}")
+            logger.error(f"Failed to save SF task for {tf_task.id}")
             return None
 
-        logger.info(f"Created SF task {validator_task.id} for {tf_task_id}")
+        logger.info(f"Created SF task {validator_task.id} for {tf_task.id}")
         return validator_task
 
     except Exception as e:

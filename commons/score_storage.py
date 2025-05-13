@@ -1,4 +1,5 @@
 import json
+import traceback
 from pathlib import Path
 
 import torch
@@ -116,4 +117,5 @@ class ScoreStorage:
             return synthetic_scores, hfl_scores
         except Exception as e:
             logger.error(f"Failed to load validator scores: {e}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return None, None

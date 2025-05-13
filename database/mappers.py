@@ -5,7 +5,7 @@ import bittensor as bt
 from commons.utils import datetime_to_iso8601_str, iso8601_str_to_datetime
 from database.prisma import Json
 from database.prisma.enums import CriteriaTypeEnum, TaskTypeEnum
-from database.prisma.models import HFLState, MinerResponse, ValidatorTask
+from database.prisma.models import Completion, HFLState, MinerResponse, ValidatorTask
 from database.prisma.types import (
     CompletionCreateInput,
     CriterionCreateWithoutRelationsInput,
@@ -18,8 +18,10 @@ from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
     ScoreCriteria,
+    Scores,
     TaskSynapseObject,
     TextCriteria,
+    TextFeedbackScore,
 )
 
 from .types import HFLEvent, Metadata
@@ -289,3 +291,80 @@ def map_miner_response_to_task_synapse_object(
         dojo_task_id=miner_response.dojo_task_id,
         axon=bt.TerminalInfo(hotkey=miner_response.hotkey),
     )
+
+
+def map_miner_response_to_completion_responses(
+    miner_response: MinerResponse, completions: list[Completion]
+) -> list[CompletionResponse]:
+    """
+    Convert a miner response and task completions to CompletionResponse objects.
+
+    Args:
+        miner_response: The miner response database model
+        task_completions: The completions from the validator task
+
+    Returns:
+        List of CompletionResponse objects
+    """
+    completion_responses = []
+
+    for completion in completions:
+        # Map criteria types for each completion
+        criteria_types = []
+        for criterion in completion.criterion or []:
+            config = json.loads(criterion.config)
+
+            # Find the corresponding score for this criterion from miner_response
+            miner_score = None
+            for score in criterion.scores or []:
+                if score.miner_response_id == miner_response.id:
+                    miner_score = score
+                    break
+
+            # Create appropriate criteria type based on the database enum
+            if criterion.criteria_type == CriteriaTypeEnum.SCORE:
+                score_data = {}
+                if miner_score:
+                    score_data = (
+                        json.loads(miner_score.scores)
+                        if isinstance(miner_score.scores, str)
+                        else miner_score.scores
+                    )
+
+                criteria_types.append(
+                    ScoreCriteria(
+                        min=config.get("min", 0.0),
+                        max=config.get("max", 10.0),
+                        scores=Scores.model_validate(score_data)
+                        if score_data
+                        else None,
+                    )
+                )
+            elif criterion.criteria_type == CriteriaTypeEnum.TEXT:
+                # Extract text feedback and score from task result if available
+                tf_score = None
+                if miner_score:
+                    tf_score = TextFeedbackScore.model_validate(
+                        json.loads(miner_score.scores)
+                    )
+                criteria_types.append(
+                    # NOTE: For simplicity, let's just return score for now
+                    TextCriteria(
+                        query="",
+                        text_feedback="",
+                        score=tf_score,
+                    )
+                )
+
+        # Create completion response with user-specific data where available
+        completion_data = json.loads(completion.completion)
+        completion_response = CompletionResponse(
+            model=completion.model,
+            completion=completion_data,
+            completion_id=completion.completion_id,
+            criteria_types=criteria_types,
+        )
+
+        completion_responses.append(completion_response)
+
+    return completion_responses

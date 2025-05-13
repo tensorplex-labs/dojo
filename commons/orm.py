@@ -60,8 +60,9 @@ class ORM:
         expire_to: datetime | None = None,
         filter_empty_result: bool = False,
         is_processed: bool = False,
-        has_previous_task: bool = False,
-        task_types: List[TaskTypeEnum] = [TaskTypeEnum.CODE_GENERATION],
+        has_previous_task: bool | None = None,
+        has_next_task: bool | None = None,
+        task_types: list[TaskTypeEnum] = [TaskTypeEnum.CODE_GENERATION],
     ) -> AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]:
         """Returns batches of expired ValidatorTask records and a boolean indicating if there are more batches.
 
@@ -72,7 +73,9 @@ class ORM:
             You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
             filter_empty_results: If True, only include miner_responses with empty task_result
             is_processed: (bool, optional): If True, only processed tasks will be returned. Defaults to False.
-            has_previous_task: (bool, optional): Checks if task has a previous task. Defaults to False.
+            has_previous_task: (bool, optional): Checks if task has a previous task. Defaults to None. If None, no filtering will be done.
+            has_next_task: (bool, optional): Checks if task has a next task. Defaults to None. If None, no filtering will be done.
+            task_types: (list[TaskTypeEnum], optional): List of task types to filter by. Defaults to [TaskTypeEnum.CODE_GENERATION].
 
         Raises:
             ExpiredFromMoreThanExpireTo: If expire_from is greater than expire_to
@@ -120,21 +123,42 @@ class ORM:
                 "expire_from should be less than expire_to."
             )
 
-        vali_where_query_dict = {
-            "expire_at": {
-                "gt": expire_from,
-                "lt": expire_to,
-            },
-            "is_processed": is_processed,
-        }
+        vali_where_query: ValidatorTaskWhereInput = ValidatorTaskWhereInput(
+            {
+                "expire_at": {
+                    "gt": expire_from,
+                    "lt": expire_to,
+                },
+                "is_processed": is_processed,
+            }
+        )
 
-        if has_previous_task:
-            vali_where_query_dict["previous_task_id"] = {"not": None}
+        not_conditions = []
+        or_conditions = []
 
+        # Add conditions for previous_task_id and next_task_id as you have them
+        if has_previous_task is not None:
+            if has_previous_task:
+                not_conditions.append({"previous_task_id": None})
+            else:
+                vali_where_query["previous_task_id"] = None
+
+        if has_next_task is not None:
+            if has_next_task:
+                not_conditions.append({"next_task_id": None})
+            else:
+                vali_where_query["next_task_id"] = None
+
+        # For task_types, use OR with direct enum values
         if task_types:
-            vali_where_query_dict["task_type"] = {"in": task_types}
+            for task_type in task_types:
+                or_conditions.append({"task_type": task_type})
 
-        vali_where_query = ValidatorTaskWhereInput(**vali_where_query_dict)
+        if not_conditions:
+            vali_where_query["AND"] = not_conditions
+
+        if or_conditions:
+            vali_where_query["OR"] = or_conditions
 
         # Get total count and first batch of validator tasks in parallel
         task_count, first_batch = await asyncio.gather(
@@ -839,6 +863,7 @@ class ORM:
                     include={
                         "HFLState": True,
                         "miner_responses": True,
+                        "completions": True,
                     },
                     order={"created_at": "desc"},
                     take=batch_size,
@@ -955,7 +980,6 @@ class ORM:
         miner_responses: list[TaskSynapseObject],
         previous_task_id: str,
         selected_completion_id: str,
-        original_task_id: str | None = None,
     ) -> tuple[ValidatorTask, HFLState]:
         """
         Save a Text Feedback task and create a new HFL state within a single transaction.
@@ -972,7 +996,6 @@ class ORM:
             hfl_state = await HFLManager.create_state(
                 current_task_id=validator_task.task_id,
                 previous_task_id=previous_task_id,
-                original_task_id=original_task_id,
                 status=HFLStatusEnum.TF_PENDING,
                 selected_completion_id=selected_completion_id,
                 tx=tx,
@@ -1488,7 +1511,7 @@ class ORM:
 
     @staticmethod
     async def update_hfl_final_scores(
-        sf_task_id: str,
+        sf_task: ValidatorTask,
         hotkey_to_sf_scores: dict[str, float],
         hotkey_to_tf_scores: dict[str, float],
         batch_size: int = 10,
@@ -1507,20 +1530,14 @@ class ORM:
             Tuple containing success flag and list of failed hotkeys
         """
         try:
-            # Get SF task and related data
-            sf_task = await ORM.get_validator_task_by_id(sf_task_id)
-            if not sf_task:
-                logger.error(f"No SF task found with ID {sf_task_id}")
-                return False, []
-
             if not sf_task.previous_task_id:
-                logger.error(f"SF task {sf_task_id} has no previous task ID")
+                logger.error(f"SF task {sf_task.id} has no previous task ID")
                 return False, []
 
             # Get all miner responses for SF task
             sf_miner_responses = await prisma.minerresponse.find_many(
                 where={
-                    "validator_task_id": sf_task_id,
+                    "validator_task_id": sf_task.id,
                     "hotkey": {"in": list(hotkey_to_sf_scores.keys())},
                 },
                 include={"scores": {"include": {"criterion_relation": True}}},

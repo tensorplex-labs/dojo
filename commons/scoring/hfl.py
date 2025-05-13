@@ -1,5 +1,6 @@
 import copy
 import json
+import traceback
 from collections import defaultdict
 
 from bittensor.utils.btlogging import logging as logger
@@ -58,6 +59,7 @@ async def score_hfl_tasks(
         return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
     except Exception as e:
         logger.error(f"Error in score_hfl_tasks for task {task.id}: {e}")
+        logger.error(f"Error traceback: {traceback.format_exc()}")
         return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
 
 

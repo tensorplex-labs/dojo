@@ -115,6 +115,8 @@ def get_time_window_for_tasks(hours_ago_start: int = 48, hours_ago_end: int = 0)
 
 def map_human_feedback_to_task_synapse(
     response_data: HumanFeedbackResponse,
+    original_model_name: str | None = None,
+    original_completion_id: str | None = None,
 ) -> TaskSynapseObject | None:
     """
     Map the HumanFeedbackResponse to a TaskSynapseObject.
@@ -142,9 +144,9 @@ def map_human_feedback_to_task_synapse(
         # create original completion
         completion_responses.append(
             CompletionResponse(
-                model="original",  # Use a default model name for base code
+                model=original_model_name or "original_model",
                 completion=original_completion,
-                completion_id=get_new_uuid(),
+                completion_id=original_completion_id or get_new_uuid(),
                 criteria_types=[
                     ScoreCriteria(
                         min=1.0,

@@ -22,6 +22,7 @@ from dojo.protocol import (
     TaskResult,
     TaskResultRequest,
     TaskSynapseObject,
+    TextCriteria,
 )
 from dojo.utils.config import get_config
 
@@ -219,6 +220,7 @@ class Miner(aobject):
                                 f"\n\tCosine Similarity: {scores.cosine_similarity_score}"
                                 f"\n\tNormalised Cosine Similarity: {scores.normalised_cosine_similarity_score}"
                                 f"\n\tCubic Reward Score: {scores.cubic_reward_score}"
+                                f"\n\tHFL Score: {scores.icc_score}"
                             )
                             shared_scores_logged = True
 
@@ -227,6 +229,11 @@ class Miner(aobject):
                             f"Completion {idx + 1} scores:"
                             f"\n\tRaw Score: {scores.raw_score}"
                             f"\n\tNormalised Score: {scores.normalised_score}"
+                        )
+                    elif isinstance(criteria, TextCriteria) and criteria.score:
+                        logger.info(
+                            f"Completion {idx + 1} text feedback:"
+                            f"\n\tText Feedback Score: {criteria.score.tf_score}"
                         )
 
         except KeyError as e:

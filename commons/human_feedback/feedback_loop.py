@@ -114,7 +114,6 @@ class FeedbackLoop:
                 validator_task=text_criteria_task,
                 miner_responses=miner_responses,
                 previous_task_id=selected_task.task_id,
-                original_task_id=selected_task.task_id,
                 selected_completion_id=selected_completion_id,
             )
 
@@ -153,6 +152,7 @@ class FeedbackLoop:
                 expire_to=expire_to,
                 is_processed=True,
                 has_previous_task=False,
+                has_next_task=False,
                 task_types=[TaskTypeEnum.CODE_GENERATION],
             ):
                 for dendrite_response in tasks_batch:
@@ -527,7 +527,7 @@ class FeedbackLoop:
                     # Create SF task for miners
                     validator_task = await create_score_feedback_task(
                         validator=validator,
-                        tf_task_id=tf_task.id,
+                        tf_task=tf_task,
                         hfl_state=tf_task.HFLState,
                     )
 
@@ -759,7 +759,6 @@ class FeedbackLoop:
                         validator_task=text_criteria_task,
                         miner_responses=miner_responses,
                         previous_task_id=sf_task.id,
-                        original_task_id=hfl_state.original_task_id,
                         selected_completion_id=best_completion_id,
                     )
 

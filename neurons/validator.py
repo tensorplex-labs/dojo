@@ -43,6 +43,8 @@ from commons.utils import (
     initialise,
     set_expire_time,
 )
+from database.client import connect_db
+from database.mappers import map_miner_response_to_completion_responses
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
@@ -132,9 +134,10 @@ class Validator:
         self.synthetic_score: torch.Tensor = torch.zeros(
             len(self.metagraph.hotkeys), dtype=torch.float32
         )
-        self.hfl_scores = torch.Tensor = torch.zeros(
+        self.hfl_scores: torch.Tensor = torch.zeros(
             len(self.metagraph.hotkeys), dtype=torch.float32
         )
+
         self.check_registered()
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.load_state()
@@ -490,7 +493,7 @@ class Validator:
             scores_tensor=current_scores,
         )
 
-        logger.info(f"Incentives for {score_type} tasks: {new_incentives.tolist()}")
+        logger.info(f"Incentives for {score_type} tasks: {new_incentives}")
 
         # Update scores with lock protection
         async with self._scores_alock:
@@ -517,7 +520,7 @@ class Validator:
             else:  # score_type == "hfl"
                 self.hfl_scores = updated_scores
 
-        logger.info(f"Updated {score_type} scores: {updated_scores.tolist()}")
+        logger.info(f"Updated {score_type} scores: {updated_scores}")
 
     async def save_state(
         self,
@@ -544,6 +547,7 @@ class Validator:
 
     async def _load_state(self):
         try:
+            await connect_db()
             synthetic_scores, hfl_scores = await ScoreStorage.load()
             # At upgrade time, we'll have synthetic_scores from previous version but hfl_scores will be None
             # Handle this migration case explicitly with clear logging
@@ -922,9 +926,9 @@ class Validator:
                                         },
                                     },
                                 )
-                                if not sf_task:
+                                if not sf_task or not sf_task.previous_task_id:
                                     logger.warning(
-                                        f"Task {validator_task.task_id} not found"
+                                        f"Task {validator_task.task_id} or previous task not found"
                                     )
                                     continue
 
@@ -958,10 +962,25 @@ class Validator:
                                     )
                                     # update miner scores in database
                                     await ORM.update_hfl_final_scores(
-                                        sf_task.id,
+                                        sf_task,
                                         hotkey_to_sf_score,
                                         hotkey_to_tf_score,
                                     )
+                                    success = await self.send_scoring_result_to_miners(
+                                        sf_task.id
+                                    )
+                                    if not success:
+                                        logger.warning(
+                                            f"Failed to send scoring result to miners for task {sf_task.id}"
+                                        )
+
+                                    success = await self.send_scoring_result_to_miners(
+                                        sf_task.previous_task_id or ""
+                                    )
+                                    if not success:
+                                        logger.warning(
+                                            f"Failed to send scoring result to miners for task {sf_task.previous_task_id}"
+                                        )
 
                                     await self._decide_hfl_continuation(
                                         sf_task.id, hfl_state
@@ -994,6 +1013,7 @@ class Validator:
                                     logger.warning(
                                         f"HFL state for task {validator_task.task_id} is not ready for scoring yet. Status: {hfl_state.status}"
                                     )
+
                         except Exception as e:
                             logger.error(
                                 f"Error in scoring task {task.validator_task.task_id}: {e}"
@@ -1434,7 +1454,6 @@ class Validator:
             expire_to=expire_to,
             filter_empty_result=filter_empty_result,
             is_processed=False,
-            has_previous_task=False,
             task_types=task_types,
         ):
             # Yield task batch first before break if no more batches
@@ -1750,6 +1769,7 @@ class Validator:
             logger.error(
                 f"📝 Error occurred while calculating scores: {e}. Request ID: {task.validator_task.task_id}"
             )
+            logger.debug(f"Traceback: {traceback.format_exc()}")
             return task.validator_task.task_id, {}
 
         logger.info(
@@ -1919,3 +1939,90 @@ class Validator:
             logger.error(f"Error deciding HFL continuation for task {sf_task_id}: {e}")
             logger.debug(f"Traceback: {traceback.format_exc()}")
             return False  # Default to not continuing in case of error
+
+    async def send_scoring_result_to_miners(self, task_id: str) -> bool:
+        """
+        Prepare and send scoring results back to miners for a specific task.
+
+        Args:
+            task_id: The ID of the task to send results for
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            scoring_result, participating_hotkeys = await self._prepare_scoring_result(
+                task_id
+            )
+
+            if not scoring_result or not participating_hotkeys:
+                logger.warning(
+                    f"No scoring result or participating hotkeys for task {task_id}"
+                )
+                return False
+
+            await self.send_scores(
+                synapse=scoring_result,
+                hotkeys=participating_hotkeys,
+            )
+
+            logger.info(f"Sent score results back to miners for task {task_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error sending scoring results for task {task_id}: {e}")
+            return False
+
+    async def _prepare_scoring_result(
+        self, task_id: str
+    ) -> tuple[ScoringResult | None, list[str]]:
+        """
+        Prepare a ScoringResult for a specific task to send back to miners.
+
+        Args:
+            task_id: The ID of the task (TF or SF) to prepare results for
+
+        Returns:
+            Tuple containing (scoring_result, participating_hotkeys)
+        """
+        # Get the task with its completions and miner responses with their scores
+        task = await ORM.get_validator_task_by_id(
+            task_id,
+            include={
+                "completions": {
+                    "include": {"criterion": {"include": {"scores": True}}}
+                },
+                "miner_responses": True,
+            },
+        )
+
+        if not task or not task.miner_responses or not task.completions:
+            logger.warning(
+                f"Cannot prepare scoring result for task {task_id}: task or responses, or completions not found"
+            )
+            return None, []
+
+        # Create hotkey_to_completion_responses mapping
+        hotkey_to_completion_responses = {}
+        participating_hotkeys = []
+
+        for miner_response in task.miner_responses:
+            hotkey = miner_response.hotkey
+            participating_hotkeys.append(hotkey)
+
+            # Use the mapper to convert to CompletionResponse objects
+            completion_responses = map_miner_response_to_completion_responses(
+                miner_response=miner_response,
+                completions=task.completions,
+            )
+
+            # Add to mapping
+            if completion_responses:
+                hotkey_to_completion_responses[hotkey] = completion_responses
+
+        # Create scoring result
+        scoring_result = ScoringResult(
+            task_id=task_id,
+            hotkey_to_completion_responses=hotkey_to_completion_responses,
+        )
+
+        return scoring_result, participating_hotkeys
