@@ -1,87 +1,14 @@
 import argparse
-import inspect
-import logging
 import os
-import site
+import sys
 from functools import lru_cache
 from pathlib import Path
 
 import bittensor as bt
-from bittensor.utils.btlogging import logging as logger
 from dotenv import find_dotenv, load_dotenv
+from loguru import logger
 
 base_path = Path.cwd()
-
-
-def get_caller_info() -> str | None:
-    """jank ass call stack inspection to get same logging format as loguru"""
-    try:
-        stack = inspect.stack()
-        site_packages_path = site.getsitepackages()[0]
-        for i in range(len(stack) - 1, 1, -1):
-            filename = stack[i].filename
-            if os.path.basename(filename) == "loggingmachine.py":
-                # get our actual caller frame
-                prev_frame = stack[i + 1]
-                full_path = prev_frame.filename
-                # ensure `/Users/username/...` stripped
-                full_path = full_path.replace(site_packages_path, "")
-                module_path = (
-                    full_path.replace(os.getcwd() + os.sep, "")
-                    .replace(os.sep, ".")
-                    .lstrip(".")
-                )
-                module_name = module_path.rsplit(".", 1)[0]
-                function_name = prev_frame.function
-                line_no = prev_frame.lineno
-                caller_info = f"{module_name}:{function_name}:{line_no}".rjust(40)
-                return caller_info
-    except Exception:
-        return None
-
-
-class CustomFormatter(logging.Formatter):
-    def __init__(self, fmt=None, datefmt=None):
-        super().__init__(fmt=fmt, datefmt=datefmt)
-        # Always enable detailed formatting
-        self.trace = True
-
-    # Support Bittensor's method but ignore the setting
-    def set_trace(self, value):
-        # Always keep trace as True regardless of the value passed
-        self.trace = True
-
-    def format(self, record):
-        caller_info = get_caller_info()
-        if caller_info is None:
-            caller_info = f"{record.filename}:{record.funcName}:{record.lineno}".rjust(
-                40
-            )
-
-        module_name, function_name, line_no = caller_info.split(":")
-        record.name = module_name
-        record.filename = function_name
-        record.lineno = int(line_no)
-
-        return super().format(record)
-
-
-date_format = "%Y-%m-%d %H:%M:%S"
-custom_formatter = CustomFormatter(datefmt=date_format)
-
-
-def apply_custom_logging_format():
-    # Get Bittensor's logging machine
-    bt_logging_machine = bt.logging
-
-    # DIRECTLY SET TRACE MODE ON - to ensure we get the full log format
-    if hasattr(bt_logging_machine, "_stream_formatter"):
-        bt_logging_machine._stream_formatter.set_trace(True)
-
-    # Apply to bittensor logger handlers
-    bittensor_logger = logging.getLogger("bittensor")
-    for handler in bittensor_logger.handlers:
-        handler.setFormatter(custom_formatter)
 
 
 def check_config(config: bt.config):
@@ -104,25 +31,16 @@ def configure_logging(config: bt.config):
     Configures logging based on the provided configuration.
     """
 
-    try:
-        # Configure global logging state
-        bt.logging.set_config(config)
-        bt.logging.on()
+    level = "INFO"
+    if config.logging.trace:  # pyright: ignore[reportOptionalMemberAccess]
+        level = "TRACE"
+    elif config.logging.debug:  # pyright: ignore[reportOptionalMemberAccess]
+        level = "DEBUG"
+    elif config.logging.info:  # pyright: ignore[reportOptionalMemberAccess]
+        level = "INFO"
 
-        if config.logging.trace:  # pyright: ignore[reportOptionalMemberAccess]
-            bt.logging.set_trace(True)
-        elif config.logging.debug:  # pyright: ignore[reportOptionalMemberAccess]
-            bt.logging.set_debug(True)
-        elif config.logging.info:  # pyright: ignore[reportOptionalMemberAccess]
-            bt.logging.set_info(True)
-        else:
-            # Default to INFO level
-            bt.logging.set_info(True)
-
-    except Exception as e:
-        print(f"Failed to configure logging: {str(e)}")
-        # Fallback to INFO level
-        bt.logging.set_info(True)
+    logger.remove()
+    logger.add(sys.stdout, level=level)
 
     # Optionally enable file logging if `record_log` and `logging_dir` are provided
     if config.record_log and config.logging_dir:
@@ -131,8 +49,6 @@ def configure_logging(config: bt.config):
             os.makedirs(logging_dir, exist_ok=True)
 
         bt.logging.set_config(config)
-
-    apply_custom_logging_format()
 
 
 def add_args(parser):

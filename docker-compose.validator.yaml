@@ -14,12 +14,14 @@ networks:
     driver: bridge
   subtensor:
     name: subtensor
+  kami:
+    name: kami
 
 services:
-#  watchtower:
-#    extends:
-#      file: docker-compose.shared.yaml
-#      service: watchtower
+  #  watchtower:
+  #    extends:
+  #      file: docker-compose.shared.yaml
+  #      service: watchtower
 
   redis:
     extends:
@@ -38,6 +40,13 @@ services:
       - postgres-validator-volume:/var/lib/postgresql/data
     networks:
       - dojo-validator
+
+  kami:
+    extends:
+      file: docker-compose.shared.yaml
+      service: kami
+    networks:
+      - subtensor
 
   synthetic-api:
     container_name: synthetic-api
@@ -105,6 +114,7 @@ services:
     networks:
       - dojo-validator
       - subtensor
+      - kami
     depends_on:
       synthetic-api:
         condition: service_healthy

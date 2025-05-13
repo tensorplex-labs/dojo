@@ -4,7 +4,7 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.dataset.types import HumanFeedbackResponse
 from commons.exceptions import (
@@ -500,6 +500,7 @@ class ORM:
         validator_task: TaskSynapseObject,
         miner_responses: List[TaskSynapseObject],
         ground_truth: dict[str, int],
+        metadata: dict | None = None,
     ) -> ValidatorTask | None:
         """Saves a task, which consists of both the validator's request and the miners' responses.
 
@@ -517,7 +518,7 @@ class ORM:
 
                 # Map validator task using mapper function
                 validator_task_data = map_task_synapse_object_to_validator_task(
-                    validator_task
+                    validator_task, metadata
                 )
                 if not validator_task_data:
                     logger.error("Failed to map validator task")

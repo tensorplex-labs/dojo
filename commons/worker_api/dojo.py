@@ -5,7 +5,7 @@ import random
 from typing import Dict, List
 
 import httpx
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.exceptions import CreateTaskFailed
 from commons.utils import loaddotenv

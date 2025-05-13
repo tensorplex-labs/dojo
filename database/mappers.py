@@ -5,7 +5,7 @@ import bittensor as bt
 from commons.utils import datetime_to_iso8601_str, iso8601_str_to_datetime
 from database.prisma import Json
 from database.prisma.enums import CriteriaTypeEnum, TaskTypeEnum
-from database.prisma.models import Completion, HFLState, MinerResponse, ValidatorTask
+from database.prisma.models import Completion, MinerResponse, ValidatorTask
 from database.prisma.types import (
     CompletionCreateInput,
     CriterionCreateWithoutRelationsInput,
@@ -24,16 +24,7 @@ from dojo.protocol import (
     TextFeedbackScore,
 )
 
-from .types import HFLEvent, Metadata
-
-
-def _parse_hfl_events(hfl_state: HFLState) -> list[HFLEvent]:
-    """Parse HFL Events for a single iteration"""
-    # TODO: confirm if we will have lifecycle...
-    if not len(hfl_state.events):
-        return []
-    events = [HFLEvent.model_validate(event) for event in hfl_state.events]
-    return events
+from .types import Metadata
 
 
 # ---------------------------------------------------------------------------- #
@@ -41,12 +32,13 @@ def _parse_hfl_events(hfl_state: HFLState) -> list[HFLEvent]:
 # ---------------------------------------------------------------------------- #
 def map_task_synapse_object_to_validator_task(
     synapse: TaskSynapseObject,
-) -> ValidatorTaskCreateInput:
+    qa_metadata: dict | None = None,
+) -> ValidatorTaskCreateInput | None:
     """Maps a TaskSynapseObject to ValidatorTask database model input.
 
     Args:
         synapse (TaskSynapseObject): The task synapse object to map
-
+        qa_metadata (dict | None): metadata from synthetic-API QA generation.
     Returns:
         ValidatorTaskCreateInput: The database model input
     """
@@ -64,8 +56,11 @@ def map_task_synapse_object_to_validator_task(
         if synapse.ground_truth
         else []
     )
+    augment_type = qa_metadata["augment_type"] if qa_metadata else ""
     metadata = Metadata(
-        git_tag=get_latest_git_tag() or "unknown", commit_hash=get_commit_hash()
+        git_tag=get_latest_git_tag() or "",
+        commit_hash=get_commit_hash(),
+        augment_type=augment_type,
     )
 
     return ValidatorTaskCreateInput(

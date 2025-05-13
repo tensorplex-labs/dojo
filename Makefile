@@ -1,5 +1,6 @@
 PRECOMMIT_VERSION="3.7.1"
 UNAME := $(shell uname)
+ARCH := $(shell uname -m)
 .PHONY: hooks install install-dev install-test btcli validator-pull miner-pull miner-decentralised miner-centralised validator validator-up-deps miner-worker-api dojo-cli miner-decentralised-logs miner-centralised-logs validator-logs
 
 hooks:
@@ -104,10 +105,22 @@ worker-ui-logs:
 # ---------------------------------------------------------------------------- #
 
 subtensor-mainnet:
-	docker compose -f docker-compose.subtensor.yaml up -d mainnet-lite
+	@if [ "$(ARCH)" = "arm64" ] || [ "$(ARCH)" = "aarch64" ]; then \
+		docker compose -f docker-compose.subtensor.yaml up -d mainnet-lite-arm64; \
+	elif [ "$(ARCH)" = "amd64" ] || [ "$(ARCH)" = "x86_64" ]; then \
+		docker compose -f docker-compose.subtensor.yaml up -d mainnet-lite-amd64; \
+	else \
+	    echo "Unsupported architecture: $(ARCH)"; \
+	fi
 
 subtensor-testnet:
-	docker compose -f docker-compose.subtensor.yaml up -d testnet-lite
+	@if [ "$(ARCH)" = "arm64" ] || [ "$(ARCH)" = "aarch64" ]; then \
+		docker compose -f docker-compose.subtensor.yaml up -d testnet-lite-arm64; \
+	elif [ "$(ARCH)" = "amd64" ] || [ "$(ARCH)" = "x86_64" ]; then \
+		docker compose -f docker-compose.subtensor.yaml up -d testnet-lite-amd64; \
+	else \
+	    echo "Unsupported architecture: $(ARCH)"; \
+	fi
 
 # ---------------------------------------------------------------------------- #
 #                             WORKER PLATFORM                                  #

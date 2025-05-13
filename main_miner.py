@@ -1,8 +1,7 @@
 import asyncio
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
-from commons.block_subscriber import start_block_subscriber
 from commons.objects import ObjectManager
 from dojo.chain import get_async_subtensor
 from dojo.utils.config import source_dotenv
@@ -25,11 +24,12 @@ async def main():
     tasks = [
         asyncio.create_task(miner.log_miner_status()),
         asyncio.create_task(miner.run()),
-        asyncio.create_task(
-            start_block_subscriber(
-                callbacks=[miner.block_headers_callback], max_interval_sec=60
-            )
-        ),
+        # asyncio.create_task(
+        #     start_block_subscriber(
+        #         callbacks=[miner.block_headers_callback], max_interval_sec=60
+        #     )
+        # ),
+        asyncio.create_task(miner.block_updater()),
     ]
 
     await asyncio.gather(*tasks)

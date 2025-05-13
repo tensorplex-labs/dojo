@@ -1,20 +1,23 @@
 import asyncio
-import copy
+import os
 import time
 import traceback
 from datetime import datetime
 from typing import Dict, Tuple
 
 import bittensor
-from bittensor.core.metagraph import AsyncMetagraph
-from bittensor.utils.btlogging import logging as logger
+from bittensor.utils.networking import ip_to_int, ip_version
+from loguru import logger
 
-from commons.exceptions import FatalSubtensorConnectionError
+# from commons.exceptions import FatalSubtensorConnectionError
+from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
-from commons.utils import aget_effective_stake, aobject, get_epoch_time, serve_axon
-from commons.worker_api.dojo import DojoAPI
+from commons.utils import aget_effective_stake, aobject, get_epoch_time
+
+#                            serve_axon)
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
-from dojo.chain import get_async_subtensor, parse_block_headers
+from dojo.chain import parse_block_headers
+from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
 from dojo.protocol import (
     Heartbeat,
     ScoreCriteria,
@@ -29,12 +32,15 @@ from dojo.utils.config import get_config
 
 class Miner(aobject):
     _should_exit: bool = False
-    root_metagraph: AsyncMetagraph
-    subnet_metagraph: AsyncMetagraph
+    kami: Kami
 
     async def __init__(self):
+        self._last_block = None
         self.config = ObjectManager.get_config()
         logger.info(self.config)
+
+        self.kami = Kami()
+        logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
         self.wallet = bittensor.wallet(config=self.config)
@@ -46,7 +52,10 @@ class Miner(aobject):
         await self.init_metagraphs()
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
-        self.uid = self.subnet_metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+        self.uid: int = self.subnet_metagraph.hotkeys.index(
+            self.wallet.hotkey.ss58_address
+        )
+
         logger.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
         )
@@ -83,24 +92,17 @@ class Miner(aobject):
 
     async def init_metagraphs(self):
         logger.info("Performing async init for miner")
-        config = ObjectManager.get_config()
-        subtensor = await get_async_subtensor()
-        if not subtensor:
-            message = "Failed to connect to async subtensor during initialisation of validator"
-            logger.error(message)
-            raise FatalSubtensorConnectionError(message)
 
-        self.block = await subtensor.get_current_block()
+        self.block = await self.kami.get_current_block()
         # The metagraph holds the state of the network, letting us know about other validators and miners.
-        self.subnet_metagraph = await subtensor.metagraph(
-            config.netuid,  # type: ignore
-            block=self.block,
-        )
-        self.root_metagraph = await subtensor.metagraph(0, block=self.block)
-        self.subtensor = subtensor
+        self.subnet_metagraph: SubnetMetagraph = await self.kami.get_metagraph(
+            self.config.netuid
+        )  # type: ignore
+        self.root_metagraph: SubnetMetagraph = await self.kami.get_metagraph(0)
+
         # Check if the miner is registered on the Bittensor network before proceeding further.
         await self.check_registered()
-        logger.info(f"Subtensor initialized, {self.subtensor}")
+        logger.info(f"Kami initialized, {self.kami.url}")
         logger.info(f"Root metagraph initialized, {self.root_metagraph}")
         logger.info(f"Subnet metagraph initialized, {self.subnet_metagraph}")
 
@@ -134,12 +136,29 @@ class Miner(aobject):
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
         logger.info(f"Serving miner axon {self.axon} with netuid: {self.config.netuid}")
-        serve_success = await serve_axon(self.subtensor, self.axon, self.config)
-        if serve_success:
-            logger.success("Successfully served axon for miner!")
+
+        axon_payload = ServeAxonPayload(
+            netuid=self.config.netuid,
+            port=self.axon.external_port,
+            ip=ip_to_int(self.axon.external_ip),
+            ipType=ip_version(self.axon.external_ip),
+            protocol=ip_version(self.axon.external_ip),
+            version=1,
+        )
+
+        # serve_success = await serve_axon(self.subtensor, self.axon, self.config)
+
+        if not await self.check_if_axon_served(axon_payload):
+            serve_success = await self.kami.serve_axon(axon_payload)
+            if serve_success.get("statusCode", None) == 200:
+                logger.success("Successfully served axon for miner!")
+            else:
+                logger.error(
+                    f"Failed to serve axon for miner, exiting with error message: {serve_success.get('message')}"
+                )
+                exit()
         else:
-            logger.error("Failed to serve axon for miner, exiting.")
-            exit()
+            logger.info("Axon already served, no need to serve again.")
 
         # Start  starts the miner's axon, making it active on the network.
         self.axon.start()
@@ -171,6 +190,7 @@ class Miner(aobject):
 
     def _cleanup(self):
         self.axon.stop()
+        self.kami.close()
 
     async def ack_heartbeat(self, synapse: Heartbeat) -> Heartbeat:
         caller_hotkey = (
@@ -391,9 +411,7 @@ class Miner(aobject):
                 f"Ignored minimum validator stake requirement of {VALIDATOR_MIN_STAKE}",
             )
 
-        effective_stake = await aget_effective_stake(
-            caller_hotkey, self.root_metagraph, self.subnet_metagraph
-        )
+        effective_stake = aget_effective_stake(caller_hotkey, self.subnet_metagraph)
         if effective_stake < float(VALIDATOR_MIN_STAKE):
             message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"
             logger.warning(message)
@@ -417,15 +435,15 @@ class Miner(aobject):
 
     async def resync_metagraph(self):
         # Copies state of metagraph before syncing.
-        previous_metagraph = copy.deepcopy(self.subnet_metagraph)
+        # previous_metagraph = copy.deepcopy(self.subnet_metagraph)
 
         # Sync the metagraph.
-        await self.subnet_metagraph.sync(subtensor=self.subtensor)
-        await self.root_metagraph.sync(subtensor=self.subtensor)
+        self.subnet_metagraph = await self.kami.get_metagraph(self.config.netuid)
+        self.root_metagraph = await self.kami.get_metagraph(0)
 
         # Check if the metagraph axon info has changed.
-        if previous_metagraph.axons == self.subnet_metagraph.axons:
-            return
+        # if previous_metagraph.axons == self.subnet_metagraph.axons:
+        #     return
 
         logger.info("Metagraph updated")
 
@@ -445,16 +463,13 @@ class Miner(aobject):
         if self.should_sync_metagraph():
             await self.resync_metagraph()
 
-    async def check_registered(self, subtensor: bittensor.AsyncSubtensor | None = None):
-        # Checkfor registration.
-        if subtensor is None:
-            subtensor = self.subtensor
-
-        if not await subtensor.is_hotkey_registered(
-            netuid=self.config.netuid,
-            hotkey_ss58=self.wallet.hotkey.ss58_address,
-            block=self.block,
-        ):
+    async def check_registered(self):
+        is_member = await self.kami.is_hotkey_registered(
+            netuid=int(self.config.netuid),  # type: ignore
+            hotkey=str(self.wallet.hotkey.ss58_address),
+            # block=int(self.block),
+        )
+        if not is_member:
             logger.error(
                 f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli s register` before trying again"
@@ -469,16 +484,55 @@ class Miner(aobject):
         # sync every 5 blocks
         return self.block % 5 == 0
 
+    async def check_if_axon_served(self, axon_payload: ServeAxonPayload) -> bool:
+        """
+        Check if the axon is served successfully.
+        """
+        hotkey = self.wallet.hotkey.ss58_address
+        uid = self.subnet_metagraph.hotkeys.index(hotkey)
+        current_axon: AxonInfo = self.subnet_metagraph.axons[uid]
+        current_axon_ip: str = current_axon.ip
+        current_axon_port = current_axon.port
+
+        if not current_axon_ip:
+            logger.info(
+                f"Axon not served for hotkey {hotkey} on netuid {self.config.netuid}"
+            )
+            return False
+
+        if (
+            ip_to_int(current_axon_ip) == axon_payload.ip
+            and axon_payload.port == current_axon_port
+        ):
+            return True
+        return False
+
     @property
     def block(self):
-        return self._block
+        return self._last_block
 
     @block.setter
     def block(self, value: int):
-        self._block = value
+        self._last_block = value
 
     async def block_headers_callback(self, block: dict):
         logger.trace(f"Received block headers{block}")
         block_header = parse_block_headers(block)
         block_number = block_header.number.to_int()
         self.block = block_number
+
+    async def block_updater(self):
+        while True:
+            block = await self.kami.get_current_block()
+            if block and block != self.block:
+                self._last_block = block
+                logger.debug(f"Updated block to {self._last_block}")
+
+            if os.getenv("FAST_MODE"):
+                continue
+
+            logger.info(
+                f"Updated block to {self._last_block}"
+            )  # log new block if non fast_mode
+
+            await asyncio.sleep(12)

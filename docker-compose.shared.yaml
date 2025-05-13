@@ -5,6 +5,8 @@ x-logging: &default-logging
 networks:
   subtensor:
     name: subtensor
+  kami:
+    name: kami
 
 services:
   btcli:
@@ -70,6 +72,19 @@ services:
       timeout: 5s
       retries: 5
     logging: *default-logging
+
+  kami:
+    container_name: kami
+    image: ghcr.io/tensorplex-labs/kami:main
+    env_file:
+      - .env
+    expose:
+      - $KAMI_PORT
+    logging: *default-logging
+    volumes:
+      - ${BITTENSOR_DIR}:${BITTENSOR_DIR}
+    networks:
+      - subtensor
 
   watchtower:
     container_name: watchtower

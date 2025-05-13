@@ -9,7 +9,7 @@ from typing import AsyncGenerator
 import aiofiles
 import bittensor as bt
 import httpx
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from commons.objects import ObjectManager

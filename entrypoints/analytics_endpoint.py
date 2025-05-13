@@ -11,9 +11,9 @@ from datetime import datetime
 
 import aioboto3
 import uvicorn
-from bittensor.utils.btlogging import logging as logger
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
+from loguru import logger
 from starlette.datastructures import State
 
 from commons.utils import check_stake, verify_hotkey_in_metagraph, verify_signature
