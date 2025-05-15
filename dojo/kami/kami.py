@@ -8,6 +8,7 @@ from loguru import logger
 
 from dojo.kami.types import (
     AxonInfo,
+    CommitRevealPayload,
     ServeAxonPayload,
     SetWeightsPayload,
     SubnetHyperparameters,
@@ -256,15 +257,23 @@ class Kami:
                 subnet_reveal_period_epochs=reveal_period,
             )
 
-            print(f"Commit for reveal: {commit_for_reveal}")
+            print(f"Commit for reveal: {commit_for_reveal.hex()}")  # type: ignore
             print(f"Reveal round: {reveal_round}")
 
-            cr_payload: dict[str, int | str] = {
-                "netuid": payload.netuid,
-                "commit": commit_for_reveal.hex(),  # type: ignore
-                "revealRound": reveal_round,
-            }
+            if not commit_for_reveal or not reveal_round:
+                raise ValueError(
+                    "Failed to generate commit for reveal. Ensure that tempo and reveal round are set correctly."
+                )
 
-            return await self.post("chain/set-commit-reveal-weights", data=cr_payload)
+            hex_commit: str = commit_for_reveal.hex()  # type: ignore
+            cr_payload: CommitRevealPayload = CommitRevealPayload(
+                netuid=payload.netuid,
+                commit=hex_commit,
+                revealRound=reveal_round,
+            )
 
-        return await self.post("chain/set-weights", data=payload.model_dump())
+            return await self.post(
+                "chain/set-commit-reveal-weights",
+                data=cr_payload.model_dump(),  # type: ignore TODO: Fix type ignore
+            )
+        return await self.post("chain/set-weights", data=payload.model_dump())  # type: ignore TODO: Fix type ignore
