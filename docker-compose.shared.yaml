@@ -76,6 +76,8 @@ services:
   kami:
     container_name: kami
     image: ghcr.io/tensorplex-labs/kami:main
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     env_file:
       - .env
     expose:

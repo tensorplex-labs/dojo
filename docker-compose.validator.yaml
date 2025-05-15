@@ -96,7 +96,7 @@ services:
     restart: on-failure
     labels:
       com.centurylinklabs.watchtower.enable: "true"
-      com.centurylinklabs.watchtower.depends-on: "synthetic-api,postgres"
+      com.centurylinklabs.watchtower.depends-on: "synthetic-api,postgres,kami"
     env_file:
       - .env
     volumes:
