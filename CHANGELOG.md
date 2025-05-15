@@ -1,3 +1,9 @@
+## [1.12.0](https://github.com/tensorplex-labs/dojo/compare/v1.11.2...v1.12.0) (2025-05-14)
+
+### Features
+
+* kami ([#185](https://github.com/tensorplex-labs/dojo/issues/185)) ([eccac9e](https://github.com/tensorplex-labs/dojo/commit/eccac9e7ffe52cc4b97610cc31da2f5e0d0c6e23))
+
 ## [1.11.2](https://github.com/tensorplex-labs/dojo/compare/v1.11.1...v1.11.2) (2025-04-29)
 
 ### Bug Fixes

@@ -14,7 +14,9 @@ class SubnetHyperparameters(BaseModel):
     maxDifficulty: int
     difficulty: int
     weightsVersion: int
-    weightsRateLimit: int
+    weightsRateLimit: (
+        int | str
+    )  # TODO: fix on kami side for netuid 0 to return max u64 integer
     adjustmentInterval: int
     activityCutoff: int
     registrationAllowed: bool
@@ -66,8 +68,8 @@ class SetWeightsPayload(BaseModel):
 
 class CommitRevealPayload(BaseModel):
     netuid: int
-    commit: int | bytes
-    reveal_round: int
+    commit: str
+    revealRound: int
 
 
 class MovingPrice(BaseModel):
@@ -135,7 +137,9 @@ class SubnetMetagraph(BaseModel):
     # # TODO: not sure if this field is present
     # maxAllowedWeights: int
     weightsVersion: int
-    weightsRateLimit: int
+    weightsRateLimit: (
+        int | str
+    )  # TODO: fix on kami side for netuid 0 to return max u64 integer
     activityCutoff: int
     maxValidators: int
     numUids: int

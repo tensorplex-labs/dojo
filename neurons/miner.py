@@ -179,18 +179,18 @@ class Miner(aobject):
         # If someone intentionally stops the miner, it'll safely terminate operations.
         except KeyboardInterrupt:
             logger.success("Miner killed by keyboard interrupt.")
-            self._cleanup()
+            await self._cleanup()
             exit()
 
         # In case of unforeseen errors, the miner will log the error and continue operations.
         except Exception:
             logger.error(traceback.format_exc())
         finally:
-            self._cleanup()
+            await self._cleanup()
 
-    def _cleanup(self):
+    async def _cleanup(self):
         self.axon.stop()
-        self.kami.close()
+        await self.kami.close()
 
     async def ack_heartbeat(self, synapse: Heartbeat) -> Heartbeat:
         caller_hotkey = (
@@ -474,7 +474,7 @@ class Miner(aobject):
                 f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli s register` before trying again"
             )
-            self._cleanup()
+            await self._cleanup()
             exit(1)
 
     def should_sync_metagraph(self):

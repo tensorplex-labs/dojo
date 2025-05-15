@@ -8,6 +8,7 @@ from loguru import logger
 from commons.objects import ObjectManager
 from dojo.kami.types import (
     AxonInfo,
+    CommitRevealPayload,
     ServeAxonPayload,
     SetWeightsPayload,
     SubnetHyperparameters,
@@ -21,13 +22,6 @@ class Kami:
     """
 
     def __init__(self):
-        # kami_host = os.getenv("KAMI_HOST")
-        # kami_port = os.getenv("KAMI_PORT")
-        # if kami_host is None:
-        #     raise ValueError("Require KAMI_HOST to be set in environment variables")
-        # if kami_port is None:
-        #     raise ValueError("Require KAMI_PORT to be set in environment variables")
-
         self.config = ObjectManager.get_config()
         if self.config.kami is None:
             raise ValueError("Require kami to be set in environment variables")
@@ -240,7 +234,9 @@ class Kami:
         Returns:
             Dict[str, Any]: The JSON response from the API.
         """
-        get_hpams = await self.get_subnet_hyperparameters(payload.netuid)
+        get_hpams: SubnetHyperparameters = await self.get_subnet_hyperparameters(
+            payload.netuid
+        )
         if get_hpams.commitRevealWeightsEnabled:
             tempo = get_hpams.tempo
             reveal_period = get_hpams.commitRevealPeriod
@@ -264,15 +260,23 @@ class Kami:
                 subnet_reveal_period_epochs=reveal_period,
             )
 
-            print(f"Commit for reveal: {commit_for_reveal}")
+            print(f"Commit for reveal: {commit_for_reveal.hex()}")  # type: ignore
             print(f"Reveal round: {reveal_round}")
 
-            cr_payload: dict[str, int | str] = {
-                "netuid": payload.netuid,
-                "commit": commit_for_reveal.hex(),  # type: ignore
-                "reveal_round": reveal_round,
-            }
+            if not commit_for_reveal or not reveal_round:
+                raise ValueError(
+                    "Failed to generate commit for reveal. Ensure that tempo and reveal round are set correctly."
+                )
 
-            return await self.post("chain/set-commit-reveal-weights", data=cr_payload)
+            hex_commit: str = commit_for_reveal.hex()  # type: ignore
+            cr_payload: CommitRevealPayload = CommitRevealPayload(
+                netuid=payload.netuid,
+                commit=hex_commit,
+                revealRound=reveal_round,
+            )
 
-        return await self.post("chain/set-weights", data=payload.model_dump())
+            return await self.post(
+                "chain/set-commit-reveal-weights",
+                data=cr_payload.model_dump(),  # type: ignore TODO: Fix type ignore
+            )
+        return await self.post("chain/set-weights", data=payload.model_dump())  # type: ignore TODO: Fix type ignore

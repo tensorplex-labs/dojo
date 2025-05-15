@@ -122,9 +122,7 @@ class Validator(aobject):
         # The wallet holds the cryptographic key pairs for the miner.
         self.wallet = bt.wallet(config=self.config)
         logger.info(f"Wallet: {self.wallet}")
-        self.metagraph: SubnetMetagraph = await self.kami.get_metagraph(
-            self.config.netuid
-        )
+        self.metagraph = await self.kami.get_metagraph(self.config.netuid)
         logger.info(f"Metagraph Loaded: {self.metagraph}")
 
         # Save validator hotkey
@@ -394,22 +392,21 @@ class Validator(aobject):
         )
 
         # Zero out all hotkeys that have been replaced.
-        for uid, hotkey in enumerate(previous_metagraph.hotkeys):
-            if hotkey != self.metagraph.hotkeys[uid]:
-                # hotkey has been replaced
-                self.synthetic_score[uid] = 0
-                self.hfl_scores[uid] = 0
+        for uid, hotkey in enumerate(previous_hotkeys):
+            if hotkey != current_hotkeys[uid]:
+                self.synthetic_score[uid] = 0  # hotkey has been replaced
+                self.hfl_scores[uid] = 0  # hotkey has been replaced
 
         # Check to see if the metagraph has changed size.
         # If so, we need to add new hotkeys and moving averages.
         if len(previous_hotkeys) < len(current_hotkeys):
             # Update the size of the moving average scores.
-            new_scores = torch.zeros(len(self.metagraph.hotkeys))
-            min_len = min(len(previous_metagraph.hotkeys), len(self.synthetic_score))
+            new_scores = torch.zeros(len(current_hotkeys))
+            min_len = min(len(previous_hotkeys), len(self.synthetic_score))
             new_scores[:min_len] = self.synthetic_score[:min_len]
 
-            new_hfl_scores = torch.zeros(len(self.metagraph.hotkeys))
-            min_len = min(len(previous_metagraph.hotkeys), len(self.hfl_scores))
+            new_hfl_scores = torch.zeros(len(current_hotkeys))
+            min_len = min(len(previous_hotkeys), len(self.hfl_scores))
             new_hfl_scores[:min_len] = self.hfl_scores[:min_len]
             async with self._scores_alock:
                 self.synthetic_score = torch.clamp(new_scores, min=0.0)
@@ -1832,6 +1829,12 @@ class Validator(aobject):
         )
 
         return task.validator_task.task_id, hotkey_to_scores
+
+    # async def block_headers_callback(self, block: dict):
+    #     logger.trace(f"Received block headers {block}")
+    #     block_header = parse_block_headers(block)
+    #     block_number = block_header.number.to_int()
+    #     self._last_block = block_number
 
     async def block_updater(self):
         while True:
