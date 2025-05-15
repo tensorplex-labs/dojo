@@ -262,7 +262,7 @@ class Kami:
             cr_payload: dict[str, int | str] = {
                 "netuid": payload.netuid,
                 "commit": commit_for_reveal.hex(),  # type: ignore
-                "reveal_round": reveal_round,
+                "revealRound": reveal_round,
             }
 
             return await self.post("chain/set-commit-reveal-weights", data=cr_payload)
