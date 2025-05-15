@@ -27,9 +27,7 @@ from dojo.protocol import AnalyticsData, AnalyticsPayload
 VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
 
 
-async def _get_all_miner_hotkeys(
-    subnet_metagraph: SubnetMetagraph, root_metagraph: SubnetMetagraph
-) -> List[str]:
+async def _get_all_miner_hotkeys(subnet_metagraph: SubnetMetagraph) -> List[str]:
     """
     returns a list of all metagraph hotkeys with stake less than VALIDATOR_MIN_STAKE
     """
@@ -216,8 +214,7 @@ async def run_analytics_upload(
         validator_hotkey = wallet.hotkey.ss58_address
 
         subnet_metagraph = await kami.get_metagraph(config.netuid)  # type: ignore
-        root_metagraph = await kami.get_metagraph(0)
-        all_miners = await _get_all_miner_hotkeys(subnet_metagraph, root_metagraph)
+        all_miners = await _get_all_miner_hotkeys(subnet_metagraph)
 
         # 1. collect processed tasks from db
         anal_data: AnalyticsPayload = await _get_task_data(
