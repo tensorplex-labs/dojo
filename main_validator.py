@@ -72,6 +72,9 @@ app.add_middleware(LimitContentLengthMiddleware)
 
 async def main():
     validator = await ObjectManager.get_validator()
+    if not validator:
+        raise RuntimeError("Validator not found")
+
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
@@ -83,9 +86,9 @@ async def main():
     server = uvicorn.Server(config)
     running_tasks = [
         asyncio.create_task(validator.log_validator_status()),
-        asyncio.create_task(validator.run()),
-        asyncio.create_task(validator.update_tasks_polling()),
-        asyncio.create_task(validator.score_and_send_feedback()),
+        # asyncio.create_task(validator.run()),
+        # asyncio.create_task(validator.update_tasks_polling()),
+        # asyncio.create_task(validator.score_and_send_feedback()),
         asyncio.create_task(validator.send_heartbeats()),
         # asyncio.create_task(
         #     start_block_subscriber(
@@ -94,11 +97,11 @@ async def main():
         # ),
         asyncio.create_task(validator.block_updater()),
         asyncio.create_task(validator.cleanup_resources()),
-        asyncio.create_task(feedback_loop.start_feedback_loop(validator)),
-        asyncio.create_task(feedback_loop.update_tf_task_results(validator)),
-        asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
-        asyncio.create_task(feedback_loop.update_sf_task_results(validator)),
-        asyncio.create_task(feedback_loop.create_next_tf_tasks(validator)),
+        # asyncio.create_task(feedback_loop.start_feedback_loop(validator)),
+        # asyncio.create_task(feedback_loop.update_tf_task_results(validator)),
+        # asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
+        # asyncio.create_task(feedback_loop.update_sf_task_results(validator)),
+        # asyncio.create_task(feedback_loop.create_next_tf_tasks(validator)),
     ]
     # set a callback on validator.run() to check for fatal errors.
     running_tasks[1].add_done_callback(_check_fatal_errors)

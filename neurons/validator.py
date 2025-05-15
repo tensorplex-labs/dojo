@@ -122,7 +122,9 @@ class Validator(aobject):
         # The wallet holds the cryptographic key pairs for the miner.
         self.wallet = bt.wallet(config=self.config)
         logger.info(f"Wallet: {self.wallet}")
-        self.metagraph = await self.kami.get_metagraph(self.config.netuid)
+        self.metagraph: SubnetMetagraph = await self.kami.get_metagraph(
+            self.config.netuid
+        )
         logger.info(f"Metagraph Loaded: {self.metagraph}")
 
         # Save validator hotkey
@@ -219,7 +221,7 @@ class Validator(aobject):
                         except Exception as e:
                             logger.error(f"Error obfuscating {file.filename}: {e}")
 
-    async def get_active_miner_uids(self):
+    async def get_active_miner_uids(self) -> list[int]:
         async with self._uids_alock:
             return sorted(list(self._active_miner_uids))
 
@@ -741,7 +743,7 @@ class Validator(aobject):
 
                 for i in range(0, len(axons), batch_size):
                     batch = axons[i : i + batch_size]
-                    responses: List[Heartbeat] = await self.dendrite.forward(
+                    responses = await self.dendrite.forward(
                         axons=batch, synapse=Heartbeat(), deserialize=False, timeout=12
                     )
                     # Process batch responses
@@ -791,10 +793,10 @@ class Validator(aobject):
 
                     if synthetic_task:
                         await self.send_request(
-                            synthetic_task,
-                            ground_truth,
-                            obfuscated_model_to_model,
-                            synthetic_metadata,
+                            synapse=synthetic_task,
+                            ground_truth=ground_truth,
+                            obfuscated_model_to_model=obfuscated_model_to_model,
+                            synthetic_metadata=synthetic_metadata,
                         )
 
                 self.step += 1
@@ -1226,6 +1228,10 @@ class Validator(aobject):
 
         start = get_epoch_time()
         sel_miner_uids = await self.get_active_miner_uids()
+
+        # TODO remove
+        logger.info(f"Active miners: {sel_miner_uids}")
+        logger.info(f"Active miners set: {self._active_miner_uids}")
 
         # If subset_size specified, randomly select that many miners
         if subset_size is not None:
@@ -1869,7 +1875,7 @@ class Validator(aobject):
 
         return miner_uids
 
-    async def _retrieve_axons(self, uids: list[int] = []) -> List[bt.AxonInfo]:
+    async def _retrieve_axons(self, uids: list[int] = []) -> list[bt.AxonInfo]:
         # Return miner UIDs based on stakes
         logger.debug(f"Retrieving axons for uids: {uids}")
 

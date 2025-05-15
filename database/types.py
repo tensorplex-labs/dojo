@@ -16,3 +16,4 @@ class HFLEvent(BaseModel):
 class Metadata(BaseModel):
     git_tag: str
     commit_hash: str
+    augment_type: str

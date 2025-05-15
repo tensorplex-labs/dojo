@@ -10,11 +10,11 @@ from bittensor.utils.networking import ip_to_int, ip_version
 from loguru import logger
 
 # from commons.exceptions import FatalSubtensorConnectionError
-from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject, get_epoch_time
 
 #                            serve_axon)
+from commons.worker_api.dojo import DojoAPI
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import parse_block_headers
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph

@@ -1,11 +1,11 @@
 import json
-import os
 from typing import Any, Dict
 
 import aiohttp
 from bittensor_commit_reveal import get_encrypted_commit  # type: ignore
 from loguru import logger
 
+from commons.objects import ObjectManager
 from dojo.kami.types import (
     AxonInfo,
     ServeAxonPayload,
@@ -21,14 +21,22 @@ class Kami:
     """
 
     def __init__(self):
-        kami_host = os.getenv("KAMI_HOST")
-        kami_port = os.getenv("KAMI_PORT")
-        if kami_host is None:
+        # kami_host = os.getenv("KAMI_HOST")
+        # kami_port = os.getenv("KAMI_PORT")
+        # if kami_host is None:
+        #     raise ValueError("Require KAMI_HOST to be set in environment variables")
+        # if kami_port is None:
+        #     raise ValueError("Require KAMI_PORT to be set in environment variables")
+
+        self.config = ObjectManager.get_config()
+        if self.config.kami is None:
+            raise ValueError("Require kami to be set in environment variables")
+        if self.config.kami.host is None:
             raise ValueError("Require KAMI_HOST to be set in environment variables")
-        if kami_port is None:
+        if self.config.kami.port is None:
             raise ValueError("Require KAMI_PORT to be set in environment variables")
 
-        self.url = f"http://{kami_host}:{kami_port}"
+        self.url = f"http://{self.config.kami.host}:{self.config.kami.port}"
         self.session: aiohttp.ClientSession | None = None
         self.headers = {
             "Content-Type": "application/json",
