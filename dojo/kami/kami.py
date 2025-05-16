@@ -3,13 +3,17 @@ import os
 from typing import Any, Dict
 
 import aiohttp
-# from bittensor_commit_reveal import get_encrypted_commit  # type: ignore
 from bittensor_drand import get_encrypted_commit  # type: ignore
 from loguru import logger
 
-from dojo.kami.types import (AxonInfo, CommitRevealPayload, ServeAxonPayload,
-                             SetWeightsPayload, SubnetHyperparameters,
-                             SubnetMetagraph)
+from dojo.kami.types import (
+    AxonInfo,
+    CommitRevealPayload,
+    ServeAxonPayload,
+    SetWeightsPayload,
+    SubnetHyperparameters,
+    SubnetMetagraph,
+)
 
 
 class Kami:
