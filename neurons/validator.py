@@ -19,50 +19,27 @@ from torch.nn import functional as F
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
-from commons.exceptions import (
-    EmptyScores,
-    FatalSyntheticGenerationError,
-    InvalidMinerResponse,
-    NoNewExpiredTasksYet,
-    SetWeightsFailed,
-    SyntheticGenerationError,
-)
+from commons.exceptions import (EmptyScores, FatalSyntheticGenerationError,
+                                InvalidMinerResponse, NoNewExpiredTasksYet,
+                                SetWeightsFailed, SyntheticGenerationError)
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.score_storage import ScoreStorage
 from commons.scoring import Scoring
-from commons.utils import (
-    _terminal_plot,
-    aget_effective_stake,
-    aobject,
-    datetime_as_utc,
-    get_epoch_time,
-    get_new_uuid,
-    set_expire_time,
-)
+from commons.utils import (_terminal_plot, aget_effective_stake, aobject,
+                           datetime_as_utc, get_epoch_time, get_new_uuid,
+                           set_expire_time)
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
-from dojo.protocol import (
-    CompletionResponse,
-    CriteriaType,
-    CriteriaTypeEnum,
-    DendriteQueryResponse,
-    Heartbeat,
-    ScoreCriteria,
-    ScoringResult,
-    SyntheticQA,
-    TaskResult,
-    TaskResultRequest,
-    TaskSynapseObject,
-    TaskTypeEnum,
-)
+from dojo.protocol import (CompletionResponse, CriteriaType, CriteriaTypeEnum,
+                           DendriteQueryResponse, Heartbeat, ScoreCriteria,
+                           ScoringResult, SyntheticQA, TaskResult,
+                           TaskResultRequest, TaskSynapseObject, TaskTypeEnum)
 from dojo.utils.config import get_config
 from dojo.utils.uids import is_miner
-from dojo.utils.weight_utils import (
-    aprocess_weights_for_netuid,
-    convert_weights_and_uids_for_emit,
-)
+from dojo.utils.weight_utils import (aprocess_weights_for_netuid,
+                                     convert_weights_and_uids_for_emit)
 from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
@@ -252,8 +229,8 @@ class Validator(aobject):
             safe_normalized_weights.numpy(),
         )
 
-        logger.info(f"final weights:\n{final_weights}")
-        logger.info(f"final uids:\n{final_uids}")
+        logger.info(f"Final weights:\n{final_weights}")
+        logger.info(f"Final uids:\n{final_uids}")
 
         _terminal_plot(
             f"final weights, block: {self.block}",
@@ -310,12 +287,13 @@ class Validator(aobject):
                 # except asyncio.TimeoutError:
                 #     pass
 
-                logger.info(f"Converting weights and uids for emit: {uids}, {weights}")
-
                 uids, weights = convert_weights_and_uids_for_emit(
                     uids=uids,
                     weights=weights,
                 )
+
+                logger.info(f"Converted uids: {uids}")
+                logger.info(f"Converted weights: {weights}")
 
                 payload = SetWeightsPayload(
                     netuid=self.config.netuid,  # type: ignore
@@ -429,9 +407,9 @@ class Validator(aobject):
             _terminal_plot(
                 f"scores before update, block: {self.block}", self.scores.numpy()
             )
-            assert (
-                existing_scores.shape == rewards.shape
-            ), "Scores and rewards must be the same length when calculating moving average"
+            assert existing_scores.shape == rewards.shape, (
+                "Scores and rewards must be the same length when calculating moving average"
+            )
 
             self.scores = alpha * rewards + (1 - alpha) * existing_scores
             self.scores = torch.clamp(self.scores, min=0.0)
