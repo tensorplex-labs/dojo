@@ -68,7 +68,7 @@ class SetWeightsPayload(BaseModel):
 
 class CommitRevealPayload(BaseModel):
     netuid: int
-    commit: str
+    commit: bytes
     revealRound: int
 
 

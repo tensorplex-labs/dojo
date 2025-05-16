@@ -261,10 +261,9 @@ class Kami:
                     "Failed to generate commit for reveal. Ensure that tempo and reveal round are set correctly."
                 )
 
-            hex_commit: str = commit_for_reveal.hex()  # type: ignore
             cr_payload: CommitRevealPayload = CommitRevealPayload(
                 netuid=payload.netuid,
-                commit=hex_commit,
+                commit=commit_for_reveal,
                 revealRound=reveal_round,
             )
 
