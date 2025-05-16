@@ -263,7 +263,7 @@ class Kami:
 
             cr_payload: CommitRevealPayload = CommitRevealPayload(
                 netuid=payload.netuid,
-                commit=commit_for_reveal,
+                commit=commit_for_reveal.hex(),
                 revealRound=reveal_round,
             )
 
