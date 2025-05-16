@@ -3,7 +3,7 @@ import os
 from typing import Any, Dict
 
 import aiohttp
-from bittensor_commit_reveal import get_encrypted_commit  # type: ignore
+from bittensor_drand import get_encrypted_commit  # type: ignore
 from loguru import logger
 
 from dojo.kami.types import (
@@ -242,7 +242,7 @@ class Kami:
                     "Tempo and reveal round must be greater than 0 for commit reveal weights."
                 )
 
-            print(
+            logger.info(
                 f"Commit reveal weights enabled: tempo: {tempo}, reveal_period: {reveal_period}"
             )
 
@@ -257,18 +257,17 @@ class Kami:
                 subnet_reveal_period_epochs=reveal_period,
             )
 
-            print(f"Commit for reveal: {commit_for_reveal.hex()}")  # type: ignore
-            print(f"Reveal round: {reveal_round}")
+            logger.info(f"Commit for reveal: {commit_for_reveal.hex()}")  # type: ignore
+            logger.info(f"Reveal round: {reveal_round}")
 
             if not commit_for_reveal or not reveal_round:
                 raise ValueError(
                     "Failed to generate commit for reveal. Ensure that tempo and reveal round are set correctly."
                 )
 
-            hex_commit: str = commit_for_reveal.hex()  # type: ignore
             cr_payload: CommitRevealPayload = CommitRevealPayload(
                 netuid=payload.netuid,
-                commit=hex_commit,
+                commit=commit_for_reveal.hex(),
                 revealRound=reveal_round,
             )
 

@@ -1,3 +1,9 @@
+## [1.12.1](https://github.com/tensorplex-labs/dojo/compare/v1.12.0...v1.12.1) (2025-05-15)
+
+### Bug Fixes
+
+* commit reveal param, enable watchtower ([#189](https://github.com/tensorplex-labs/dojo/issues/189)) ([badbb6a](https://github.com/tensorplex-labs/dojo/commit/badbb6acf02392bb504849a69ffcdced10bce68d)), closes [#185](https://github.com/tensorplex-labs/dojo/issues/185)
+
 ## [1.12.0](https://github.com/tensorplex-labs/dojo/compare/v1.11.2...v1.12.0) (2025-05-14)
 
 ### Features
