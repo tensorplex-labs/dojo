@@ -277,8 +277,8 @@ class Validator(aobject):
             safe_normalized_weights.numpy(),
         )
 
-        logger.info(f"final weights:\n{final_weights}")
-        logger.info(f"final uids:\n{final_uids}")
+        logger.info(f"Final weights:\n{final_weights}")
+        logger.info(f"Final uids:\n{final_uids}")
 
         _terminal_plot(
             f"final weights, block: {self.block}",
@@ -335,12 +335,13 @@ class Validator(aobject):
                 # except asyncio.TimeoutError:
                 #     pass
 
-                logger.info(f"Converting weights and uids for emit: {uids}, {weights}")
-
                 uids, weights = convert_weights_and_uids_for_emit(
                     uids=uids,
                     weights=weights,
                 )
+
+                logger.info(f"Converted uids: {uids}")
+                logger.info(f"Converted weights: {weights}")
 
                 payload = SetWeightsPayload(
                     netuid=self.config.netuid,  # type: ignore

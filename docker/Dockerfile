@@ -16,7 +16,7 @@ ENV PATH=$NVM_DIR/versions/node/$NODE_VERSION/bin:$PATH
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-    build-essential curl git ca-certificates openssl \
+    build-essential curl git ca-certificates openssl clang libssl-dev llvm libudev-dev make pkg-config protobuf-compiler\
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
