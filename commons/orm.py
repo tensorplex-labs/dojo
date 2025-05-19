@@ -1016,19 +1016,25 @@ class ORM:
             validator_task_data["previous_task_id"] = previous_task_id
 
             created_task = await tx.validatortask.create(data=validator_task_data)
-            await tx.validatortask.update(
+            updated_previous_task = await tx.validatortask.update(
                 where={"id": previous_task_id},
                 data={"next_task": {"connect": {"id": created_task.id}}},
             )
 
+            # NOTE: This is for creating next tf task
             if is_next_task:
+                if not updated_previous_task or not updated_previous_task.hfl_state_id:
+                    raise ValueError(
+                        f"Failed to update previous task {updated_previous_task=}"
+                    )
+
                 await HFLManager.update_state(
-                    hfl_state_id=hfl_state.id,
+                    hfl_state_id=updated_previous_task.hfl_state_id,
                     updates=HFLStateUpdateInput(
                         status=HFLStatusEnum.TF_NEXT_TASK_CREATED,
                     ),
                     event_data=TextFeedbackEvent(
-                        task_id=previous_task_id,
+                        task_id=updated_previous_task.id,
                         message=f"Created next TF task with id {created_task.id}",
                     ),
                     tx=tx,
