@@ -1146,12 +1146,11 @@ class ORM:
                 ),
                 event_data=ScoreFeedbackEvent(
                     type=HFLStatusEnum.SF_PENDING,
-                    task_id=validator_task.task_id,
+                    task_id=created_task.id,
                     syn_req_id=hfl_state.current_synthetic_req_id
                     if hfl_state.current_synthetic_req_id
                     else "",
                     iteration=hfl_state.current_iteration,
-                    timestamp=datetime_as_utc(datetime.now(timezone.utc)),
                 ),
                 tx=tx,
             )
@@ -1281,8 +1280,14 @@ class ORM:
                 updated_hfl_state = await HFLManager.update_state(
                     hfl_state_id=hfl_state.id,
                     updates=HFLStateUpdateInput(
-                        tf_retry_count=hfl_state.tf_retry_count + 1
+                        tf_retry_count=hfl_state.tf_retry_count + 1,
+                        status=HFLStatusEnum.TF_PENDING,
                     ),
+                    event_data=TextFeedbackEvent(
+                        task_id=validator_task_id,
+                        message=f"Not enough responses from miners, retrying TF task {validator_task_id}",
+                    ),
+                    tx=tx,
                 )
             return saved_count, updated_hfl_state
 

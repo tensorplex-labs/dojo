@@ -209,7 +209,7 @@ async def process_score_feedback_task(
             type=HFLStatusEnum.SF_COMPLETED,
             task_id=sf_task.id,
             iteration=hfl_state.current_iteration,
-            timestamp=datetime_as_utc(datetime.now(timezone.utc)),
+            message=f"Successfully processed SF task {sf_task.id} with {success_count} results",
         )
 
         updated_hfl_state = await HFLManager.update_state(

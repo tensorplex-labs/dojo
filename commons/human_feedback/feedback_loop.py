@@ -32,7 +32,7 @@ from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import MinerResponse
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskInclude
-from dojo.protocol import DendriteQueryResponse, TaskSynapseObject, TextFeedbackEvent
+from dojo.protocol import DendriteQueryResponse, TaskSynapseObject
 from neurons.validator import Validator
 
 
@@ -272,7 +272,7 @@ class FeedbackLoop:
 
             # Set time window for expired tasks
             expire_from, expire_to = get_time_window_for_tasks(
-                hours_ago_start=10, hours_ago_end=0
+                hours_ago_start=2, hours_ago_end=0, buffer_minutes=5
             )
 
             # Process TF_PENDING tasks in batches
@@ -435,11 +435,6 @@ class FeedbackLoop:
                                 updates=HFLStateUpdateInput(
                                     status=HFLStatusEnum.TF_FAILED
                                 ),
-                                event_data=TextFeedbackEvent(
-                                    type=HFLStatusEnum.TF_FAILED,
-                                    task_id=task.id,
-                                    iteration=task.HFLState.current_iteration,
-                                ),
                             )
                             await ORM.mark_validator_task_as_processed([task.id])
 
@@ -552,7 +547,9 @@ class FeedbackLoop:
         while True:
             try:
                 await asyncio.sleep(dojo.HFL_SF_UPDATE_INTERVAL)
+                logger.info("Updating SF task results")
                 await self._update_sf_task_results(validator)
+                logger.info("Updating SF task results completed")
             except Exception as e:
                 logger.error(f"Error in update_sf_task_results: {str(e)}")
                 logger.debug(f"Traceback: {traceback.format_exc()}")

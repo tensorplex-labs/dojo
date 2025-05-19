@@ -159,6 +159,14 @@ class HFLManager:
     ) -> HFLState:
         """Handle transition to TF_FAILED."""
         # NOTE: Add TF failed specific logic as needed
+        if not event_data:
+            event_data = TextFeedbackEvent(
+                task_id=state.current_task_id,
+                iteration=state.current_iteration,
+                type=HFLStatusEnum.TF_FAILED,
+                message="Max retries reached, and got zero responses from miners, ending HFL",
+            )
+
         return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
@@ -202,7 +210,7 @@ class HFLManager:
             task_id=state.current_task_id,
             iteration=state.current_iteration,
             timestamp=datetime_as_utc(datetime.now(timezone.utc)),
-            type=HFLStatusEnum.TF_SCHEDULED,
+            type=HFLStatusEnum.TF_NEXT_TASK_CREATED,
         )
         if event_data:
             new_event.message = event_data.message

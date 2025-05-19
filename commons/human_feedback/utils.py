@@ -96,7 +96,9 @@ def extract_text_feedback_from_results(task_results: list[TaskResult] | Json) ->
     return ""
 
 
-def get_time_window_for_tasks(hours_ago_start: int = 48, hours_ago_end: int = 0):
+def get_time_window_for_tasks(
+    hours_ago_start: int = 48, hours_ago_end: int = 0, buffer_minutes: int = 0
+):
     """
     Get a time window for selecting tasks.
 
@@ -109,7 +111,7 @@ def get_time_window_for_tasks(hours_ago_start: int = 48, hours_ago_end: int = 0)
     """
     current_time = datetime_as_utc(datetime.now(timezone.utc))
     expire_from = current_time - timedelta(hours=hours_ago_start)
-    expire_to = current_time - timedelta(hours=hours_ago_end)
+    expire_to = current_time - timedelta(hours=hours_ago_end, minutes=buffer_minutes)
     return expire_from, expire_to
 
 

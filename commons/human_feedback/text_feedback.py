@@ -2,7 +2,6 @@
 
 import asyncio
 import traceback
-from datetime import datetime, timezone
 from typing import List
 
 from bittensor.utils.btlogging import logging as logger
@@ -16,7 +15,7 @@ from commons.human_feedback.utils import (
     extract_text_feedback_from_results,
 )
 from commons.orm import ORM
-from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
+from commons.utils import get_new_uuid, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, MinerResponse, ValidatorTask
 from database.prisma.types import ValidatorTaskInclude
@@ -244,7 +243,7 @@ async def send_text_feedback_to_synthetic_api(
 
         # Get original task
         original_task = await ORM.get_validator_task_by_id(
-            hfl_state.original_task_id,
+            task_id=validator_task_id,
             include=ValidatorTaskInclude(
                 completions={"include": {"criterion": {"include": {"scores": True}}}}
             ),
@@ -253,6 +252,16 @@ async def send_text_feedback_to_synthetic_api(
         if not original_task or not original_task.completions:
             logger.warning(
                 f"Could not find original task or completions for {hfl_state.original_task_id}"
+            )
+            return None
+
+        # TODO: KIV
+        if (
+            original_task.completions[0].completion_id
+            != hfl_state.selected_completion_id
+        ):
+            logger.error(
+                f"Selected completion ID {hfl_state.selected_completion_id} does not match the original task completion ID {original_task.completions[0].completion_id}"
             )
             return None
 
@@ -288,7 +297,7 @@ async def send_text_feedback_to_synthetic_api(
             event_data=TextFeedbackEvent(
                 task_id=validator_task_id,
                 iteration=hfl_state.current_iteration,
-                timestamp=datetime_as_utc(datetime.now(timezone.utc)),
+                message=f"Sent {len(miner_feedback)} text feedback to synthetic API for task {validator_task_id}, got syn_req_id: {syn_req_id}",
             ),
         )
 
