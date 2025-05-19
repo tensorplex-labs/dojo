@@ -33,7 +33,7 @@ from .types import Metadata
 def map_task_synapse_object_to_validator_task(
     synapse: TaskSynapseObject,
     qa_metadata: dict | None = None,
-) -> ValidatorTaskCreateInput | None:
+) -> ValidatorTaskCreateInput:
     """Maps a TaskSynapseObject to ValidatorTask database model input.
 
     Args:

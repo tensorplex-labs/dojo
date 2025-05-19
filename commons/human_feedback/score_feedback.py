@@ -94,14 +94,12 @@ async def create_score_feedback_task(
             logger.error(f"No active miners found for SF task for {tf_task.id}")
             return None
 
-        axons = [validator.metagraph.axons[miner_uid] for miner_uid in active_miners]
-
         # Send to miners
         miner_responses: list[TaskSynapseObject] | None = await send_hfl_request(
             validator=validator,
             synapse=task_synapse,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
-            axons=axons,
+            axons=validator._retrieve_axons(active_miners),
         )
         logger.info(f"Miner responses: {miner_responses}")
 

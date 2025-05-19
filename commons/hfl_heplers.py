@@ -117,6 +117,10 @@ class HFLManager:
                     return await HFLManager._handle_sf_completed(
                         current_state, updates, event_data, tx
                     )
+                case HFLStatusEnum.TF_NEXT_TASK_CREATED:
+                    return await HFLManager._handle_tf_next_task_created(
+                        current_state, updates, event_data, tx
+                    )
                 case HFLStatusEnum.HFL_COMPLETED:
                     return await HFLManager._handle_hfl_completed(
                         current_state, updates, event_data, tx
@@ -171,6 +175,7 @@ class HFLManager:
             updates["current_synthetic_req_id"] = (
                 event_data.syn_req_id
             )  # Clear the current synthetic request ID
+
         return await HFLManager._update_state(state, updates, event_data, tx)
 
     @staticmethod
@@ -183,6 +188,25 @@ class HFLManager:
         """Handle transition to SF_COMPLETED."""
         # NOTE: Add SF completion specific logic as needed
         return await HFLManager._update_state(state, updates, event_data, tx)
+
+    @staticmethod
+    async def _handle_tf_next_task_created(
+        state: HFLState,
+        updates: HFLStateUpdateInput,
+        event_data: HFLEvent | None = None,
+        tx=None,
+    ) -> HFLState:
+        """Handle transition to TF_NEXT_TASK_CREATED."""
+        # NOTE: Add TF next task creation specific logic as needed
+        new_event = TextFeedbackEvent(
+            task_id=state.current_task_id,
+            iteration=state.current_iteration,
+            timestamp=datetime_as_utc(datetime.now(timezone.utc)),
+            type=HFLStatusEnum.TF_SCHEDULED,
+        )
+        if event_data:
+            new_event.message = event_data.message
+        return await HFLManager._update_state(state, updates, new_event, tx)
 
     @staticmethod
     async def _handle_hfl_completed(

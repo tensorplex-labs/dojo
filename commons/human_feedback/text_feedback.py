@@ -325,7 +325,7 @@ async def get_task_synapse_for_retry(task_id: str) -> TaskSynapseObject | None:
         from database.mappers import map_validator_task_to_task_synapse_object
 
         task_synapse = map_validator_task_to_task_synapse_object(task)
-        task_synapse.expire_at = set_expire_time(int(dojo.TASK_DEADLINE / 2))
+        task_synapse.expire_at = set_expire_time(int(dojo.HFL_TASK_DEADLINE))
         if task_synapse.completion_responses:
             for completion in task_synapse.completion_responses:
                 if not completion.criteria_types or len(completion.criteria_types) == 0:

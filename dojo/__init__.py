@@ -80,7 +80,7 @@ if get_config().fast_mode:
     print("Running in fast mode for testing purposes...")
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
     TASK_DEADLINE = 180
-    VALIDATOR_RUN = 60
+    VALIDATOR_RUN = 300
     VALIDATOR_HEARTBEAT = 15
     VALIDATOR_UPDATE_SCORE = 120
     VALIDATOR_UPDATE_TASK = 30

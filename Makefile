@@ -152,4 +152,3 @@ kami:
 
 kami-down:
 	docker compose -f docker-compose.shared.yaml down kami
-

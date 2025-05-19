@@ -30,6 +30,7 @@ enum HFLStatusEnum {
     TF_COMPLETED // TF task completed, and TASK_RESULT are updated, waiting for synthetic request
     TF_FAILED // TF task failed for some reason
     TF_SCHEDULED // Ready for next HFL iteration
+    TF_NEXT_TASK_CREATED // Next TF task created
     SF_PENDING // SF created, waiting for scores from miners
     SF_COMPLETED // SF task results received from miners
     SF_FAILED // SF task failed for some reason

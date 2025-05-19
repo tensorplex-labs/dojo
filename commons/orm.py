@@ -36,6 +36,7 @@ from database.prisma.types import (
     MinerResponseInclude,
     MinerScoreCreateInput,
     MinerScoreUpdateInput,
+    ValidatorTaskCreateInput,
     ValidatorTaskInclude,
     ValidatorTaskUpdateInput,
     ValidatorTaskWhereInput,
@@ -48,6 +49,7 @@ from dojo.protocol import (
     Scores,
     TaskResult,
     TaskSynapseObject,
+    TextFeedbackEvent,
 )
 
 
@@ -208,6 +210,7 @@ class ORM:
                 skip=skip,
                 take=batch_size,
             )
+
             batch_responses = [
                 DendriteQueryResponse(
                     validator_task=map_validator_task_to_task_synapse_object(task),
@@ -981,6 +984,7 @@ class ORM:
         miner_responses: list[TaskSynapseObject],
         previous_task_id: str,
         selected_completion_id: str,
+        is_next_task: bool = False,
     ) -> tuple[ValidatorTask, HFLState]:
         """
         Save a Text Feedback task and create a new HFL state within a single transaction.
@@ -1001,9 +1005,10 @@ class ORM:
                 selected_completion_id=selected_completion_id,
                 tx=tx,
             )
+
             # Create the validator task with the HFL state ID
-            validator_task_data = map_task_synapse_object_to_validator_task(
-                validator_task
+            validator_task_data: ValidatorTaskCreateInput = (
+                map_task_synapse_object_to_validator_task(validator_task)
             )
 
             # Add the HFL state ID to the validator task data
@@ -1015,6 +1020,19 @@ class ORM:
                 where={"id": previous_task_id},
                 data={"next_task": {"connect": {"id": created_task.id}}},
             )
+
+            if is_next_task:
+                await HFLManager.update_state(
+                    hfl_state_id=hfl_state.id,
+                    updates=HFLStateUpdateInput(
+                        status=HFLStatusEnum.TF_NEXT_TASK_CREATED,
+                    ),
+                    event_data=TextFeedbackEvent(
+                        task_id=previous_task_id,
+                        message=f"Created next TF task with id {created_task.id}",
+                    ),
+                    tx=tx,
+                )
 
             # Create completions separately, ValidatorTaskCreateInput does not support CompletionCreateInput
             completions = map_task_synapse_object_to_completions(
@@ -1716,13 +1734,18 @@ async def test_get_expired_tasks():
 
     try:
         orm = ORM()
-        batch_size = 5
         expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(days=1)
         expire_to = datetime_as_utc(datetime.now(timezone.utc))
 
         total_tasks = 0
         async for tasks, has_more in orm.get_expired_tasks(
-            batch_size, expire_from, expire_to, is_processed=False
+            batch_size=10,
+            expire_from=expire_from,
+            expire_to=expire_to,
+            is_processed=True,
+            has_previous_task=False,
+            has_next_task=False,
+            task_types=[TaskTypeEnum.CODE_GENERATION],
         ):
             total_tasks += len(tasks)
             if not has_more:
@@ -1825,10 +1848,10 @@ async def test_get_num_processed_tasks():
 if __name__ == "__main__":
 
     async def run_tests():
-        # await test_get_expired_tasks()
+        await test_get_expired_tasks()
         # await test_get_real_model_ids()
         # await test_mark_validator_task_as_processed()
-        await test_get_num_processed_tasks()
+        # await test_get_num_processed_tasks()
         # await test_save_task()
 
     asyncio.run(run_tests())

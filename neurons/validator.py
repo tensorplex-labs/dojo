@@ -153,7 +153,7 @@ class Validator(aobject):
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
         miners_uids = await self.get_active_miner_uids()
-        metagraph_axons = await self._retrieve_axons(miners_uids)
+        metagraph_axons = self._retrieve_axons(miners_uids)
         axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]
         if not axons:
             logger.warning("No axons to send consensus to... skipping")
@@ -299,6 +299,7 @@ class Validator(aobject):
                 )
         except asyncio.TimeoutError:
             logger.error("Setting weights timed out after 90 seconds")
+            logger.error(traceback.format_exc())
             return
 
         return
@@ -431,18 +432,18 @@ class Validator(aobject):
                 for key, value in hotkey_to_scores.items()
             }
 
-        for index, (key, value) in enumerate(hotkey_to_scores.items()):
+        for index, (hotkey, value) in enumerate(hotkey_to_scores.items()):
             # handle nan values
             if nan_value_indices[index]:
-                new_incentives[key] = 0.0  # type: ignore
+                new_incentives[hotkey] = 0.0  # type: ignore
             # search metagraph for hotkey and grab uid
             try:
-                uid: int = self.metagraph.hotkeys.index(key)
+                uid: int = self.metagraph.hotkeys.index(hotkey)
             except ValueError:
                 logger.warning("Old hotkey found from previous metagraph")
                 continue
 
-            logger.info(f"Score for hotkey {key} is {value}")
+            logger.info(f"Score for hotkey {hotkey} is {value}")
             new_incentives[uid] = value
 
             # scores_tensor is a tensor already based on uids
@@ -732,7 +733,7 @@ class Validator(aobject):
         while True:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
             try:
-                axons = await self._retrieve_axons()
+                axons = self._retrieve_axons()
                 logger.info(f"Sending heartbeats to {len(axons)} miners")
 
                 # Send heartbeats in batches
@@ -1225,29 +1226,29 @@ class Validator(aobject):
             return
 
         start = get_epoch_time()
-        sel_miner_uids = await self.get_active_miner_uids()
+        active_miner_uids = await self.get_active_miner_uids()
 
         # TODO remove
-        logger.info(f"Active miners: {sel_miner_uids}")
+        logger.info(f"Active miners: {active_miner_uids}")
         logger.info(f"Active miners set: {self._active_miner_uids}")
 
         # If subset_size specified, randomly select that many miners
         if subset_size is not None:
-            subset_size = min(subset_size, len(sel_miner_uids))
-            sel_miner_uids = random.sample(sel_miner_uids, subset_size)
+            subset_size = min(subset_size, len(active_miner_uids))
+            active_miner_uids = random.sample(active_miner_uids, subset_size)
             logger.info(
                 f"Selected {subset_size} random miners from {len(self._active_miner_uids)} active miners"
             )
 
         # axons = [self.metagraph.axons[uid] for uid in sel_miner_uids]
-        axons = await self._retrieve_axons(sel_miner_uids)
+        axons = self._retrieve_axons(active_miner_uids)
 
         if not axons:
             logger.warning("🤷 No axons to query ... skipping")
             return
 
         logger.info(
-            f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{sel_miner_uids} with expire_at: {synapse.expire_at}"
+            f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{active_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
         miner_responses: List[TaskSynapseObject] = await self._send_requests_to_miners(
@@ -1506,9 +1507,9 @@ class Validator(aobject):
             batch: list[TaskSynapseObject] = task.miner_responses[i : i + batch_size]
 
             # Get the miner UIDs and create identifier tuples for logging
-            miner_uids: list[tuple[str, int]] = await self._extract_miners_hotkey_uid(
-                batch, self.metagraph
-            )
+            miner_uids: list[
+                tuple[str, int | None]
+            ] = await self._extract_miners_hotkey_uid(batch, self.metagraph)
             logger.info(
                 f"Processing miner responses batch {i // batch_size + 1} of {num_batches} for validator task request: {task.validator_task.task_id} "
                 f"to miners: {miner_uids}"
@@ -1855,7 +1856,7 @@ class Validator(aobject):
 
     async def _extract_miners_hotkey_uid(
         self, batch: list[TaskSynapseObject], metagraph: SubnetMetagraph
-    ) -> list[tuple[str, int]]:
+    ) -> list[tuple[str, int | None]]:
         """
         Extract UIDs for miners based on their hotkeys.
 
@@ -1868,18 +1869,19 @@ class Validator(aobject):
         """
         miner_uids: list[tuple[str, int | None]] = []
         for miner_response in batch:
-            hotkey = miner_response.miner_hotkey
-            hotkey_short = hotkey if hotkey else "None"
+            hotkey = (
+                miner_response.miner_hotkey if miner_response.miner_hotkey else "None"
+            )
 
             try:
                 uid: int | None = metagraph.hotkeys.index(hotkey)
-                miner_uids.append((hotkey_short, uid))
+                miner_uids.append((hotkey, uid))
             except ValueError:
-                miner_uids.append((hotkey_short, None))
+                miner_uids.append((hotkey, None))
 
         return miner_uids
 
-    async def _retrieve_axons(self, uids: list[int] = []) -> list[bt.AxonInfo]:
+    def _retrieve_axons(self, uids: list[int] = []) -> list[bt.AxonInfo]:
         # Return miner UIDs based on stakes
         logger.debug(f"Retrieving axons for uids: {uids}")
 
@@ -1966,11 +1968,17 @@ class Validator(aobject):
         # TODO: shift these to a config
         synthetic_score_weight = 0.5
         hfl_score_weight = 0.5
+        logger.info(
+            f"Synthetic score: {self.synthetic_score.shape=} {self.synthetic_score=} {len(self.synthetic_score.tolist())=}"
+        )
+        logger.info(
+            f"HFL scores: {self.hfl_scores.shape=} {self.hfl_scores=} {len(self.hfl_scores.tolist())=}"
+        )
         async with self._scores_alock:
             # TODO: assignment of self.hfl_score
-            # assert (
-            #     self.synthetic_score.shape == self.hfl_scores.shape
-            # ), "Scores and HFL scores must be the same shape"
+            assert (
+                self.synthetic_score.shape == self.hfl_scores.shape
+            ), "Scores and HFL scores must be the same shape"
             combined_score = (
                 synthetic_score_weight * self.synthetic_score
                 + hfl_score_weight * self.hfl_scores

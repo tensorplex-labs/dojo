@@ -75,18 +75,14 @@ class SyntheticAPI:
         if cls._session is None:
             raise FatalSyntheticGenerationError("Failed to initialize session")
 
-        logger.info(
-            f"Sending human feedback request for {text_feedback_data} miner feedbacks"
-        )
         path = f"{SYNTHETIC_API_BASE_URL}/api/human-feedback"
         request_data = text_feedback_data.model_dump(mode="json")
-        logger.info(f"Request data +++++++++++++++ after model dump: {request_data}")
 
         try:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(6),
                 wait=wait_exponential(multiplier=1, max=30),
-                before_sleep=before_sleep_log(logger._logger, log_level=10),
+                before_sleep=before_sleep_log(logger, log_level=10, exc_info=True),
             ):
                 with attempt:
                     async with cls._session.post(path, json=request_data) as response:

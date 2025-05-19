@@ -51,9 +51,11 @@ class FeedbackLoop:
         while True:
             try:
                 await asyncio.sleep(dojo.HFL_TF_CREATE_INTERVAL)
+                logger.info("Starting feedback loop")
                 await self._start_feedback_loop(validator)
             except Exception as e:
                 logger.error(f"Error in start_feedback_loop: {e}")
+                logger.debug(f"Traceback: {traceback.format_exc()}")
                 await asyncio.sleep(dojo.HFL_TF_CREATE_INTERVAL)
 
     async def _start_feedback_loop(self, validator: Validator):
@@ -93,9 +95,7 @@ class FeedbackLoop:
                 validator=validator,
                 synapse=text_criteria_task,
                 task_type=TaskTypeEnum.TEXT_FEEDBACK,
-                axons=[
-                    validator.metagraph.axons[axon_uid] for axon_uid in active_miners
-                ],
+                axons=validator._retrieve_axons(active_miners),
             )
 
             if not miner_responses:
@@ -242,6 +242,7 @@ class FeedbackLoop:
                     logger.info(f"Task {task_id}: Selected miners {miner_info}")
             except Exception as e:
                 logger.error(f"Error in update_text_feedback_results: {e}")
+                logger.debug(f"Traceback: {traceback.format_exc()}")
                 await asyncio.sleep(dojo.HFL_TF_UPDATE_INTERVAL)
 
     async def _update_tf_task_results(
@@ -380,12 +381,13 @@ class FeedbackLoop:
                             )
                             continue
 
+                        axons = validator._retrieve_axons(active_miners)
+
                         # filter hotkey that have already been give feedback
                         axons = [
-                            validator.metagraph.axons[uid]
-                            for uid in active_miners
-                            if validator.metagraph.axons[uid].hotkey
-                            not in hotkeys_with_feedback
+                            axon
+                            for axon in axons
+                            if axon.hotkey not in hotkeys_with_feedback
                         ]
 
                         miner_responses = await send_hfl_request(
@@ -625,7 +627,9 @@ class FeedbackLoop:
         while True:
             try:
                 await asyncio.sleep(dojo.HFL_NEXT_TF_INTERVAL)
+                logger.info("Creating next TF tasks")
                 await self._create_next_tf_tasks(validator)
+                logger.info("Next TF tasks creation completed")
             except Exception as e:
                 logger.error(f"Error in create_next_tf_tasks: {str(e)}")
                 logger.debug(f"Traceback: {traceback.format_exc()}")
@@ -732,10 +736,7 @@ class FeedbackLoop:
                         validator=validator,
                         synapse=text_criteria_task,
                         task_type=TaskTypeEnum.TEXT_FEEDBACK,
-                        axons=[
-                            validator.metagraph.axons[axon_uid]
-                            for axon_uid in active_miners
-                        ],
+                        axons=validator._retrieve_axons(active_miners),
                     )
 
                     if not miner_responses:
@@ -750,6 +751,7 @@ class FeedbackLoop:
                         miner_responses=miner_responses,
                         previous_task_id=sf_task.id,
                         selected_completion_id=best_completion_id,
+                        is_next_task=True,
                     )
 
                     if not validator_task:

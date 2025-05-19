@@ -604,9 +604,6 @@ async def create_initial_miner_scores(
     Returns:
         Tuple containing success flag and error message (if any)
     """
-    logger.info(
-        f"Creating initial miner scores +++++++++++++++++++++++++++++ {validator_task_id} and miner {miner_hotkey}"
-    )
     try:
         # Step 1: Find the miner response for this task and miner
         db_miner_response = await prisma.minerresponse.find_first(
