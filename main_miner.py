@@ -1,7 +1,6 @@
 import asyncio
 import logging as python_logging
 
-from commons.block_subscriber import start_block_subscriber
 from commons.objects import ObjectManager
 from dojo.chain import get_async_subtensor
 from dojo.logging import (
@@ -31,15 +30,15 @@ async def shutdown_miner():
 
 async def main():
     miner = await ObjectManager.get_miner()
-
     tasks = [
         asyncio.create_task(miner.log_miner_status()),
         asyncio.create_task(miner.run()),
-        asyncio.create_task(
-            start_block_subscriber(
-                callbacks=[miner.block_headers_callback], max_interval_sec=60
-            )
-        ),
+        # asyncio.create_task(
+        #     start_block_subscriber(
+        #         callbacks=[miner.block_headers_callback], max_interval_sec=60
+        #     )
+        # ),
+        asyncio.create_task(miner.block_updater()),
     ]
 
     await asyncio.gather(*tasks)

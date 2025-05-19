@@ -8,7 +8,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from commons.api.middleware import LimitContentLengthMiddleware
-from commons.block_subscriber import start_block_subscriber
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import FatalSyntheticGenerationError
 from commons.objects import ObjectManager
@@ -90,10 +89,10 @@ def _check_fatal_errors(task: asyncio.Task):
 
 async def _shutdown_validator():
     logger.info("Performing shutdown tasks...")
-    validator._should_exit = True
-    validator.executor.shutdown(wait=True)
-    validator.subtensor.substrate.close()
-    await validator.save_state()
+    validator = await ObjectManager.get_validator()
+    if validator:
+        validator.subtensor.substrate.close()
+        await validator.save_state()
     await SyntheticAPI.close_session()
     await disconnect_db()
     try:
@@ -118,6 +117,7 @@ app.add_middleware(LimitContentLengthMiddleware)
 
 
 async def main():
+    validator = await ObjectManager.get_validator()
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
@@ -134,11 +134,12 @@ async def main():
         asyncio.create_task(validator.update_tasks_polling()),
         asyncio.create_task(validator.score_and_send_feedback()),
         asyncio.create_task(validator.send_heartbeats()),
-        asyncio.create_task(
-            start_block_subscriber(
-                callbacks=[validator.block_headers_callback], max_interval_sec=60
-            )
-        ),
+        # asyncio.create_task(
+        #     start_block_subscriber(
+        #         callbacks=[validator.block_headers_callback], max_interval_sec=60
+        #     )
+        # ),
+        asyncio.create_task(validator.block_updater()),
         asyncio.create_task(validator.cleanup_resources()),
     ]
     # set a callback on validator.run() to check for fatal errors.

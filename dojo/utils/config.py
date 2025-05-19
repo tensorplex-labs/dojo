@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -22,6 +23,33 @@ def check_config(config: bt.config):
     config.neuron.full_path = os.path.expanduser(full_path)
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
+
+    # bt.logging.enable_third_party_loggers()
+
+
+def configure_logging(config: bt.config):
+    """
+    Configures logging based on the provided configuration.
+    """
+
+    level = "INFO"
+    if config.logging.trace:  # pyright: ignore[reportOptionalMemberAccess]
+        level = "TRACE"
+    elif config.logging.debug:  # pyright: ignore[reportOptionalMemberAccess]
+        level = "DEBUG"
+    elif config.logging.info:  # pyright: ignore[reportOptionalMemberAccess]
+        level = "INFO"
+
+    logger.remove()
+    logger.add(sys.stdout, level=level)
+
+    # Optionally enable file logging if `record_log` and `logging_dir` are provided
+    if config.record_log and config.logging_dir:
+        logging_dir = os.path.expanduser(config.logging_dir)
+        if not os.path.exists(logging_dir):
+            os.makedirs(logging_dir, exist_ok=True)
+
+        bt.logging.set_config(config)
 
 
 def add_args(parser):
