@@ -1,15 +1,12 @@
-"""The validator neuron registers on the substrate chain and then serves up requested
-prompts for miners to respond to."""
-
 import asyncio
 import copy
 import gc
 import math
+import os
 import random
 import time
 import traceback
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, Dict, List, TypeAlias
 
@@ -17,7 +14,6 @@ import aiohttp
 import bittensor as bt
 import numpy as np
 import torch
-from bittensor.utils.weight_utils import process_weights_for_netuid
 from torch.nn import functional as F
 
 import dojo
@@ -37,15 +33,16 @@ from commons.score_storage import ScoreStorage
 from commons.scoring import Scoring
 from commons.utils import (
     _terminal_plot,
+    aget_effective_stake,
+    aobject,
     datetime_as_utc,
     get_epoch_time,
     get_new_uuid,
-    initialise,
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
+from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.analytics import run_analytics_upload
-from dojo.chain import parse_block_headers
 from dojo.logging import logger
 from dojo.protocol import (
     CompletionResponse,
@@ -62,10 +59,15 @@ from dojo.protocol import (
     TaskTypeEnum,
 )
 from dojo.utils.config import get_config
-from dojo.utils.uids import extract_miner_uids, is_miner
+from dojo.utils.uids import is_miner
+from dojo.utils.weight_utils import (
+    aprocess_weights_for_netuid,
+    convert_weights_and_uids_for_emit,
+)
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
-SyntheticMetadata: TypeAlias = dict
+SyntheticMetadata: TypeAlias = dict[str, str]
+
 
 latest_local = get_latest_git_tag()
 latest_remote = get_latest_remote_tag()
@@ -80,8 +82,7 @@ if (
     )
 
 
-class Validator:
-    _should_exit: bool = False
+class Validator(aobject):
     _scores_alock = asyncio.Lock()
     _uids_alock = asyncio.Lock()
     _request_alock = asyncio.Lock()
@@ -91,36 +92,40 @@ class Validator:
 
     subtensor: bt.subtensor
     wallet: bt.wallet  # type: ignore
-    metagraph: bt.metagraph
+    metagraph: SubnetMetagraph
     spec_version: int = get_spec_version()
+    kami: Kami
 
-    def __init__(self):
+    async def __init__(self):
         self.MAX_BLOCK_CHECK_ATTEMPTS = 3
         self.QUALITY_WEIGHT = 0.8
         self._last_block = None
         self._block_check_attempts = 0
         self._connection_lock = asyncio.Lock()
 
+        self.kami = Kami()
+
         self.loop = asyncio.get_event_loop()
-        # TODO @dev WIP from BaseNeuron
         self.config = ObjectManager.get_config()
 
-        # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
-        self.device = self.config.neuron.device
-
-        # Log the configuration for reference.
         logger.info(self.config)
 
-        self.wallet, self.subtensor, self.metagraph, self.axon = initialise(self.config)
+        logger.info("Setting up bittensor objects....")
+        # The wallet holds the cryptographic key pairs for the miner.
+        self.wallet = bt.wallet(config=self.config)
+        logger.info(f"Wallet: {self.wallet}")
+        self.metagraph = await self.kami.get_metagraph(self.config.netuid)
+        logger.info(f"Metagraph Loaded: {self.metagraph}")
 
         # Save validator hotkey
-        self.vali_hotkey = self.wallet.hotkey.ss58_address
+        self.vali_hotkey: str = self.wallet.hotkey.ss58_address
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.metagraph.hotkeys.index(self.vali_hotkey)
         logger.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
         )
+
         self.step = 0
         self.last_anal_upload_time: datetime | None = None
         # Dendrite lets us send messages to other nodes (axons) in the network.
@@ -130,22 +135,24 @@ class Validator:
         self.scores: torch.Tensor = torch.zeros(
             len(self.metagraph.hotkeys), dtype=torch.float32
         )
-        self.check_registered()
+
+        await self.check_registered()
 
         # Run score migration before loading state
-        migration_success = self.loop.run_until_complete(ScoreStorage.migrate_from_db())
+        migration_success = await ScoreStorage.migrate_from_db()
         if not migration_success:
             logger.error(
                 "Score migration failed - cannot continue without valid scores"
             )
             raise RuntimeError("Score migration failed - validator cannot start")
 
-        self.executor = ThreadPoolExecutor(max_workers=2)
-        self.load_state()
+        await self.load_state()
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
-        axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
+        miners_uids = await self.get_active_miner_uids()
+        metagraph_axons = await self._retrieve_axons(miners_uids)
+        axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]
         if not axons:
             logger.warning("No axons to send consensus to... skipping")
         else:
@@ -188,7 +195,7 @@ class Validator:
                         except Exception as e:
                             logger.error(f"Error obfuscating {file.filename}: {e}")
 
-    async def get_miner_uids(self):
+    async def get_active_miner_uids(self):
         async with self._uids_alock:
             return sorted(list(self._active_miner_uids))
 
@@ -224,11 +231,11 @@ class Validator:
         (
             final_uids,
             final_weights,
-        ) = process_weights_for_netuid(  # type: ignore
+        ) = await aprocess_weights_for_netuid(  # type: ignore
             uids=uids.numpy(),
             weights=safe_normalized_weights.numpy(),
             netuid=self.config.netuid,  # type: ignore
-            subtensor=self.subtensor,
+            kami=self.kami,
             metagraph=self.metagraph,
         )
 
@@ -245,8 +252,8 @@ class Validator:
             safe_normalized_weights.numpy(),
         )
 
-        logger.info(f"final weights:\n{final_weights}")
-        logger.info(f"final uids:\n{final_uids}")
+        logger.info(f"Final weights:\n{final_weights}")
+        logger.info(f"Final uids:\n{final_uids}")
 
         _terminal_plot(
             f"final weights, block: {self.block}",
@@ -255,14 +262,16 @@ class Validator:
 
         # dependent on underlying `set_weights` call
         try:
-            result, message = await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 self._set_weights(final_uids, final_weights), timeout=90
             )
             if not result:
-                logger.error(f"Failed to set weights: {message}")
+                logger.error(f"Failed to set weights: {result}")
                 return
-
-            logger.success(f"Set weights successfully: {message}")
+            if result.get("statusCode", None) == 200:
+                logger.success(
+                    f"Set weights successfully with hash {result.get('data')}"
+                )
         except asyncio.TimeoutError:
             logger.error("Setting weights timed out after 90 seconds")
             return
@@ -284,7 +293,9 @@ class Validator:
         max_attempts = 5
         attempt = 0
         result = False
-        while attempt < max_attempts and not result:
+        while attempt < max_attempts and (
+            not result or result.get("statusCode", None) != 200
+        ):
             message: str = ""
             try:
                 logger.info(
@@ -299,63 +310,75 @@ class Validator:
                 # except asyncio.TimeoutError:
                 #     pass
 
-                result, message = self.subtensor.set_weights(
-                    wallet=self.wallet,
-                    netuid=self.config.netuid,  # type: ignore
-                    uids=uids.tolist(),
-                    weights=weights.tolist(),
-                    wait_for_finalization=False,
-                    wait_for_inclusion=False,
-                    version_key=self.spec_version,
-                    max_retries=1,
+                uids, weights = convert_weights_and_uids_for_emit(
+                    uids=uids,
+                    weights=weights,
                 )
-                if result:
-                    logger.success(f"Set weights successfully: {message}")
-                    return result, message
+
+                logger.info(f"Converted uids: {uids}")
+                logger.info(f"Converted weights: {weights}")
+
+                payload = SetWeightsPayload(
+                    netuid=self.config.netuid,  # type: ignore
+                    dests=uids,
+                    weights=weights,
+                    version_key=self.spec_version,
+                )
+
+                result = await self.kami.set_weights(payload)
+                if result.get("statusCode", None) == 200:
+                    logger.success(f"Set weights successfully: {result.get('data')}")
+                    return result
 
                 raise SetWeightsFailed(f"Failed to set weights with message:{message}")
 
-            except Exception:
+            except Exception as e:
                 logger.warning(
-                    f"Failed to set weights with attempt {attempt + 1}/{max_attempts} due to: {message}"
+                    f"Failed to set weights with attempt {attempt + 1}/{max_attempts} due to: {e}"
                 )
 
                 if attempt == max_attempts:
                     logger.error("Max attempts reached. Could not set weights.")
-                    return False, "Max attempts reached"
+                    return {"success": False, "data": "Max attempts reached"}
 
                 await asyncio.sleep(12)
             finally:
                 attempt += 1
 
-        return False, "Max attempts reached"
+        return {"success": False, "data": "Max attempts reached"}
 
     async def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
         # Copies state of metagraph before syncing.
         previous_metagraph = copy.deepcopy(self.metagraph)
+        previous_axons = previous_metagraph.axons
+        previous_hotkeys = previous_metagraph.hotkeys
 
         # Sync the metagraph.
-        self.metagraph.sync(subtensor=self.subtensor)
+        self.metagraph = await self.kami.get_metagraph(self.config.netuid)
+        current_axons = self.metagraph.axons
+        current_hotkeys = self.metagraph.hotkeys
 
         # Check if the metagraph axon info has changed.
-        if previous_metagraph.axons == self.metagraph.axons:
+        if previous_axons == current_axons:
             return
 
         logger.info(
             "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
         )
+
         # Zero out all hotkeys that have been replaced.
-        for uid, hotkey in enumerate(previous_metagraph.hotkeys):
-            if hotkey != self.metagraph.hotkeys[uid]:
+
+        for uid, hotkey in enumerate(previous_hotkeys):
+            if hotkey != current_hotkeys[uid]:
                 self.scores[uid] = 0  # hotkey has been replaced
 
         # Check to see if the metagraph has changed size.
         # If so, we need to add new hotkeys and moving averages.
-        if len(previous_metagraph.hotkeys) < len(self.metagraph.hotkeys):
+        if len(previous_hotkeys) < len(current_hotkeys):
             # Update the size of the moving average scores.
-            new_moving_average = torch.zeros(len(self.metagraph.hotkeys))
-            min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
+            new_moving_average = torch.zeros(len(current_hotkeys))
+            min_len = min(len(previous_hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             async with self._scores_alock:
                 self.scores = torch.clamp(new_moving_average, min=0.0)
@@ -479,20 +502,20 @@ class Validator:
             )
             return None
 
-    def load_state(self):
+    async def load_state(self):
         """Loads the state of the validator from a file."""
         try:
-            self.loop.run_until_complete(self._load_state())
+            await self._load_state()
         except Exception as e:
             logger.error(f"Failed to load validator state: {e}")
             pass
 
-    def should_sync_metagraph(self):
+    async def should_sync_metagraph(self):
         """
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
         return (
-            self.block - self.metagraph.last_update[self.uid]
+            self.block - self.metagraph.lastUpdate[self.uid]
         ) > self.config.neuron.epoch_length
 
     def should_set_weights(self) -> bool:
@@ -502,17 +525,13 @@ class Validator:
 
         # Define appropriate logic for when set weights.
         return (
-            self.block - self.metagraph.last_update[self.uid]
+            self.block - self.metagraph.lastUpdate[self.uid]
         ) > self.config.neuron.epoch_length
 
     async def sync(self):
-        has_connection = await self._ensure_subtensor_connection()
-        if not has_connection:
-            logger.warning("Subtensor connection failed - continuing with partial sync")
+        await self.check_registered()
 
-        self.check_registered()
-
-        if self.should_sync_metagraph():
+        if await self.should_sync_metagraph():
             await self.resync_metagraph()
 
         if self.should_set_weights():
@@ -544,19 +563,6 @@ class Validator:
             logger.error(f"Failed to reconnect to subtensor: {e}")
             return await self._try_reconnect_subtensor()
 
-    async def _ensure_subtensor_connection(self):
-        async with self._connection_lock:
-            try:
-                self.subtensor.get_current_block()
-                self._block_check_attempts = 0
-                return True
-            except (BrokenPipeError, ConnectionError):
-                logger.warning("Connection lost, attempting immediate reconnection")
-                return await self._try_reconnect_subtensor()
-            except Exception as e:
-                logger.error(f"Unexpected error checking connection: {e}")
-                return False
-
     # ---------------------------------------------------------------------------- #
     #                         VALIDATOR CORE FUNCTIONS                             #
     # ---------------------------------------------------------------------------- #
@@ -565,7 +571,7 @@ class Validator:
         Periodically logs the status of the validator, including the current block and time.
         This function runs in a loop until the validator is signaled to exit.
         """
-        while not self._should_exit:
+        while True:
             logger.info(
                 f"Validator running... block:{str(self.block)} time: {time.time()}"
             )
@@ -576,12 +582,8 @@ class Validator:
         while True:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
             try:
-                all_miner_uids = await extract_miner_uids()
-                logger.info(f"Sending heartbeats to {len(all_miner_uids)} miners")
-
-                axons: list[bt.AxonInfo] = [
-                    self.metagraph.axons[uid] for uid in all_miner_uids
-                ]
+                axons = await self._retrieve_axons()
+                logger.info(f"Sending heartbeats to {len(axons)} miners")
 
                 # Send heartbeats in batches
                 batch_size = 10
@@ -597,10 +599,10 @@ class Validator:
                         r.axon.hotkey for r in responses if r and r.ack and r.axon
                     )
 
-                active_uids = {
+                active_uids: set[int] = {
                     uid
                     for uid, axon in enumerate(self.metagraph.axons)
-                    if axon.hotkey in active_hotkeys
+                    if self.metagraph.hotkeys[uid] in active_hotkeys
                 }
 
                 async with self._uids_alock:
@@ -645,10 +647,6 @@ class Validator:
                             synthetic_metadata,
                         )
 
-                if self._should_exit:
-                    logger.info("Validator should stop...")
-                    break
-
                 self.step += 1
 
                 # Sync metagraph and potentially set weights.
@@ -656,12 +654,12 @@ class Validator:
                 await asyncio.sleep(dojo.VALIDATOR_RUN)
             except KeyboardInterrupt:
                 # Handle shutdown gracefully
-                await self._cleanup()
+                await self.cleanup()
                 return
             except FatalSyntheticGenerationError:
                 # if synthetic-API is unresponsive, shut down validator.
                 logger.error("Synthetic API is unresponsive, shutting down validator")
-                await self._cleanup()
+                await self.cleanup()
                 raise
             # In case of unforeseen errors, the validator will log the error and continue operations.
             except Exception as err:
@@ -670,7 +668,7 @@ class Validator:
                 await asyncio.sleep(dojo.VALIDATOR_RUN)
 
         # Cleanup on exit
-        await self._cleanup()
+        await self.cleanup()
 
     async def update_tasks_polling(self):
         """
@@ -763,7 +761,7 @@ class Validator:
                 # upload scores to analytics API after updating.
                 # record last successful upload time.
                 self.last_anal_upload_time = await run_analytics_upload(
-                    self._scores_alock, self.last_anal_upload_time, expire_to
+                    self._scores_alock, self.last_anal_upload_time, expire_to, self.kami
                 )
             except Exception:
                 logger.error("Error in score_and_send_feedback")
@@ -813,32 +811,24 @@ class Validator:
     # ---------------------------------------------------------------------------- #
 
     # Validator Setup Functions
-    def check_registered(self) -> bool:
-        """
-        Check if the validator's hotkey is registered on the network.
-        Returns True if registered, raises ValueError if not.
-        """
-        try:
-            is_registered = self.subtensor.is_hotkey_registered(
-                netuid=self.config.netuid,
-                hotkey_ss58=self.vali_hotkey,
+    async def check_registered(self):
+        is_registered = await self.kami.is_hotkey_registered(
+            netuid=int(self.config.netuid),  # type: ignore
+            hotkey=str(self.wallet.hotkey.ss58_address),
+        )
+        if not is_registered:
+            logger.error(
+                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
+                f" Please register the hotkey using `btcli s register` before trying again"
             )
-            if not is_registered:
-                raise ValueError(
-                    f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}. "
-                    f"Please register the hotkey using `btcli s register` before trying again"
-                )
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to check registration status: {str(e)}")
-            raise
+            await self.cleanup()
+            exit(1)
 
     # Validator Run helper functions
-    async def _cleanup(self):
+    async def cleanup(self):
         """Handle cleanup operations when shutting down"""
-        self.axon.stop()
         logger.success("Validator axon stopped")
+        await self.kami.close()
 
     async def _generate_synthetic_request(
         self,
@@ -928,9 +918,9 @@ class Validator:
             return
 
         start = get_epoch_time()
-        sel_miner_uids = await self.get_miner_uids()
+        sel_miner_uids = await self.get_active_miner_uids()
 
-        axons = [self.metagraph.axons[uid] for uid in sel_miner_uids]
+        axons = await self._retrieve_axons(sel_miner_uids)
 
         if not axons:
             logger.warning("🤷 No axons to query ... skipping")
@@ -1031,6 +1021,10 @@ class Validator:
         logger.info(
             f"Sending request to miners & processing took {get_epoch_time() - start}"
         )
+
+        # clear axons
+        axons.clear()
+
         return
 
     async def cleanup_resources(self):
@@ -1179,7 +1173,7 @@ class Validator:
             batch: list[TaskSynapseObject] = task.miner_responses[i : i + batch_size]
 
             # Get the miner UIDs and create identifier tuples for logging
-            miner_uids: list[tuple[str, int]] = self._extract_miners_hotkey_uid(
+            miner_uids: list[tuple[str, int]] = await self._extract_miners_hotkey_uid(
                 batch, self.metagraph
             )
             logger.info(
@@ -1302,11 +1296,20 @@ class Validator:
         try:
             try:
                 axon_index = self.metagraph.hotkeys.index(miner_hotkey)
+                coldkey = self.metagraph.coldkeys[axon_index]
             except ValueError:
                 logger.warning(f"Miner hotkey {miner_hotkey} not found in metagraph")
                 return []
 
-            miner_axon = self.metagraph.axons[axon_index]
+            axon = self.metagraph.axons[axon_index]
+            miner_axon = bt.AxonInfo(
+                ip=axon.ip,
+                port=axon.port,
+                hotkey=miner_hotkey,
+                coldkey=coldkey,
+                version=axon.version,
+                ip_type=axon.ipType,
+            )
 
             # Send the request via Dendrite and get the response
             max_retries = 3
@@ -1524,14 +1527,30 @@ class Validator:
                 )
         return hotkey_to_dojo_task_scores_and_gt
 
-    async def block_headers_callback(self, block: dict):
-        logger.trace(f"Received block headers {block}")
-        block_header = parse_block_headers(block)
-        block_number = block_header.number.to_int()
-        self._last_block = block_number
+    # async def block_headers_callback(self, block: dict):
+    #     logger.trace(f"Received block headers {block}")
+    #     block_header = parse_block_headers(block)
+    #     block_number = block_header.number.to_int()
+    #     self._last_block = block_number
 
-    def _extract_miners_hotkey_uid(
-        self, batch: list[TaskSynapseObject], metagraph: bt.metagraph
+    async def block_updater(self):
+        while True:
+            block = await self.kami.get_current_block()
+            if block and block != self.block:
+                self._last_block = block
+                logger.debug(f"Updated block to {self._last_block}")
+
+            if os.getenv("FAST_MODE"):
+                continue
+
+            logger.info(
+                f"Updated block to {self._last_block}"
+            )  # log new block if non fast_mode
+
+            await asyncio.sleep(12)
+
+    async def _extract_miners_hotkey_uid(
+        self, batch: list[TaskSynapseObject], metagraph: SubnetMetagraph
     ) -> list[tuple[str, int]]:
         """
         Extract UIDs for miners based on their hotkeys.
@@ -1543,18 +1562,55 @@ class Validator:
         Returns:
             List of tuples containing (hotkey_short, uid)
         """
-        miner_uids = []
+        miner_uids: list[tuple[str, int | None]] = []
         for miner_response in batch:
             hotkey = miner_response.miner_hotkey
             hotkey_short = hotkey if hotkey else "None"
 
             try:
-                uid = metagraph.hotkeys.index(hotkey) if hotkey else None
+                uid: int | None = metagraph.hotkeys.index(hotkey)
                 miner_uids.append((hotkey_short, uid))
             except ValueError:
                 miner_uids.append((hotkey_short, None))
 
         return miner_uids
+
+    async def _retrieve_axons(self, uids: list[int] = []) -> List[bt.AxonInfo]:
+        # Return miner UIDs based on stakes
+        logger.debug(f"Retrieving axons for uids: {uids}")
+
+        axons: list[bt.AxonInfo] = []
+        for uid, axon in enumerate(self.metagraph.axons):
+            if uids and uid not in uids:
+                continue
+
+            if not axon.ip or not axon.port:
+                continue
+
+            hotkey = self.metagraph.hotkeys[uid]
+            coldkey = self.metagraph.coldkeys[uid]
+
+            eff_stake = aget_effective_stake(hotkey, self.metagraph)
+            if (
+                not get_config().ignore_min_stake
+                and eff_stake > dojo.VALIDATOR_MIN_STAKE
+            ):
+                logger.debug(
+                    f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {dojo.VALIDATOR_MIN_STAKE} to be considered miner"
+                )
+                continue
+
+            new_axon = bt.AxonInfo(
+                ip=axon.ip,
+                port=axon.port,
+                hotkey=hotkey,
+                coldkey=coldkey,
+                version=axon.version,
+                ip_type=axon.ipType,
+            )
+            axons.append(new_axon)
+
+        return axons
 
     def _classify_miner_results(
         self,

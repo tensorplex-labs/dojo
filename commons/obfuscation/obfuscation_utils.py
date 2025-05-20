@@ -13,6 +13,7 @@ from functools import partial
 
 from bs4 import BeautifulSoup
 from jsmin import jsmin
+from loguru import logger
 
 from dojo.logging import logger
 

@@ -195,4 +195,8 @@ scores/*.pt
 # migration logs
 migration_logs/
 
+uv.lock
+.python-version
+
+
 test/
