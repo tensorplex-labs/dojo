@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from strenum import StrEnum
 
 from commons.utils import get_epoch_time, get_new_uuid
-from database.prisma.enums import HFLStatusEnum
 
 
 class TaskTypeEnum(StrEnum):
@@ -293,13 +292,9 @@ class HFLEvent(BaseModel):
 
 # TODO: Add more data as needed
 class TextFeedbackEvent(HFLEvent):
-    type: str = Field(
-        description="Type of the event", default=HFLStatusEnum.TF_PENDING.value
-    )
+    type: str = Field(description="Type of the event", default="TEXT_FEEDBACK")
 
 
 # TODO: Add more data as needed
 class ScoreFeedbackEvent(HFLEvent):
-    type: str = Field(
-        description="Type of the event", default=HFLStatusEnum.SF_PENDING.value
-    )
+    type: str = Field(description="Type of the event", default="SCORE_FEEDBACK")
