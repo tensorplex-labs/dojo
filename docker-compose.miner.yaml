@@ -49,8 +49,8 @@ services:
       - subtensor
     logging: *default-logging
     depends_on:
-      - kami:
-          condition: service_healthy
+      kami:
+        condition: service_healthy
 
   kami:
     extends:
