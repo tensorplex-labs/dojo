@@ -6,8 +6,6 @@ import aiohttp
 import bittensor as bt
 from loguru import logger
 
-from commons.objects import ObjectManager
-from dojo import get_dojo_api_base_url
 from dojo.logging.colors import convert_tags_to_ansi
 
 
@@ -19,9 +17,14 @@ class ValidatorLogForwarder(python_logging.Handler):
     ):
         super().__init__()
 
+        from commons.objects import ObjectManager
+
         self.config = ObjectManager.get_config()
 
+        from dojo import get_dojo_api_base_url
+
         api_url = get_dojo_api_base_url()
+
         if api_url:
             if not api_url.startswith(("http://", "https://")):
                 api_url = f"https://{api_url}"

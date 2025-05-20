@@ -123,7 +123,11 @@ services:
 
   validator-api-service:
     container_name: validator-api-service
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: test
+    networks:
+      - dojo-validator
+      - subtensor
+      - kami
     env_file:
       - .env
     ports:
@@ -133,7 +137,7 @@ services:
 
   extract-dataset:
     container_name: extract-dataset
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: test
     env_file:
       - .env
     command: ["extract-dataset"]
@@ -149,7 +153,7 @@ services:
 
   migration:
     container_name: migration
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: test
     platform: linux/amd64
     env_file:
       - .env
@@ -166,7 +170,7 @@ services:
 
   validate-migration:
     container_name: validate-migration
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: test
     platform: linux/amd64
     env_file:
       - .env
@@ -183,7 +187,7 @@ services:
 
   fill-score-column:
     container_name: fill-score-column
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: test
     env_file:
       - .env
     command: ["fill-score-column"]
