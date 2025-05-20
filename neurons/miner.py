@@ -6,8 +6,6 @@ from datetime import datetime
 from typing import Dict, Tuple
 
 import bittensor as bt
-from bittensor.core.metagraph import AsyncMetagraph
-import bittensor
 from bittensor.utils.networking import ip_to_int, ip_version
 
 from commons.human_feedback.dojo import DojoAPI
@@ -16,7 +14,6 @@ from commons.utils import aget_effective_stake, aobject, get_epoch_time
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import parse_block_headers
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
-from dojo.chain import get_async_subtensor, parse_block_headers
 from dojo.logging import logger
 from dojo.protocol import (
     Heartbeat,

@@ -13,8 +13,6 @@ from typing import List
 
 import bittensor as bt
 import httpx
-from bittensor.core.async_subtensor import AsyncSubtensor
-from bittensor.core.metagraph import AsyncMetagraph
 
 from commons.exceptions import NoProcessedTasksYet
 from commons.objects import ObjectManager

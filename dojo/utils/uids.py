@@ -1,11 +1,6 @@
 import bittensor as bt
 
 from commons.utils import get_effective_stake
-from commons.exceptions import FatalSubtensorConnectionError
-from commons.objects import ObjectManager
-from commons.utils import aget_effective_stake, get_effective_stake, keccak256_hash
-from dojo.chain import get_async_subtensor
-from dojo.logging import logger
 
 
 def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:

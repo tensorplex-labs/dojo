@@ -6,26 +6,25 @@ import aiohttp
 import bittensor as bt
 from loguru import logger
 
+from commons.objects import ObjectManager
+from dojo import get_dojo_api_base_url
 from dojo.logging.colors import convert_tags_to_ansi
 
 
 class ValidatorLogForwarder(python_logging.Handler):
     def __init__(
         self,
-        api_url: str,
-        wallet: bt.wallet,
         batch_size: int = 100,
         flush_interval: float = 1.0,
     ):
         super().__init__()
 
-        # Ensure api_url is properly formatted
+        self.config = ObjectManager.get_config()
+
+        api_url = get_dojo_api_base_url()
         if api_url:
-            # Make sure the URL has a scheme
             if not api_url.startswith(("http://", "https://")):
                 api_url = f"https://{api_url}"
-
-            # Remove trailing slash if present
             if api_url.endswith("/"):
                 api_url = api_url[:-1]
 
@@ -34,8 +33,8 @@ class ValidatorLogForwarder(python_logging.Handler):
             logger.warning("API URL is not set, log forwarding to API will be disabled")
 
         self.api_url = api_url
-        self.hotkey = wallet.hotkey.ss58_address
-        self.wallet = wallet  # Store wallet for signing messages
+        self.wallet = bt.wallet(config=self.config)
+        self.hotkey = self.wallet.hotkey.ss58_address
         self.batch_size = batch_size
         self.flush_interval = flush_interval
         self.log_queue: asyncio.Queue[dict[str, str | int | float]] = asyncio.Queue()

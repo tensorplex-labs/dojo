@@ -41,8 +41,8 @@ from commons.utils import (
     set_expire_time,
 )
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
-from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.analytics import run_analytics_upload
+from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.logging import logger
 from dojo.protocol import (
     CompletionResponse,

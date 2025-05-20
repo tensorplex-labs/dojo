@@ -1,11 +1,11 @@
 import asyncio
 import gc
+import logging as python_logging
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from loguru import logger
 
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.dataset.synthetic import SyntheticAPI
@@ -13,16 +13,56 @@ from commons.exceptions import FatalSyntheticGenerationError
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
 from dojo.chain import get_async_subtensor
+from dojo.logging import (
+    ValidatorLogForwarder,
+    configure_logger,
+    forwarded_log_filter,
+    get_log_level,
+    logger,
+    python_logging_to_loguru,
+)
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
+
+log_level = get_log_level(ObjectManager.get_config)
+configure_logger(log_level)
+python_logging_to_loguru(level=getattr(python_logging, log_level))
+api_log_forwarder = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Performing startup tasks...")
     await connect_db()
+    # Setup validator API logging
+    global api_log_forwarder
+    api_log_forwarder = ValidatorLogForwarder()
+    api_log_forwarder.start()
+
+    # Add the handler directly to Loguru with the filter
+    log_forwarder_handler = logger.add(
+        api_log_forwarder,
+        level=log_level,
+        format="{message}",
+        filter=forwarded_log_filter,
+        colorize=True,
+    )
+
     yield
+
+    # Cleanup logging handlers
+    if api_log_forwarder:
+        try:
+            # Remove the Loguru handler we added
+            if log_forwarder_handler:
+                logger.remove(log_forwarder_handler)
+        except Exception as e:
+            print(f"Error removing Loguru handlers: {e}")
+
+        # Stop the handler and flush logs
+        await api_log_forwarder.stop()
+
     await _shutdown_validator()
 
 
@@ -73,8 +113,8 @@ async def main():
         host="0.0.0.0",
         port=ObjectManager.get_config().api.port,
         workers=1,
-        log_level="info",
-        reload=False,
+        log_level="debug",
+        log_config=None,  # Disable uvicorn's default logging config
     )
     server = uvicorn.Server(config)
     running_tasks = [

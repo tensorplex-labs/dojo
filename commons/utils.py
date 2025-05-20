@@ -6,11 +6,6 @@ from datetime import datetime, timedelta, timezone
 import bittensor as bt
 import numpy as np
 import plotext
-import requests
-import torch
-from bittensor.core.metagraph import AsyncMetagraph
-from Crypto.Hash import keccak
-from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
 from commons.objects import ObjectManager
 from dojo.kami import SubnetMetagraph

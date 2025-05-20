@@ -92,7 +92,7 @@ services:
 
   validator:
     container_name: validator
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: test
     restart: on-failure
     labels:
       com.centurylinklabs.watchtower.enable: "true"
