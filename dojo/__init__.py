@@ -50,6 +50,14 @@ def get_spec_version():
     )
 
 
+def get_mode() -> str:
+    mode = get_config().fast_mode
+    if not mode:
+        return "normal"
+
+    return mode.lower()
+
+
 VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
 TASK_DEADLINE = 6 * 60 * 60
 
@@ -76,7 +84,9 @@ HFL_SF_UPDATE_INTERVAL = 700  # 11 minutes for Score Feedback updates
 HFL_NEXT_TF_INTERVAL = 1200  # 20 minutes for creating next Text Feedback tasks
 HFL_TASK_DEADLINE = 5 * 60 * 60  # 5 hours
 
-if get_config().fast_mode:
+mode = get_mode()
+
+if mode == "fast":
     print("Running in fast mode for testing purposes...")
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
     TASK_DEADLINE = 180
@@ -96,6 +106,27 @@ if get_config().fast_mode:
     HFL_SF_UPDATE_INTERVAL = 70  # 70 seconds
     HFL_NEXT_TF_INTERVAL = 120  # 2 minutes
     HFL_TASK_DEADLINE = 180  # 3 minutes
+
+elif mode == "medium":
+    print("Running in medium mode...")
+    VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
+    TASK_DEADLINE = 900  # 15 minutes
+    VALIDATOR_RUN = 600  # 10 minutes
+    VALIDATOR_HEARTBEAT = 60  # 1 minute
+    VALIDATOR_UPDATE_SCORE = 600  # 10 minutes
+    VALIDATOR_UPDATE_TASK = 120  # 2 minutes
+    BUFFER_PERIOD = 300  # 5 minutes
+    VALIDATOR_STATUS = 600  # 10 minutes
+    MINER_STATUS = 600  # 10 minutes
+    DOJO_TASK_MONITORING = 60  # 1 minute
+
+    # Medium mode HFL intervals (roughly 1/3rd of normal mode)
+    HFL_TF_CREATE_INTERVAL = 1200  # 20 minutes
+    HFL_TF_UPDATE_INTERVAL = 300  # 5 minutes
+    HFL_SF_CREATE_INTERVAL = 250  # ~4 minutes
+    HFL_SF_UPDATE_INTERVAL = 230  # ~4 minutes
+    HFL_NEXT_TF_INTERVAL = 400  # ~7 minutes
+    HFL_TASK_DEADLINE = 1200  # 20 minutes
 
 
 def get_dojo_api_base_url() -> str:
