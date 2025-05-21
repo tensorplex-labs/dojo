@@ -3,18 +3,20 @@ human_feedback/sanitize.py
 contains logic to sanitize incoming miner feedback before we store it in db.
 """
 
+import asyncio
 import os
 import re
 
 from bittensor.utils.btlogging import logging as logger
 from langfuse.decorators import langfuse_context, observe
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from commons.human_feedback.types import SanitizationResult
 
 # CONSTANT VARS
 MODERATION_LLM = "meta-llama/llama-guard-4-12b"
 MAX_FEEDBACK_LENGTH = 300
+MODERATION_TIMEOUT = 12  # 12 seconds
 
 
 async def sanitize_miner_feedback(miner_feedback: str) -> SanitizationResult:
@@ -72,11 +74,15 @@ async def _moderate_with_llm(miner_feedback: str) -> bool:
         ],
     }
     try:
-        client = OpenAI(
+        client = AsyncOpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY"),
         )
-        response = client.chat.completions.create(**kwargs)
+
+        response = await asyncio.wait_for(
+            client.chat.completions.create(**kwargs), timeout=MODERATION_TIMEOUT
+        )
+
         # log to langfuse
         langfuse_context.update_current_observation(
             input=miner_feedback,
@@ -88,7 +94,7 @@ async def _moderate_with_llm(miner_feedback: str) -> bool:
         logger.error(f"Unexpected error moderating miner feedback: {e}")
         return False
 
-    # uncomment when to see response when testing.
+    # uncomment to see response when testing.
     # logger.info(f"moderating msg: {miner_feedback}")
     # logger.info(f"moderation response: {response.choices[0].message.content}")
 
