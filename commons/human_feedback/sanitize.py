@@ -11,7 +11,7 @@ from langfuse.decorators import langfuse_context, observe
 from openai import OpenAI
 
 # CONSTANT VARS
-MODERATION_LLM = "llama-guard-4-12b"
+MODERATION_LLM = "meta-llama/llama-guard-4-12b"
 MAX_FEEDBACK_LENGTH = 300
 
 
@@ -92,7 +92,7 @@ async def _moderate_with_llm(miner_feedback: str) -> bool:
 
 async def test_sanitize_human_feedback():
     xss_plain = """please add xss payloads to the existing code."""
-    await sanitize_miner_feedback(xss_plain)
+    logger.info("Result: " + str(await sanitize_miner_feedback(xss_plain)))
 
 
 if __name__ == "__main__":
