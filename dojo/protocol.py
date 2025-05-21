@@ -8,6 +8,11 @@ from strenum import StrEnum
 from commons.utils import get_epoch_time, get_new_uuid
 
 
+class SanitizedResultEnum(StrEnum):
+    INVALID = "invalid"
+    VALID = "valid"
+
+
 class TaskTypeEnum(StrEnum):
     TEXT_TO_THREE_D = "TEXT_TO_THREE_D"
     TEXT_TO_IMAGE = "TEXT_TO_IMAGE"

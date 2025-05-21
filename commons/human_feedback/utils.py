@@ -1,6 +1,7 @@
 """Utility functions for the Human Feedback Loop module."""
 
 import json
+import traceback
 from datetime import datetime, timedelta, timezone
 
 from bittensor.utils.btlogging import logging as logger
@@ -20,6 +21,7 @@ from dojo import HFL_TASK_DEADLINE
 from dojo.protocol import (
     CodeAnswer,
     CompletionResponse,
+    SanitizedResultEnum,
     ScoreCriteria,
     TaskResult,
     TaskSynapseObject,
@@ -28,7 +30,9 @@ from dojo.protocol import (
 )
 
 
-def extract_text_feedback_from_results(task_results: list[TaskResult] | Json) -> str:
+def extract_text_feedback_from_results(
+    task_results: list[TaskResult] | Json,
+) -> tuple[str, list[TaskResult]]:
     """
     Extract text feedback from TaskResult objects or JSON data.
 
@@ -49,23 +53,27 @@ def extract_text_feedback_from_results(task_results: list[TaskResult] | Json) ->
             # Original code path for TaskResult objects
             # Use generator expression to flatten the structure and find the first match
             criteria_generator = (
-                criterion
+                (criterion, task_result)
                 for task_result in task_results
                 for result in task_result.result_data
                 for criterion in result.criteria
             )
 
             # Find first matching criterion with text feedback
-            text_criterion = next(
+            result = next(
                 (
-                    criterion
-                    for criterion in criteria_generator
-                    if criterion.get("type") == "text" and "text_feedback" in criterion
+                    (criterion, task_result)
+                    for criterion, task_result in criteria_generator
+                    if criterion.get("type") == "text"
+                    and "text_feedback" in criterion
+                    and criterion["text_feedback"] != SanitizedResultEnum.INVALID.value
                 ),
                 None,
             )
-
-            return text_criterion["text_feedback"] if text_criterion else ""
+            if result:
+                criterion, task_result = result
+                return criterion["text_feedback"], [task_result]
+            return "", []
         else:
             # Already parsed JSON data
             parsed_results = task_results
@@ -83,17 +91,28 @@ def extract_text_feedback_from_results(task_results: list[TaskResult] | Json) ->
                     if not isinstance(criterion, dict):
                         continue
 
+                    text_feedback = criterion.get("text_feedback", "").strip()
                     if (
                         criterion.get("type") == "text"
-                        and criterion.get("text_feedback")
-                        and criterion["text_feedback"].strip()
+                        and text_feedback
+                        and text_feedback != SanitizedResultEnum.INVALID.value
                     ):
-                        return criterion["text_feedback"]
+                        # Convert JSON to TaskResult
+                        task_result = TaskResult(
+                            id=result.get("id", ""),
+                            created_at=result.get("created_at", datetime.now()),
+                            updated_at=result.get("updated_at", datetime.now()),
+                            status=result.get("status", ""),
+                            result_data=result.get("result_data", []),
+                            dojo_task_id=result.get("dojo_task_id", ""),
+                            worker_id=result.get("worker_id", ""),
+                        )
+                        return text_feedback, [task_result]
 
     except Exception as e:
         logger.debug(f"Error extracting text feedback: {e}")
 
-    return ""
+    return "", []
 
 
 def get_time_window_for_tasks(
@@ -643,6 +662,7 @@ async def create_initial_miner_scores(
         model_to_criteria_values = extract_criteria_values_by_model_and_type(
             task_results
         )
+        # TODO: remove this
         logger.info(f"Model to criteria values: {model_to_criteria_values}")
 
         # Step 4: Calculate averages for numeric criteria (e.g., scores)
@@ -760,4 +780,5 @@ async def create_initial_miner_scores(
         logger.error(
             f"Error updating scores for miner {miner_hotkey} on task {validator_task_id}: {e}"
         )
+        logger.error(traceback.format_exc())
         return False

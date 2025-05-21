@@ -62,8 +62,11 @@ if [ "$1" = 'validator' ]; then
     if [ "${SIMULATION}" = "true" ]; then
         EXTRA_ARGS="${EXTRA_ARGS} --simulation"
     fi
-    if [ "${FAST_MODE}" = "true" ]; then
-        EXTRA_ARGS="${EXTRA_ARGS} --fast_mode"
+
+    if [ "${FAST_MODE}" = "medium" ]; then
+        EXTRA_ARGS="${EXTRA_ARGS} --fast_mode medium"
+    elif [ "${FAST_MODE}" = "high" ]; then
+        EXTRA_ARGS="${EXTRA_ARGS} --fast_mode high"
     fi
 
     python main_validator.py \

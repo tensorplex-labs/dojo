@@ -52,6 +52,7 @@ def get_spec_version():
 
 def get_mode() -> str:
     mode = get_config().fast_mode
+    print(f"Mode: {mode}")
     if not mode:
         return "normal"
 
@@ -86,8 +87,8 @@ HFL_TASK_DEADLINE = 5 * 60 * 60  # 5 hours
 
 mode = get_mode()
 
-if mode == "fast":
-    print("Running in fast mode for testing purposes...")
+if mode == "high":
+    print(f"Running in fast mode: {mode} for testing purposes...")
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
     TASK_DEADLINE = 180
     VALIDATOR_RUN = 300
@@ -108,7 +109,7 @@ if mode == "fast":
     HFL_TASK_DEADLINE = 180  # 3 minutes
 
 elif mode == "medium":
-    print("Running in medium mode...")
+    print(f"Running in fast mode: {mode} for testing purposes..")
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
     TASK_DEADLINE = 900  # 15 minutes
     VALIDATOR_RUN = 600  # 10 minutes

@@ -12,6 +12,7 @@ from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import FatalSyntheticGenerationError
 from commons.human_feedback.feedback_loop import FeedbackLoop
 from commons.objects import ObjectManager
+from commons.utils import validate_openai_config
 from database.client import connect_db, disconnect_db
 from dojo.chain import get_async_subtensor
 from dojo.utils.config import source_dotenv
@@ -68,6 +69,9 @@ app.add_middleware(LimitContentLengthMiddleware)
 
 
 async def main():
+    if not await validate_openai_config():
+        raise RuntimeError("OpenAI configuration is invalid")
+
     validator = await ObjectManager.get_validator()
     if not validator:
         raise RuntimeError("Validator not found")

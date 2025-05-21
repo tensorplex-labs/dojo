@@ -7,6 +7,7 @@ import bittensor as bt
 import numpy as np
 import plotext
 from loguru import logger
+from openai import AsyncOpenAI
 
 from commons.objects import ObjectManager
 from dojo.kami import SubnetMetagraph
@@ -209,3 +210,35 @@ def check_stake(subtensor: bt.subtensor, hotkey: str) -> bool:
     if stake < VALIDATOR_MIN_STAKE:
         return False
     return True
+
+
+async def validate_openai_config() -> bool:
+    """
+    Validate OpenAI configuration at startup.
+    Returns True if configuration is valid and API is accessible.
+    """
+    try:
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            logger.error("OPENROUTER_API_KEY not found in environment variables")
+            return False
+
+        client = AsyncOpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
+
+        from commons.human_feedback.sanitize import MODERATION_LLM
+
+        # Test API connection with a minimal request
+        response = await client.chat.completions.create(
+            model=MODERATION_LLM,
+            messages=[{"role": "user", "content": "test"}],
+        )
+
+        logger.info(f"OpenAI configuration validated successfully: {response}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to validate OpenAI configuration: {e}")
+        return False

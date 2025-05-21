@@ -110,7 +110,7 @@ def add_args(parser):
     parser.add_argument(
         "--fast_mode",
         type=str,
-        choices=["fast", "medium", "normal"],
+        choices=["high", "medium", "normal"],
         help="Whether to run in fast mode, for developers to test locally.",
         default="normal",
     )

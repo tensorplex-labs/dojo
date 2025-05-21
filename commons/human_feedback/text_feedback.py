@@ -23,6 +23,7 @@ from database.prisma.types import ValidatorTaskInclude
 from dojo.protocol import (
     CriteriaType,
     CriteriaTypeEnum,
+    SanitizedResultEnum,
     TaskResult,
     TaskSynapseObject,
     TextCriteria,
@@ -126,8 +127,12 @@ async def fetch_miner_feedback_for_task(
     # Filter out miner responses that have already been given feedback
     for resp in valid_miner_responses:
         # Extract feedback text directly from the task_result
-        feedback_text = extract_text_feedback_from_results(resp.task_result)
-        if feedback_text and feedback_text != "":
+        feedback_text, _ = extract_text_feedback_from_results(resp.task_result)
+        if (
+            feedback_text
+            and feedback_text != ""
+            and feedback_text != SanitizedResultEnum.INVALID.value
+        ):
             # Valid feedback already exists
             logger.info(f"Feedback text: {feedback_text} from miner {resp.hotkey}")
             miner_feedbacks.append(
@@ -178,17 +183,17 @@ async def fetch_miner_feedback_for_task(
 
         if not result:  # Empty or None result
             continue
+
         miner_response = responses_needing_fetch[i]
 
-        # TODO sanitize result
-        result = await sanitize_text_feedback(result)
+        logger.info(f"original result from miners........ {result}")
 
-        logger.info(f"result from miners........ {result}")
+        sanitized_result = await sanitize_text_feedback(result)
         # Update the database with fresh results
         success = await ORM.update_miner_task_results(
             miner_hotkey=miner_response.hotkey,
             dojo_task_id=miner_response.dojo_task_id,
-            task_results=result,
+            task_results=sanitized_result,
         )
 
         if not success:
@@ -199,30 +204,15 @@ async def fetch_miner_feedback_for_task(
 
         logger.info(f"Task results for miner {miner_response.hotkey}: {result}")
         # Create initial miner scores with their relations
-        success = await create_initial_miner_scores(
-            validator_task_id=task.id,
-            miner_hotkey=miner_response.hotkey,
-            task_results=result,
+        # Extract text feedback
+        feedback_text, selected_task_result = extract_text_feedback_from_results(
+            sanitized_result
+        )
+        logger.info(
+            f"Selected Feedback text: {feedback_text}, and task result: {selected_task_result}"
         )
 
-        if not success:
-            logger.error(
-                f"Error creating initial miner scores for miner {miner_response.hotkey}"
-            )
-
-        # Extract text feedback
-        feedback_text = extract_text_feedback_from_results(result)
-
-        # @dev - what should happen if not feedback_text?
         if feedback_text:
-            # sanitize miner feedback
-            sanitization_result = await sanitize_miner_feedback(feedback_text)
-            if not sanitization_result.is_safe:
-                logger.warning(f"Skipping feedback from miner {miner_response.hotkey}")
-                continue
-            else:
-                feedback_text = sanitization_result.sanitized_feedback
-
             miner_feedbacks.append(
                 MinerFeedback(
                     hotkey=miner_response.hotkey,
@@ -231,6 +221,16 @@ async def fetch_miner_feedback_for_task(
                 )
             )
             valid_responses.append(miner_response)
+
+            success = await create_initial_miner_scores(
+                validator_task_id=task.id,
+                miner_hotkey=miner_response.hotkey,
+                task_results=selected_task_result,
+            )
+            if not success:
+                logger.error(
+                    f"Error creating initial miner scores for miner {miner_response.hotkey}"
+                )
 
     return miner_feedbacks, valid_responses
 
@@ -412,13 +412,23 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                 )
 
                 # Apply sanitization checks
-                if await dummy_sanitize_text_feedback(text_feedback):
+                # @dev - what should happen if not feedback_text?
+                sanitization_result = await sanitize_miner_feedback(text_feedback)
+                if sanitization_result.is_safe:
                     # Keep original text feedback if valid
                     sanitized_criterion = criterion.copy()
+                    sanitized_criterion["text_feedback"] = (
+                        sanitization_result.sanitized_feedback
+                    )
                 else:
+                    logger.warning(
+                        f"Sanitization failed for dojo_task_id: {task_result.dojo_task_id} with text feedback: {text_feedback}"
+                    )
                     # Replace with "invalid" if not valid
                     sanitized_criterion = criterion.copy()
-                    sanitized_criterion["text_feedback"] = "invalid"
+                    sanitized_criterion["text_feedback"] = (
+                        SanitizedResultEnum.INVALID.value
+                    )
 
                 sanitized_criteria.append(sanitized_criterion)
 
@@ -433,5 +443,13 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
     return sanitized_results
 
 
-async def dummy_sanitize_text_feedback(text_feedback: str) -> bool:
+async def dummy_sanitize_text_feedback(text: str) -> bool:
     return True
+
+
+if __name__ == "__main__":
+
+    async def run_tests():
+        pass
+
+    asyncio.run(run_tests())

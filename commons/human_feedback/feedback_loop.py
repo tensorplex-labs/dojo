@@ -208,10 +208,11 @@ class FeedbackLoop:
                 )
                 return None
 
+            # TODO: turn back to 90 on mainnet
             _, eligible_completion, _ = await evaluate_miner_consensus(
                 task_id=validator_task.task_id,
                 min_threshold=50,
-                max_threshold=90,
+                max_threshold=100,
             )
 
             if eligible_completion:
@@ -272,7 +273,7 @@ class FeedbackLoop:
 
             # Set time window for expired tasks
             expire_from, expire_to = get_time_window_for_tasks(
-                hours_ago_start=2, hours_ago_end=0, buffer_minutes=5
+                hours_ago_start=2, hours_ago_end=0, buffer_minutes=10
             )
 
             # Process TF_PENDING tasks in batches
