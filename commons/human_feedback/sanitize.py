@@ -84,10 +84,10 @@ async def _moderate_with_llm(miner_feedback: str) -> bool:
 
     # if response is safe return True, otherwise return False
     # @dev note: the specific response term could change depending on the LLM used. This is currently configured for llama-guard-4-12b.
-    if response.choices[0].message.content.lower() == "safe":
-        return True
-    else:
+    if "unsafe" in response.choices[0].message.content.lower():
         return False
+    else:
+        return True
 
 
 async def test_sanitize_human_feedback():
