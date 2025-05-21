@@ -21,6 +21,8 @@ from database.prisma.models import HFLState, MinerResponse, ValidatorTask
 from database.prisma.types import ValidatorTaskInclude
 from dojo.protocol import (
     CriteriaType,
+    CriteriaTypeEnum,
+    TaskResult,
     TaskSynapseObject,
     TextCriteria,
     TextFeedbackEvent,
@@ -162,7 +164,7 @@ async def fetch_miner_feedback_for_task(
         for resp in responses_needing_fetch
     ]
 
-    # Execute all fetch tasks concurrently
+    # A list of TaskResult gathered from multiple workers for each miner
     task_results_list = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
     # A list of miner responses that have been updated with the new results
@@ -177,6 +179,9 @@ async def fetch_miner_feedback_for_task(
             continue
 
         miner_response = responses_needing_fetch[i]
+
+        # TODO sanitize result
+        result = await sanitize_text_feedback(result)
 
         logger.info(f"result from miners........ {result}")
         # Update the database with fresh results
@@ -351,3 +356,72 @@ async def get_task_synapse_for_retry(task_id: str) -> TaskSynapseObject | None:
         logger.error(f"Error retrieving task {task_id}: {e}")
         logger.debug(f"Traceback: {traceback.format_exc()}")
         return None
+
+
+async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
+    """
+    Sanitize text feedback for each TaskResult.
+    Replace invalid text feedback with "invalid" instead of removing.
+
+    Args:
+        results (List[TaskResult]): List of task results from miners
+
+    Returns:
+        List[TaskResult]: Results with sanitized text feedback
+    """
+    sanitized_results = []
+
+    for task_result in results:
+        # Create a copy of the task result to avoid modifying the original
+        sanitized_task_result = task_result.model_copy()
+
+        # Ensure result_data exists and is a list
+        if not sanitized_task_result.result_data:
+            continue
+
+        sanitized_result_data = []
+
+        for result_item in sanitized_task_result.result_data:
+            # Check if criteria exists
+            if not hasattr(result_item, "criteria") or not result_item.criteria:
+                continue
+
+            sanitized_criteria = []
+
+            for criterion in result_item.criteria:
+                # Only process text type criteria
+                if criterion["type"] != CriteriaTypeEnum.TEXT.value:
+                    sanitized_criteria.append(criterion)
+                    continue
+
+                # Get text feedback
+                text_feedback = (
+                    criterion["text_feedback"].strip()
+                    if criterion["text_feedback"]
+                    else ""
+                )
+
+                # Apply sanitization checks
+                if await dummy_sanitize_text_feedback(text_feedback):
+                    # Keep original text feedback if valid
+                    sanitized_criterion = criterion.copy()
+                else:
+                    # Replace with "invalid" if not valid
+                    sanitized_criterion = criterion.copy()
+                    sanitized_criterion["text_feedback"] = "invalid"
+
+                sanitized_criteria.append(sanitized_criterion)
+
+            # Update result item with sanitized criteria
+            result_item.criteria = sanitized_criteria
+            sanitized_result_data.append(result_item)
+
+        # Update task result with sanitized result data
+        sanitized_task_result.result_data = sanitized_result_data
+        sanitized_results.append(sanitized_task_result)
+
+    return sanitized_results
+
+
+async def dummy_sanitize_text_feedback(text_feedback: str) -> bool:
+    return True
