@@ -42,8 +42,8 @@ async def sanitize_miner_feedback(miner_feedback: str) -> bool:
 @observe(as_type="generation", capture_input=True, capture_output=True)
 async def _moderate_with_llm(miner_feedback: str) -> bool:
     """
-    uses openrouter key to call llama-guard-4-12b to moderate miner feedback
-    logs call to langfuse if keys exist in .env
+    @dev uses openrouter key from .env to call llama-guard-4-12b to moderate miner feedback. Will throw error if no key is found.
+    @dev logs call to langfuse if keys exist in .env
 
     returns True if the feedback is safe, otherwise returns False.
     """
