@@ -143,6 +143,10 @@ watchtower-down:
 	docker compose -f docker-compose.shared.yaml down watchtower
 
 
+install-hfl-miner:
+	chmod +x ./scripts/hfl/hfl_miner.sh
+	./scripts/hfl/hfl_miner.sh
+
 # ---------------------------------------------------------------------------- #
 #                                   KAMI                                       #
 # ---------------------------------------------------------------------------- #
