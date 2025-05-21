@@ -209,12 +209,16 @@ async def fetch_miner_feedback_for_task(
         # Extract text feedback
         feedback_text = extract_text_feedback_from_results(result)
 
-        # WIP - sanitize miner feedback
-        if not await sanitize_miner_feedback(feedback_text):
-            logger.warning(f"Skipping feedback from miner {miner_response.hotkey}")
-            continue
-
+        # @dev - what should happen if not feedback_text?
         if feedback_text:
+            # sanitize miner feedback
+            sanitization_result = await sanitize_miner_feedback(feedback_text)
+            if not sanitization_result.is_safe:
+                logger.warning(f"Skipping feedback from miner {miner_response.hotkey}")
+                continue
+            else:
+                feedback_text = sanitization_result.sanitized_feedback
+
             miner_feedbacks.append(
                 MinerFeedback(
                     hotkey=miner_response.hotkey,
