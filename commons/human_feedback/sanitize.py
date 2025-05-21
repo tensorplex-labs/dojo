@@ -60,11 +60,6 @@ async def _moderate_with_llm(miner_feedback: str) -> bool:
 
     returns True if the feedback is safe, otherwise returns False.
     """
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-    )
-
     kwargs = {
         "model": MODERATION_LLM,
         "messages": [
@@ -76,16 +71,22 @@ async def _moderate_with_llm(miner_feedback: str) -> bool:
             }
         ],
     }
-
-    response = client.chat.completions.create(**kwargs)
-
-    # log to langfuse
-    langfuse_context.update_current_observation(
-        input=miner_feedback,
-        model=kwargs["model"],
-        output=response.choices[0].message.content,
-        usage=response.usage,
-    )
+    try:
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+        )
+        response = client.chat.completions.create(**kwargs)
+        # log to langfuse
+        langfuse_context.update_current_observation(
+            input=miner_feedback,
+            model=kwargs["model"],
+            output=response.choices[0].message.content,
+            usage=response.usage,
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error moderating miner feedback: {e}")
+        return False
 
     # uncomment when to see response when testing.
     # logger.info(f"moderating msg: {miner_feedback}")
@@ -93,10 +94,10 @@ async def _moderate_with_llm(miner_feedback: str) -> bool:
 
     # if response is safe return True, otherwise return False
     # @dev note: the specific response term could change depending on the LLM used. This is currently configured for llama-guard-4-12b.
-    if "unsafe" in response.choices[0].message.content.lower():
-        return False
-    else:
+    if re.search(r"\bsafe\b", response.choices[0].message.content, re.IGNORECASE):
         return True
+    else:
+        return False
 
 
 async def test_sanitize_human_feedback():
