@@ -10,19 +10,23 @@ from bittensor.utils.btlogging import logging as logger
 from langfuse.decorators import langfuse_context, observe
 from openai import OpenAI
 
+# CONSTANT VARS
+MODERATION_LLM = "llama-guard-4-12b"
+MAX_FEEDBACK_LENGTH = 300
+
 
 async def sanitize_miner_feedback(miner_feedback: str) -> bool:
     """
     sanitizes miner feedback for malicious content
 
-    1. checks for length < 300 chars
+    1. checks for length < MAX_FEEDBACK_LENGTH
     2. screen for blacklisted terms typically found in malicious content
     3. call LLM as a filter
 
     returns False if the feedback is not safe, otherwise returns True.
     """
     # 1. check for length
-    if len(miner_feedback) > 300:
+    if len(miner_feedback) > MAX_FEEDBACK_LENGTH:
         logger.error(f"miner feedback is too long: {len(miner_feedback)}")
         return False
 
@@ -47,14 +51,13 @@ async def _moderate_with_llm(miner_feedback: str) -> bool:
 
     returns True if the feedback is safe, otherwise returns False.
     """
-    model = "meta-llama/llama-guard-4-12b"
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OPENROUTER_API_KEY"),
     )
 
     kwargs = {
-        "model": model,
+        "model": MODERATION_LLM,
         "messages": [
             {
                 "role": "user",
