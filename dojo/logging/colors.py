@@ -1,8 +1,3 @@
-"""
-Utilities for handling color tags in log messages.
-Converts tags like [red], [blue], etc. to ANSI color codes.
-"""
-
 import logging
 import re
 from typing import Match
@@ -44,22 +39,17 @@ def convert_tags_to_ansi(text: str) -> str:
     Returns:
         Text with ANSI color codes
     """
-    # Pattern to match color tags: [color] or [/color]
     pattern = r"\[(/?[a-zA-Z_]+)\]"
 
     def replace_tag(match: Match[str]) -> str:
         tag = match.group(1)
         if tag.startswith("/"):
-            # Closing tag, reset the color
             return ANSI_COLORS["reset"]
         elif tag in ANSI_COLORS:
-            # Opening tag with known color
             return ANSI_COLORS[tag]
         else:
-            # Unknown tag, return as is
             return match.group(0)
 
-    # Replace all color tags with their ANSI equivalents
     return re.sub(pattern, replace_tag, text)
 
 
