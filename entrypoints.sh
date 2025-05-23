@@ -43,6 +43,8 @@ if [ "$1" = 'miner' ]; then
     --wallet.hotkey ${WALLET_HOTKEY} \
     --axon.port ${AXON_PORT} \
     --neuron.type miner \
+    --kami.host ${KAMI_HOST} \
+    --kami.port ${KAMI_PORT} \
     ${EXTRA_ARGS}
 fi
 
@@ -60,8 +62,11 @@ if [ "$1" = 'validator' ]; then
     if [ "${SIMULATION}" = "true" ]; then
         EXTRA_ARGS="${EXTRA_ARGS} --simulation"
     fi
-    if [ "${FAST_MODE}" = "true" ]; then
-        EXTRA_ARGS="${EXTRA_ARGS} --fast_mode"
+
+    if [ "${FAST_MODE}" = "medium" ]; then
+        EXTRA_ARGS="${EXTRA_ARGS} --fast_mode medium"
+    elif [ "${FAST_MODE}" = "high" ]; then
+        EXTRA_ARGS="${EXTRA_ARGS} --fast_mode high"
     fi
 
     python main_validator.py \
@@ -72,6 +77,8 @@ if [ "$1" = 'validator' ]; then
     --wallet.name ${WALLET_COLDKEY} \
     --wallet.hotkey ${WALLET_HOTKEY} \
     --neuron.type validator \
+    --kami.host ${KAMI_HOST} \
+    --kami.port ${KAMI_PORT} \
     ${EXTRA_ARGS}
 fi
 
