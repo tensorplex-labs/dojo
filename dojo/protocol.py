@@ -53,7 +53,6 @@ CriteriaType = ScoreCriteria
 class CodeFileObject(BaseModel):
     filename: str = Field(description="Name of the file")
     content: str = Field(description="Content of the file which can be code or json")
-    language: str = Field(description="Programming language of the file")
 
 
 class CodeAnswer(BaseModel):
