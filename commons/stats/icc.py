@@ -64,14 +64,15 @@ if __name__ == "__main__":
     # Sample data: 5 items rated by 4 raters
     # TODO: hotkey to scores, ensure proper ordering!!!
     data = {
-        "Rater1": [7.5, 8.0, 6.5, 9.0, 7.0],
-        "Rater2": [7.0, 8.5, 6.0, 8.5, 7.5],
-        "Rater3": [8.0, 7.5, 6.8, 9.5, 6.5],
-        "Rater4": [7.2, 8.2, 6.2, 9.2, 7.8],
+        "Rater1": [34.0, 23.0, 12.0, 45.0],
+        "Rater2": [23.0, 45.0, 34.0, 12.0],
+        "Rater3": [34.0, 12.0, 23.0, 45.0],
+        # "Rater4": [7.2, 8.2, 6.2, 9.2, 7.8],
     }
-    icc_scores = calculate_icc(data)
-    # Display the results
-    print("Inter-Rater Reliability (ICC) Scores:")
 
-    for pair, score in icc_scores.items():
-        print(f"{pair}: ICC = {score:.3f}")
+    # icc_scores = calculate_icc(data)
+    # # Display the results
+    # print("Inter-Rater Reliability (ICC) Scores:")
+
+    # for pair, score in icc_scores.items():
+    #     print(f"{pair}: ICC = {score:.3f}")

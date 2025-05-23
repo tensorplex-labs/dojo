@@ -111,7 +111,7 @@ if mode == "high":
 elif mode == "medium":
     print(f"Running in fast mode: {mode} for testing purposes..")
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
-    TASK_DEADLINE = 900  # 15 minutes
+    TASK_DEADLINE = 1200  # 20 minutes
     VALIDATOR_RUN = 600  # 10 minutes
     VALIDATOR_HEARTBEAT = 60  # 1 minute
     VALIDATOR_UPDATE_SCORE = 600  # 10 minutes
@@ -121,13 +121,12 @@ elif mode == "medium":
     MINER_STATUS = 600  # 10 minutes
     DOJO_TASK_MONITORING = 60  # 1 minute
 
-    # Medium mode HFL intervals (roughly 1/3rd of normal mode)
-    HFL_TF_CREATE_INTERVAL = 1200  # 20 minutes
+    HFL_TF_CREATE_INTERVAL = 660  # 10 minutes
     HFL_TF_UPDATE_INTERVAL = 300  # 5 minutes
     HFL_SF_CREATE_INTERVAL = 250  # ~4 minutes
     HFL_SF_UPDATE_INTERVAL = 230  # ~4 minutes
     HFL_NEXT_TF_INTERVAL = 400  # ~7 minutes
-    HFL_TASK_DEADLINE = 1200  # 20 minutes
+    HFL_TASK_DEADLINE = 1800  # 30 minutes
 
 
 def get_dojo_api_base_url() -> str:

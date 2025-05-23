@@ -53,6 +53,7 @@ class FeedbackLoop:
                 await asyncio.sleep(dojo.HFL_TF_CREATE_INTERVAL)
                 logger.info("Starting feedback loop")
                 await self._start_feedback_loop(validator)
+                logger.info("Feedback loop completed")
             except Exception as e:
                 logger.error(f"Error in start_feedback_loop: {e}")
                 logger.debug(f"Traceback: {traceback.format_exc()}")

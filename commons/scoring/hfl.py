@@ -345,7 +345,7 @@ def ensure_miner_response_order(validator_task: ValidatorTask) -> ValidatorTask:
             return completion_order[completion_id]
 
         miner_response.scores.sort(key=get_order)
-    return validator_task
+    return task_copy
 
 
 async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, float]:

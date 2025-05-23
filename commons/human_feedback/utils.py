@@ -1,5 +1,6 @@
 """Utility functions for the Human Feedback Loop module."""
 
+import asyncio
 import json
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -8,7 +9,7 @@ from bittensor.utils.btlogging import logging as logger
 
 from commons.dataset.types import HumanFeedbackResponse
 from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
-from database.client import prisma
+from database.client import connect_db, prisma
 from database.prisma import Json
 from database.prisma.models import Criterion, HFLState, MinerScore, ValidatorTask
 from database.prisma.types import (
@@ -244,11 +245,10 @@ async def evaluate_miner_consensus(
             logger.debug(f"No miner scores found for task {task_id}")
             return {}, None, None
 
-        # Group scores by miner response ID and completion ID
-        # map of miner_response_id -> completion_id
+        # map of miner_response_id -> best_completion_id
         miner_best_completions = {}
-        # map of completion_id -> list of miners and their raw scores
-        completion_scores = {}
+        # map of miner_response_id -> completion_id -> score mapping
+        miner_completion_scores = {}
 
         for score in miner_scores:
             if (
@@ -267,30 +267,19 @@ async def evaluate_miner_consensus(
             completion_id = score.criterion_relation.completion_relation.completion_id
             miner_response_id = score.miner_response_id
 
-            # Store score for this completion
-            if completion_id not in completion_scores:
-                completion_scores[completion_id] = []
-            completion_scores[completion_id].append(
-                (miner_response_id, miner_raw_score)
+            # Store score directly in miner_completion_scores
+            if miner_response_id not in miner_completion_scores:
+                miner_completion_scores[miner_response_id] = {}
+            miner_completion_scores[miner_response_id][completion_id] = miner_raw_score
+
+        # Single loop to find best completion for each miner
+        for miner_response_id, completion_scores_map in miner_completion_scores.items():
+            # Find the completion with highest score for this miner
+            best_completion = max(
+                completion_scores_map.items(),
+                key=lambda x: x[1],  # x is (completion_id, score)
             )
-
-        # Find highest scored completion for each miner
-        for completion_id, scores in completion_scores.items():
-            for miner_response_id, score in scores:
-                current_best = miner_best_completions.get(miner_response_id)
-                if current_best is None:
-                    miner_best_completions[miner_response_id] = completion_id
-                    continue
-
-                # Find the current best score
-                current_best_score = None
-                for c_scores in completion_scores.get(current_best, []):
-                    if c_scores[0] == miner_response_id:
-                        current_best_score = c_scores[1]
-                        break
-
-                if current_best_score is None or score > current_best_score:
-                    miner_best_completions[miner_response_id] = completion_id
+            miner_best_completions[miner_response_id] = best_completion[0]
 
         total_miners = len(set(miner_best_completions.keys()))
         if total_miners == 0:
@@ -782,3 +771,17 @@ async def create_initial_miner_scores(
         )
         logger.error(traceback.format_exc())
         return False
+
+
+if __name__ == "__main__":
+    from database.client import connect_db
+
+    async def test():
+        await connect_db()
+        miner_consensus: tuple[
+            dict[str, float], str | None, str | None
+        ] = await evaluate_miner_consensus("", 50, 100)
+        print(miner_consensus)
+        await prisma.disconnect()
+
+    asyncio.run(test())

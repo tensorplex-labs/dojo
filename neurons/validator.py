@@ -530,6 +530,7 @@ class Validator(aobject):
                 moving_average_alpha * new_incentives
                 + (1 - moving_average_alpha) * existing_incentives
             )
+            # ensure scores are non-negative
             updated_scores = torch.clamp(updated_scores, min=0.0)
 
             _terminal_plot(
@@ -954,7 +955,7 @@ class Validator(aobject):
 
                                 # TODO: remove this
                                 logger.info(
-                                    f"Scored HFL task {sf_task.id}, hotkey to score: {hotkey_to_weighted_score}"
+                                    f"Scored HFL task {sf_task.id}, hotkey to weighted score: {hotkey_to_weighted_score}"
                                 )
                                 logger.info(
                                     f"Scored HFL task {sf_task.id}, hotkey to tf score: {hotkey_to_tf_score}"
