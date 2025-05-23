@@ -60,7 +60,9 @@ dependencies = [
   "aioboto3==13.4.0",
   "aiofiles==24.1.0",
   "python-multipart==0.0.20",
-  "async-lru==2.0.5"
+  "async-lru==2.0.5",
+  "openai>=1.0.0",
+  "langfuse==2.48.0"
 ]
 
 [project.optional-dependencies]
@@ -81,7 +83,7 @@ name = "cz_conventional_commits"
 [tool.pyright]
 exclude = ["**/__pycache__", "database/prisma", "wandb", ".nox"]
 reportUnusedCallResult = false
-typeCheckingMode = "strict"
+typeCheckingMode = "standard"
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

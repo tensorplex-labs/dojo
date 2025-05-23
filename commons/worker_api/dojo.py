@@ -10,11 +10,7 @@ from loguru import logger
 from commons.exceptions import CreateTaskFailed
 from commons.utils import loaddotenv
 from dojo import get_dojo_api_base_url
-from dojo.protocol import (
-    CodeAnswer,
-    MultimediaAnswer,
-    TaskSynapseObject,
-)
+from dojo.protocol import CodeAnswer, MultimediaAnswer, TaskSynapseObject, TaskTypeEnum
 
 DOJO_API_BASE_URL = get_dojo_api_base_url()
 # to be able to get the curlify requests
@@ -75,10 +71,20 @@ class DojoAPI:
 
     @staticmethod
     def serialize_task_request(data: TaskSynapseObject):
+        # Use a mapping for task_modality to avoid if-else logic
+        # TODO: KIV
+        if data.task_type in (
+            TaskTypeEnum.TEXT_FEEDBACK,
+            TaskTypeEnum.CODE_GENERATION,
+        ):
+            task_modality = TaskTypeEnum.CODE_GENERATION
+        else:
+            task_modality = str(data.task_type).upper()
+
         output = dict(
             prompt=data.prompt,
             responses=[],
-            task_modality=str(data.task_type).upper(),
+            task_modality=task_modality,
         )
 
         # Safety check for responses
@@ -112,19 +118,25 @@ class DojoAPI:
         task_request: TaskSynapseObject,
     ) -> List[str]:
         response_data = {"text": "", "json": {}}
+        # Simplified title assignment
+        title = (
+            "Text Feedback Task"
+            if task_request.task_type == TaskTypeEnum.TEXT_FEEDBACK
+            else cls.CODE_GEN_TASK_TITLE
+        )
 
         for attempt in range(cls.MAX_RETRIES):
             try:
                 # Prepare request data
                 task_data = cls.serialize_task_request(task_request)
-                # TODO: make task title dynamic
                 form_body = {
-                    "title": ("", cls.CODE_GEN_TASK_TITLE),
+                    "title": ("", title),
                     "body": ("", task_request.prompt),
                     "expireAt": ("", task_request.expire_at),
                     "taskData": ("", json.dumps([task_data])),
                     "maxResults": ("", str(_get_max_results_param())),
                 }
+                # logger.info(f"Form body: {form_body}")
 
                 # Make request
                 response = await cls._http_client.post(
@@ -140,7 +152,7 @@ class DojoAPI:
                 if response.status_code == 200:
                     task_ids = response_data["json"]["body"]
                     logger.success(
-                        f"Successfully created task with\ntask ids:{task_ids}"
+                        f"Successfully created {task_request.task_type} task with\ntask ids:{task_ids}"
                     )
                     return task_ids
 

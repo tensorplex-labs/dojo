@@ -109,8 +109,10 @@ def add_args(parser):
 
     parser.add_argument(
         "--fast_mode",
-        action="store_true",
+        type=str,
+        choices=["high", "medium", "normal"],
         help="Whether to run in fast mode, for developers to test locally.",
+        default="normal",
     )
 
     parser.add_argument(
@@ -123,6 +125,19 @@ def add_args(parser):
         "--simulation_bad_miner",
         action="store_true",
         help="Set miner simluation to a bad one",
+    )
+
+    parser.add_argument(
+        "--kami.port",
+        type=int,
+        help="Port for Kami connection",
+    )
+
+    parser.add_argument(
+        "--kami.host",
+        type=str,
+        help="Host for Kami connection",
+        default="localhost",
     )
 
     epoch_length = 100
@@ -148,6 +163,13 @@ def add_args(parser):
 
         parser.add_argument(
             "--neuron.moving_average_alpha",
+            type=float,
+            help="Moving average alpha parameter, how much to add of the new observation.",
+            default=0.3,
+        )
+
+        parser.add_argument(
+            "--weights.hfl_ema_alpha",
             type=float,
             help="Moving average alpha parameter, how much to add of the new observation.",
             default=0.3,
