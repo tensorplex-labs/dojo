@@ -63,7 +63,6 @@ async def score_hfl_tasks(
         return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
 
 
-@staticmethod
 async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
     """Calculate SF Score, which is used when we don't have ground truth for the score feedback task.
     Args:
@@ -119,7 +118,6 @@ def _validate_task(task: ValidatorTask, hfl_state: HFLState) -> None:
         )
 
 
-@staticmethod
 async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
     """Calculate TF_TASK score based on how much each miner's feedback improved the completion.
 
