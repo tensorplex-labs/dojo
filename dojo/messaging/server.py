@@ -24,8 +24,8 @@ async def health_check():
 
 class Server:
     def __init__(self, app: FastAPI | None = None) -> None:
-        self.app = FastAPI() or app
-        # self.app.include_router(router)
+        self.app = app or FastAPI()
+        self.app.include_router(router)
         self.app.add_middleware(ZstdMiddleware)
         self.app.add_middleware(SignatureMiddleware)
         # NOTE: here we register some exception handlers that make it easier to
@@ -164,3 +164,14 @@ def _register_route_handler(
         description=description,
     )
     return app
+
+
+if __name__ == "__main__":
+    # Example usage
+    server = Server()
+    # Define your Pydantic model and handler function here
+    # server.serve_synapse(MyModel, my_handler)
+    # asyncio.run(server.initialise())
+    import asyncio
+
+    asyncio.run(server.initialise())

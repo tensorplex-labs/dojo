@@ -22,6 +22,9 @@ class SignatureMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> ORJSONResponse | Response:
+        if request.url.path == "/health":
+            return await call_next(request)
+
         signature = request.headers.get(SIGNATURE_HEADER, "")
         hotkey = request.headers.get(HOTKEY_HEADER, "")
         message = request.headers.get(MESSAGE_HEADER, "")
@@ -49,12 +52,17 @@ class ZstdMiddleware(BaseHTTPMiddleware):
     This middleware:
     1. Decompresses incoming request bodies with content-encoding: zstd
     2. Compresses outgoing response bodies when Accept-Encoding includes zstd
+
+    NOTE: The /health endpoint is excluded from compression/decompression.
     """
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> ORJSONResponse | Response:
         logger.info(f"Request headers: {request.headers}")
+        if request.url.path == "/health":
+            return await call_next(request)
+
         encoding = request.headers.get("content-encoding", "").lower()
         if encoding == "zstd":
             decompressed_body = await decode_body(request)
