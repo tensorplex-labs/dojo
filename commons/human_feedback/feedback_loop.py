@@ -5,7 +5,7 @@ import random
 import traceback
 from typing import Dict, List, Tuple
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 import dojo
 from commons.dataset.types import MinerFeedback

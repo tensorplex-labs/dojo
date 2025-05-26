@@ -45,7 +45,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.utils import datetime_as_utc, get_new_uuid
 from database.client import prisma
@@ -244,7 +244,7 @@ async def create_validator_tasks(
         # Create scores in the database from the miner response task_results
         await create_scores(task.id, completions, miner_responses)
 
-        logger.info(f"Created test task {i+1}/{num_tasks} with ID: {task.id}")
+        logger.info(f"Created test task {i + 1}/{num_tasks} with ID: {task.id}")
 
     return created_tasks, task_to_target_completion_id
 
@@ -730,7 +730,7 @@ async def create_tf_tasks(
         )
 
         logger.info(
-            f"Created {scenario} TEXT_FEEDBACK task {i+1}/{num_tasks} with ID: {task.id}"
+            f"Created {scenario} TEXT_FEEDBACK task {i + 1}/{num_tasks} with ID: {task.id}"
         )
 
     return created_tasks

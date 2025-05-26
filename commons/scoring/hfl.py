@@ -3,7 +3,7 @@ import json
 import traceback
 from collections import defaultdict
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 from pydantic import ValidationError
 
 from commons.orm import ORM

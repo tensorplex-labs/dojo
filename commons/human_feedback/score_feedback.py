@@ -4,7 +4,7 @@ import traceback
 from datetime import datetime, timezone
 
 from bittensor.core.chain_data.axon_info import AxonInfo
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.hfl_heplers import HFLManager
