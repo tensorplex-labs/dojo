@@ -31,15 +31,13 @@ from dojo.utils.config import get_config
 
 
 class Miner(aobject):
-    _should_exit: bool = False
-    kami: Kami
-
     async def __init__(self):
+        self._should_exit: bool = False
         self._last_block = None
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
-        self.kami = Kami()
+        self.kami: Kami = Kami()
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
