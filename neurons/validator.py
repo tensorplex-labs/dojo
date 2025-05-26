@@ -29,7 +29,6 @@ from commons.exceptions import (
 )
 from commons.hfl_heplers import HFLManager
 from commons.human_feedback.utils import should_continue_hfl
-from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.score_storage import ScoreStorage
@@ -194,28 +193,6 @@ class Validator(aobject):
                 )
 
         return completion_responses
-
-    @staticmethod
-    async def _obfuscate_completion_files(
-        completion_responses: List[CompletionResponse],
-    ):
-        """Obfuscate HTML files in each completion response."""
-        for completion in completion_responses:
-            if hasattr(completion.completion, "files"):
-                for file in completion.completion.files:
-                    if file.filename.lower().endswith(".html"):
-                        try:
-                            original_size = len(file.content)
-                            logger.debug(
-                                f"Original size of {file.filename}: {original_size} bytes"
-                            )
-                            file.content = await obfuscate_html_and_js(file.content)
-                            obfuscated_size = len(file.content)
-                            logger.debug(
-                                f"Obfuscated size of {file.filename}: {obfuscated_size} bytes"
-                            )
-                        except Exception as e:
-                            logger.error(f"Error obfuscating {file.filename}: {e}")
 
     async def get_active_miner_uids(self) -> list[int]:
         async with self._uids_alock:
