@@ -7,8 +7,8 @@ import asyncio
 import os
 import re
 
-from bittensor.utils.btlogging import logging as logger
 from langfuse.decorators import langfuse_context, observe
+from loguru import logger
 from openai import AsyncOpenAI
 
 from commons.human_feedback.types import SanitizationResult

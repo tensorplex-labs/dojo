@@ -45,7 +45,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.utils import datetime_as_utc, get_new_uuid
 from database.client import prisma

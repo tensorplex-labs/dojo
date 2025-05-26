@@ -5,7 +5,7 @@ import json
 import traceback
 from datetime import datetime, timedelta, timezone
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 from commons.dataset.types import HumanFeedbackResponse
 from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time

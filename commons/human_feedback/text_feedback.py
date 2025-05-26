@@ -4,7 +4,7 @@ import asyncio
 import traceback
 from typing import List
 
-from bittensor.utils.btlogging import logging as logger
+from loguru import logger
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
