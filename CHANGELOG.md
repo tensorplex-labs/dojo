@@ -1,3 +1,22 @@
+## [1.12.3](https://github.com/tensorplex-labs/dojo/compare/v1.12.2...v1.12.3) (2025-05-27)
+
+### Bug Fixes
+
+* connect db on init ([2375a02](https://github.com/tensorplex-labs/dojo/commit/2375a0235c047dee3a5044bd8d13e29c55d89c38)), closes [#198](https://github.com/tensorplex-labs/dojo/issues/198)
+* connect db on init ([af6437f](https://github.com/tensorplex-labs/dojo/commit/af6437ffeccf0b12c45fd14d3ecc34862930cfe7))
+
+## [1.12.2](https://github.com/tensorplex-labs/dojo/compare/v1.12.1...v1.12.2) (2025-05-27)
+
+### Bug Fixes
+
+* added missing score volume ([fd25cdf](https://github.com/tensorplex-labs/dojo/commit/fd25cdfa7cf0d9ce687d7a9724e09b44f205b3c3))
+* backup scores; removed lang field ([ea56758](https://github.com/tensorplex-labs/dojo/commit/ea56758e107bf8626255de72e1ee127da32620f5))
+* bind score volumns, and reduce synapase size sending miner score ([ad9cb8c](https://github.com/tensorplex-labs/dojo/commit/ad9cb8c13003ec56eec15814f42e7bfee41435ec))
+* fixed makefile ([9eb2c6d](https://github.com/tensorplex-labs/dojo/commit/9eb2c6d22dcc15ee7eac7b616ae80ee977a0bda0))
+* mount scores as local path ([3a9d7d9](https://github.com/tensorplex-labs/dojo/commit/3a9d7d98677802adce2dd90575ef49fbfcf5abfd))
+* removed language field in FileObject type ([965995b](https://github.com/tensorplex-labs/dojo/commit/965995bd2c7aa915cc9144f3e45e3f6a060d2a98))
+* use normalized outputs instead of raw outputs ([5ef88ed](https://github.com/tensorplex-labs/dojo/commit/5ef88edc0935c1d325f75bd905c32c747976dd5d))
+
 ## [1.12.1](https://github.com/tensorplex-labs/dojo/compare/v1.12.0...v1.12.1) (2025-05-15)
 
 ### Bug Fixes
