@@ -104,7 +104,6 @@ class Validator(aobject):
     async def __init__(self):
         self.MAX_BLOCK_CHECK_ATTEMPTS = 3
         self.QUALITY_WEIGHT = 0.8
-        self._last_block = None
         self._block_check_attempts = 0
         self._connection_lock = asyncio.Lock()
 
@@ -668,7 +667,13 @@ class Validator(aobject):
 
     @property
     def block(self):
-        return self._last_block
+        if not hasattr(self, "_block"):
+            self._block = 0
+        return self._block
+
+    @block.setter
+    def block(self, value: int):
+        self._block = value
 
     async def _try_reconnect_subtensor(self):
         self._block_check_attempts += 1
@@ -1808,24 +1813,18 @@ class Validator(aobject):
 
         return task.validator_task.task_id, hotkey_to_scores
 
-    # async def block_headers_callback(self, block: dict):
-    #     logger.trace(f"Received block headers {block}")
-    #     block_header = parse_block_headers(block)
-    #     block_number = block_header.number.to_int()
-    #     self._last_block = block_number
-
     async def block_updater(self):
         while True:
             block = await self.kami.get_current_block()
             if block and block != self.block:
-                self._last_block = block
-                logger.debug(f"Updated block to {self._last_block}")
+                self.block = block
+                logger.debug(f"Updated block to {self._block}")
 
             if os.getenv("FAST_MODE"):
                 continue
 
             logger.info(
-                f"Updated block to {self._last_block}"
+                f"Updated block to {self.block}"
             )  # log new block if non fast_mode
 
             await asyncio.sleep(12)
