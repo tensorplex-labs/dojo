@@ -19,12 +19,7 @@ from dojo.messaging.types import (
     StdResponse,
 )
 from dojo.messaging.utils import encode_body
-from dojo.protocol import (
-    CodeAnswer,
-    CompletionResponse,
-    TaskSynapseObject,
-    TaskTypeEnum,
-)
+from dojo.protocol import Heartbeat
 
 
 def get_client() -> ClientSession:
@@ -146,6 +141,7 @@ class Client:
             Response: Returns both the aiohttp Response, and the model that
                 was returned from the server
         """
+        model_name = model.__class__.__name__
         _headers = self._build_headers()
         payload = encode_body(model, _headers)
         # response: aiohttp.ClientResponse | None = None
@@ -156,11 +152,13 @@ class Client:
             headers=_headers,
             timeout=aiohttp.ClientTimeout(total=timeout_sec),
         ) as client_resp:
-            logger.info(f"Received response from: {url}, status: {client_resp.status}")
+            logger.info(
+                f"Received response from: {url} for synapse: {model_name}, status: {client_resp.status}"
+            )
             response_json = {}
             try:
                 if client_resp.headers.get("content-encoding", "").lower() == "zstd":
-                    logger.info("Attempting zstd decoding")
+                    logger.info(f"Attempting zstd decoding for {model_name}")
                     response_bytes = await client_resp.read()
                     dctx = zstd.ZstdDecompressor()
                     decompressed_bytes = dctx.decompress(response_bytes)
@@ -254,20 +252,6 @@ class Client:
 
 # NOTE: example usage below
 async def main():
-    payload_a = TaskSynapseObject(
-        prompt="Hello",
-        task_type=TaskTypeEnum.CODE_GENERATION,
-        # completion_responses=[],
-        completion_responses=[
-            CompletionResponse(
-                model="gpt-4",
-                completion=CodeAnswer(files=[]),
-                completion_id="123",
-            )
-        ],
-        expire_at="2026-10-01T00:00:00Z",
-    )
-    json_data = payload_a.model_dump_json()
     # NOTE: example here to generate a valid signature, message, and hotkey
     keypair = substrateinterface.Keypair.create_from_uri("//Alice")
     message = "bingbong"
@@ -282,8 +266,29 @@ async def main():
     client = Client(session=session, keypair=keypair)
     is_healthy = await client.health_check(url)
     logger.info(f"Server health check: {is_healthy}")
-    response, returned_payload = await client.send(url, model=payload_a)
-    compressed = encode_body(payload_a, client._build_headers())  # pyright: ignore
+
+    # # NOTE: testing TaskSynapseObject
+    # task_payload = TaskSynapseObject(
+    #     prompt="Hello",
+    #     task_type=TaskTypeEnum.CODE_GENERATION,
+    #     # completion_responses=[],
+    #     completion_responses=[
+    #         CompletionResponse(
+    #             model="gpt-4",
+    #             completion=CodeAnswer(files=[]),
+    #             completion_id="123",
+    #         )
+    #     ],
+    #     expire_at="2026-10-01T00:00:00Z",
+    # )
+    # json_data = task_payload.model_dump_json()
+    # response, returned_payload = await client.send(url, model=task_payload)
+    # compressed = encode_body(task_payload, client._build_headers())  # pyright: ignore
+
+    heartbeat = Heartbeat(ack=False)
+    response, returned_payload = await client.send(url, model=heartbeat)
+    json_data = heartbeat.model_dump_json()
+    compressed = encode_body(heartbeat, client._build_headers())
 
     if response:
         logger.debug(f"Status: {response.status}")

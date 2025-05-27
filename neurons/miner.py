@@ -7,6 +7,7 @@ from typing import Dict, Tuple
 
 import bittensor
 from bittensor.utils.networking import ip_to_int, ip_version
+from fastapi import Request
 from loguru import logger
 
 from commons.objects import ObjectManager
@@ -16,6 +17,7 @@ from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import parse_block_headers
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
 from dojo.messaging import Server
+from dojo.messaging.types import HOTKEY_HEADER
 from dojo.protocol import (
     Heartbeat,
     ScoreCriteria,
@@ -70,15 +72,23 @@ class Miner(aobject):
             forward_fn=self.forward_score_result,
             blacklist_fn=self.blacklist_score_result_request,
         ).attach(
-            forward_fn=self.ack_heartbeat,
-            blacklist_fn=self.blacklist_heartbeat_request,
-        ).attach(
             forward_fn=self.forward_task_result_request,
             blacklist_fn=self.blacklist_task_result_request,
         )
 
+        async def heartbeat_adapter(request: Request, synapse: Heartbeat):
+            return await self._ack_heartbeat(request, synapse)
+
+        self.server.serve_synapse(synapse=Heartbeat, handler=heartbeat_adapter)
+        # TODO: task request request
+        # TODO: score result request
+        # TODO: task result request
+
         # log all incoming requests
         self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
+
+    async def start_server(self):
+        await self.server.initialise()
 
     async def init_metagraphs(self):
         logger.info("Performing async init for miner")
@@ -175,17 +185,12 @@ class Miner(aobject):
 
     async def _cleanup(self):
         self.axon.stop()
+        await self.server.shutdown()
         await self.kami.close()
 
-    async def ack_heartbeat(self, synapse: Heartbeat) -> Heartbeat:
-        caller_hotkey = (
-            synapse.dendrite.hotkey if synapse.dendrite else "unknown hotkey"
-        )
+    async def _ack_heartbeat(self, request: Request, synapse: Heartbeat) -> Heartbeat:
+        caller_hotkey = request.headers.get(HOTKEY_HEADER)
         logger.info(f"⬇️ Received heartbeat synapse from {caller_hotkey}")
-        if not synapse:
-            logger.error("Invalid synapse object")
-            return synapse
-
         synapse.ack = True
         logger.info(f"⬆️ Respondng to heartbeat synapse: {synapse}")
         return synapse
@@ -355,6 +360,7 @@ class Miner(aobject):
         ip_addr = synapse.dendrite.ip or "Unknown IP"
         return f"Hotkey: {caller_hotkey}, IP: {ip_addr}"
 
+    # TODO: add this into ack_heartbeat
     async def _blacklist_function(
         self, synapse, request_tag: str, valid_msg: str
     ) -> Tuple[bool, str]:

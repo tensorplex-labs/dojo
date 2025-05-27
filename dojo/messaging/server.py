@@ -32,6 +32,8 @@ class Server:
         # write miner's code
         self._add_http_exception_handler()
         self._add_invalid_signature_exception_handler()
+        self.server_task = None
+        self.config = None
 
     def _add_http_exception_handler(self) -> None:
         """Register exception handlers to standardize error responses"""
@@ -79,6 +81,7 @@ class Server:
                 log_level="info",
                 reload=False,
             )
+            self.config = default_config
             if not server_config:
                 logger.info(
                     f"Server config not provided, using default config: host:{default_config.host}, port: {default_config.port}, log_level: {default_config.log_level}"
@@ -87,7 +90,6 @@ class Server:
                 default_config if not server_config else server_config
             )
             await server.serve()
-
             return True
         except Exception as e:
             logger.error(f"Error starting server: {str(e)}")
