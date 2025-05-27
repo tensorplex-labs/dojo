@@ -9,15 +9,13 @@ import bittensor
 from bittensor.utils.networking import ip_to_int, ip_version
 from loguru import logger
 
-# from commons.exceptions import FatalSubtensorConnectionError
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject, get_epoch_time
-
-#                            serve_axon)
 from commons.worker_api.dojo import DojoAPI
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import parse_block_headers
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
+from dojo.messaging import Server
 from dojo.protocol import (
     Heartbeat,
     ScoreCriteria,
@@ -32,8 +30,6 @@ from dojo.utils.config import get_config
 
 class Miner(aobject):
     async def __init__(self):
-        self._should_exit: bool = False
-        self._last_block = None
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
@@ -43,7 +39,8 @@ class Miner(aobject):
         logger.info("Setting up bittensor objects....")
         self.wallet = bittensor.wallet(config=self.config)
         logger.info(f"Wallet: {self.wallet}")
-        # The axon handles request processing, allowing validators to send this miner requests.
+        # TODO: replace axon this once all functions done
+        self.server = Server()
         self.axon = bittensor.axon(wallet=self.wallet, port=self.config.axon.port)
         logger.info(f"Axon: {self.axon}")
 
@@ -75,16 +72,11 @@ class Miner(aobject):
         ).attach(
             forward_fn=self.ack_heartbeat,
             blacklist_fn=self.blacklist_heartbeat_request,
-        )
-
-        # Attach a handler for TaskResultRequest to return task results
-        self.axon.attach(
+        ).attach(
             forward_fn=self.forward_task_result_request,
             blacklist_fn=self.blacklist_task_result_request,
         )
 
-        # Instantiate runners
-        self.should_exit: bool = False
         # log all incoming requests
         self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
 
@@ -113,7 +105,6 @@ class Miner(aobject):
         2. Starts the miner's axon, making it active on the network.
         3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting weights.
 
-        The miner continues its operations until `should_exit` is set to True or an external interruption occurs.
         During each epoch of its operation, the miner waits for new blocks on the Bittensor network, updates its
         knowledge of the network (metagraph), and sets its weights. This process ensures the miner remains active
         and up-to-date with the network's latest state.
@@ -166,10 +157,6 @@ class Miner(aobject):
         # This loop maintains the miner's operations until intentionally stopped.
         try:
             while True:
-                # Check if we should exit.
-                if self.should_exit:
-                    break
-
                 # Sync metagraph and potentially set weights.
                 await self.sync()
                 await asyncio.sleep(12)
@@ -446,7 +433,7 @@ class Miner(aobject):
         logger.info("Metagraph updated")
 
     async def log_miner_status(self):
-        while not self._should_exit:
+        while True:
             logger.info(f"Miner running... block:{str(self.block)} time: {time.time()}")
             await asyncio.sleep(MINER_STATUS)
 
@@ -507,11 +494,13 @@ class Miner(aobject):
 
     @property
     def block(self):
-        return self._last_block
+        if not hasattr(self, "_block"):
+            self._block = 0
+        return self._block
 
     @block.setter
     def block(self, value: int):
-        self._last_block = value
+        self._block = value
 
     async def block_headers_callback(self, block: dict):
         logger.trace(f"Received block headers{block}")
@@ -523,14 +512,12 @@ class Miner(aobject):
         while True:
             block = await self.kami.get_current_block()
             if block and block != self.block:
-                self._last_block = block
-                logger.debug(f"Updated block to {self._last_block}")
+                self.block = block
+                logger.debug(f"Updated block to {self.block}")
 
             if os.getenv("FAST_MODE"):
                 continue
 
-            logger.info(
-                f"Updated block to {self._last_block}"
-            )  # log new block if non fast_mode
+            logger.info(f"Updated block to {self.block}")
 
             await asyncio.sleep(12)
