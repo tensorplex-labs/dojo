@@ -10,7 +10,7 @@ from loguru import logger
 import dojo
 from commons.dataset.types import MinerFeedback
 from commons.exceptions import NoNewExpiredTasksYet
-from commons.hfl_heplers import HFLManager
+from commons.hfl_helpers import HFLManager
 from commons.human_feedback.score_feedback import (
     create_score_feedback_task,
     get_active_miners_for_hfl,

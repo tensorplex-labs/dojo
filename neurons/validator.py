@@ -27,7 +27,7 @@ from commons.exceptions import (
     SetWeightsFailed,
     SyntheticGenerationError,
 )
-from commons.hfl_heplers import HFLManager
+from commons.hfl_helpers import HFLManager
 from commons.human_feedback.utils import should_continue_hfl
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager

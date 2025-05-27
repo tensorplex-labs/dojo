@@ -9,7 +9,7 @@ from loguru import logger
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dataset.types import MinerFeedback, TextFeedbackRequest
-from commons.hfl_heplers import HFLManager
+from commons.hfl_helpers import HFLManager
 from commons.human_feedback.sanitize import sanitize_miner_feedback
 from commons.human_feedback.utils import (
     create_initial_miner_scores,
