@@ -103,6 +103,8 @@ class Validator(aobject):
     kami: Kami
 
     async def __init__(self):
+        await connect_db()
+
         self.MAX_BLOCK_CHECK_ATTEMPTS = 3
         self.QUALITY_WEIGHT = 0.8
         self._last_block = None
@@ -150,6 +152,11 @@ class Validator(aobject):
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
+        for _, responses in synapse.hotkey_to_completion_responses.items():
+            for response in responses:
+                # Set completion to None to reduce the size of the synapse
+                response.completion = None
+
         miners_uids = await self.get_active_miner_uids()
         metagraph_axons = self._retrieve_axons(miners_uids)
         axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]

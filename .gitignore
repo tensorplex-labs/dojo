@@ -191,6 +191,8 @@ database/prisma/
 
 # scores data
 scores/*.pt
+scores/*.pt.bak
+scores/*.pt.bak.*
 
 # migration logs
 migration_logs/
