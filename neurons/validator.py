@@ -48,7 +48,7 @@ from database.mappers import map_miner_response_to_completion_responses
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
-from dojo import get_spec_version
+from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.protocol import (
     CompletionResponse,
@@ -75,19 +75,17 @@ from entrypoints.analytics_upload import run_analytics_upload
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
 SyntheticMetadata: TypeAlias = dict[str, str]
 
-
-# TODO: re-enable before release
-# latest_local = get_latest_git_tag()
-# latest_remote = get_latest_remote_tag()
-# if (
-#     latest_local
-#     and latest_remote
-#     and latest_local.strip("v") != latest_remote.strip("v")
-# ):
-#     logger.warning("Your repository is not up to date, and may fail to set weights.")
-#     logger.warning(
-#         f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
-#     )
+latest_local = get_latest_git_tag()
+latest_remote = get_latest_remote_tag()
+if (
+    latest_local
+    and latest_remote
+    and latest_local.strip("v") != latest_remote.strip("v")
+):
+    logger.warning("Your repository is not up to date, and may fail to set weights.")
+    logger.warning(
+        f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
+    )
 
 
 class Validator(aobject):
