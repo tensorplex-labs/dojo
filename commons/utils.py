@@ -1,5 +1,6 @@
 import os
 import time
+import traceback
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -9,6 +10,8 @@ import plotext
 from loguru import logger
 from openai import AsyncOpenAI
 
+from commons.api_settings import RedisSettings
+from commons.cache import RedisCache
 from commons.objects import ObjectManager
 from dojo.kami import SubnetMetagraph
 
@@ -241,4 +244,32 @@ async def validate_openai_config() -> bool:
 
     except Exception as e:
         logger.error(f"Failed to validate OpenAI configuration: {e}")
+        return False
+
+
+async def validate_services() -> bool:
+    """Validate all necessary services before startup"""
+    try:
+        # 1. Check OpenAI/OpenRouter
+        logger.info("Validating OpenAI/OpenRouter connection")
+        if not await validate_openai_config():
+            logger.error("OpenAI/OpenRouter validation failed")
+            return False
+
+        # 2. Check Redis using RedisCache
+        try:
+            logger.info("Validating Redis connection")
+            cache = RedisCache(RedisSettings(), is_ssl=False)
+            await cache.connect()
+            await cache.redis.ping()
+            await cache.close()
+            logger.info("Redis connection validated successfully")
+        except Exception as e:
+            logger.error(f"Redis validation failed: {e}")
+            return False
+
+        return True
+    except Exception as e:
+        logger.error(f"Service validation failed: {e}")
+        logger.error(traceback.format_exc())
         return False

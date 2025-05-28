@@ -92,6 +92,12 @@ async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
 
         hotkey_to_raw_scores[miner_response.hotkey] = miner_raw_scores
 
+    if len(hotkey_to_raw_scores) < 2:
+        logger.warning(
+            f"Not enough raw scores to calculate ICC for task {task.id}, returning empty dict"
+        )
+        return {}
+
     hotkey_to_icc = calculate_icc(hotkey_to_scores=hotkey_to_raw_scores)
     return hotkey_to_icc
 

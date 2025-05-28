@@ -40,7 +40,7 @@ class SyntheticAPI:
                 timeout=aiohttp.ClientTimeout(total=120)
             )
         if cls._cache is None:
-            cls._cache = RedisCache(redis_config)
+            cls._cache = RedisCache(redis_config, is_ssl=False)
             await cls._cache.connect()
 
     @classmethod

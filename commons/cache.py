@@ -8,18 +8,20 @@ from redis.asyncio.client import Redis
 from commons.api_settings import RedisSettings
 
 
-def build_redis_url(config: RedisSettings) -> str:
+def build_redis_url(config: RedisSettings, is_ssl: bool = True) -> str:
     """uses redisss for ssl connection; required for production analytics API"""
     host = config.REDIS_HOST
     port = config.REDIS_PORT
     username = config.REDIS_USERNAME
     password = config.REDIS_PASSWORD
+
+    scheme = "rediss" if is_ssl else "redis"
     if username and password:
-        return f"rediss://{username}:{password}@{host}:{port}"
+        return f"{scheme}://{username}:{password}@{host}:{port}"
     elif password:
-        return f"rediss://:{password}@{host}:{port}"
+        return f"{scheme}://:{password}@{host}:{port}"
     else:
-        return f"rediss//{host}:{port}"
+        return f"{scheme}://{host}:{port}"
 
 
 class RedisCache:
@@ -30,11 +32,11 @@ class RedisCache:
     config: RedisSettings
     redis_url: str
 
-    def __new__(cls, config: RedisSettings):
+    def __new__(cls, config: RedisSettings, is_ssl: bool = True):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.config = config
-            cls._instance.redis_url = build_redis_url(config)
+            cls._instance.redis_url = build_redis_url(config, is_ssl)
             cls._instance.redis = aioredis.from_url(url=cls._instance.redis_url)
 
         return cls._instance
