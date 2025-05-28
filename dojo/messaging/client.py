@@ -1,5 +1,6 @@
 import asyncio
 import http
+from pathlib import Path
 from typing import Any, Sequence
 
 import aiohttp
@@ -11,6 +12,7 @@ from loguru import logger
 from orjson import JSONDecodeError
 from pydantic import BaseModel
 
+from dojo.kami import Kami
 from dojo.messaging.types import (
     HOTKEY_HEADER,
     MESSAGE_HEADER,
@@ -20,10 +22,23 @@ from dojo.messaging.types import (
 )
 from dojo.messaging.utils import encode_body
 from dojo.protocol import Heartbeat
+from dojo.wallet import WalletInfo
 
 
-def get_client() -> ClientSession:
-    return aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False, limit=256))
+def get_client(conn_limit: int = None, limit_per_host: int = None) -> ClientSession:  # type: ignore[assignment]
+    if not conn_limit:
+        conn_limit = 256
+    if not limit_per_host:
+        limit_per_host = 10
+
+    return aiohttp.ClientSession(
+        connector=aiohttp.TCPConnector(
+            ssl=False,
+            limit=conn_limit,
+            limit_per_host=limit_per_host,
+            enable_cleanup_closed=True,
+        )
+    )
 
 
 def _build_url(url: str, model: BaseModel, protocol: str = "http") -> str:
@@ -50,20 +65,22 @@ async def _log_context(
 class Client:
     def __init__(
         self,
-        keypair: substrateinterface.Keypair,
+        wallet_info: WalletInfo,
         session: ClientSession | None = None,
     ) -> None:
-        self._keypair = keypair
+        self._kami = Kami()
+        self._wallet_info = wallet_info
         self._session: ClientSession = session or get_client()
         self._compression_headers = {
             "content-encoding": "zstd",
             "accept-encoding": "zstd",
         }
 
-    def _build_headers(self) -> dict[str, str]:
-        hotkey: str = self._keypair.ss58_address
+    async def _build_headers(self) -> dict[str, str]:
+        hotkey: str = self._wallet_info.hotkey
+        # TODO: replace meme message
         message: str = f"I solemnly swear that I am up to some good. Hotkey: {hotkey}"
-        signature: str = "0x" + self._keypair.sign(message).hex()
+        signature: str = await self._kami.sign_message(message)
         # TODO: use wallet nonce
         headers = {
             "content-type": "application/json",
@@ -142,7 +159,7 @@ class Client:
                 was returned from the server
         """
         model_name = model.__class__.__name__
-        _headers = self._build_headers()
+        _headers = await self._build_headers()
         payload = encode_body(model, _headers)
         # response: aiohttp.ClientResponse | None = None
         ERROR_RESPONSE = None, None
@@ -263,7 +280,13 @@ async def main():
     # TODO: this should be miner's axon IP
     url = "http://127.0.0.1:8888"
     session = get_client()
-    client = Client(session=session, keypair=keypair)
+    wallet_info = WalletInfo(
+        coldkey=keypair.ss58_address,
+        hotkey=keypair.ss58_address,
+        coldkey_path=Path("."),
+        hotkey_path=Path("."),
+    )
+    client = Client(session=session, wallet_info=wallet_info)
     is_healthy = await client.health_check(url)
     logger.info(f"Server health check: {is_healthy}")
 
@@ -288,7 +311,7 @@ async def main():
     heartbeat = Heartbeat(ack=False)
     response, returned_payload = await client.send(url, model=heartbeat)
     json_data = heartbeat.model_dump_json()
-    compressed = encode_body(heartbeat, client._build_headers())
+    compressed = encode_body(heartbeat, await client._build_headers())
 
     if response:
         logger.debug(f"Status: {response.status}")

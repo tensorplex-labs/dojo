@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import gc
+import http
 import math
 import os
 import random
@@ -47,9 +48,9 @@ from database.mappers import map_miner_response_to_completion_responses
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
-from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
+from dojo import get_spec_version
 from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
-from dojo.messaging import Client
+from dojo.messaging import Client, get_client
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -70,22 +71,23 @@ from dojo.utils.weight_utils import (
     aprocess_weights_for_netuid,
     convert_weights_and_uids_for_emit,
 )
+from dojo.wallet.path import get_wallet_info
 from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
 SyntheticMetadata: TypeAlias = dict[str, str]
 
-latest_local = get_latest_git_tag()
-latest_remote = get_latest_remote_tag()
-if (
-    latest_local
-    and latest_remote
-    and latest_local.strip("v") != latest_remote.strip("v")
-):
-    logger.warning("Your repository is not up to date, and may fail to set weights.")
-    logger.warning(
-        f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
-    )
+# latest_local = get_latest_git_tag()
+# latest_remote = get_latest_remote_tag()
+# if (
+#     latest_local
+#     and latest_remote
+#     and latest_local.strip("v") != latest_remote.strip("v")
+# ):
+#     logger.warning("Your repository is not up to date, and may fail to set weights.")
+#     logger.warning(
+#         f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
+#     )
 
 
 class Validator(aobject):
@@ -106,6 +108,8 @@ class Validator(aobject):
         await connect_db()
         self.QUALITY_WEIGHT = 0.8
         self._connection_lock = asyncio.Lock()
+        # considering the payload of heartbeats we can afford higher concurrency
+        self._semaphore_heartbeats = asyncio.BoundedSemaphore(32)
 
         self.kami = Kami()
 
@@ -122,7 +126,12 @@ class Validator(aobject):
         logger.info(f"Metagraph Loaded: {self.metagraph}")
 
         # TODO: this allows us to call miners
-        self.client = Client()
+        self.wallet_info = get_wallet_info(
+            bittensor_dir=os.getenv("BITTENSOR_DIR", "~/.bittensor"),
+            wallet_coldkey=self.config.wallet.name,
+            wallet_hotkey=self.config.wallet.hotkey,
+        )
+        self.client = Client(wallet_info=self.wallet_info, session=get_client())
 
         # Save validator hotkey
         self.vali_hotkey: str = self.wallet.hotkey.ss58_address
@@ -695,27 +704,29 @@ class Validator(aobject):
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
             try:
                 axons = self._retrieve_axons()
+                urls = [f"http://{axon.ip}:{axon.port}" for axon in axons]
                 logger.info(f"Sending heartbeats to {len(axons)} miners")
 
-                # Send heartbeats in batches
-                batch_size = 10
-                active_hotkeys = set()
+                responses = await self.client.batch_send(
+                    urls,
+                    [Heartbeat()] * len(urls),
+                    self._semaphore_heartbeats,
+                    timeout_sec=30,
+                )
 
-                for i in range(0, len(axons), batch_size):
-                    batch = axons[i : i + batch_size]
-                    responses = await self.dendrite.forward(
-                        axons=batch, synapse=Heartbeat(), deserialize=False, timeout=12
-                    )
-                    # Process batch responses
-                    active_hotkeys.update(
-                        r.axon.hotkey for r in responses if r and r.ack and r.axon
-                    )
+                active_uids: set[int] = set()
+                for uid, (url, response) in enumerate(zip(urls, responses)):
+                    if isinstance(response, BaseException):
+                        logger.error("Failed sending to {url} due to {r}")
+                        continue
 
-                active_uids: set[int] = {
-                    uid
-                    for uid, axon in enumerate(self.metagraph.axons)
-                    if self.metagraph.hotkeys[uid] in active_hotkeys
-                }
+                    client_resp, std_resp = response
+                    if client_resp and std_resp:
+                        if client_resp.status != http.HTTPStatus.OK:
+                            logger.error("Failed sending to {url} due to {r}")
+
+                        if std_resp.body.ack:
+                            active_uids.add(uid)
 
                 async with self._uids_alock:
                     self._active_miner_uids = active_uids
@@ -1851,6 +1862,7 @@ class Validator(aobject):
             hotkey = self.metagraph.hotkeys[uid]
             coldkey = self.metagraph.coldkeys[uid]
 
+            # TODO: misleading async
             eff_stake = aget_effective_stake(hotkey, self.metagraph)
             if (
                 not get_config().ignore_min_stake
@@ -1861,6 +1873,7 @@ class Validator(aobject):
                 )
                 continue
 
+            # NOTE: why are we even using bt.AxonInfo anymore?
             new_axon = bt.AxonInfo(
                 ip=axon.ip,
                 port=axon.port,
