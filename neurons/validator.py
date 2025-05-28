@@ -49,6 +49,7 @@ from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
 from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
+from dojo.messaging import Client
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -103,10 +104,7 @@ class Validator(aobject):
 
     async def __init__(self):
         await connect_db()
-
-        self.MAX_BLOCK_CHECK_ATTEMPTS = 3
         self.QUALITY_WEIGHT = 0.8
-        self._block_check_attempts = 0
         self._connection_lock = asyncio.Lock()
 
         self.kami = Kami()
@@ -122,6 +120,9 @@ class Validator(aobject):
         logger.info(f"Wallet: {self.wallet}")
         self.metagraph = await self.kami.get_metagraph(self.config.netuid)
         logger.info(f"Metagraph Loaded: {self.metagraph}")
+
+        # TODO: this allows us to call miners
+        self.client = Client()
 
         # Save validator hotkey
         self.vali_hotkey: str = self.wallet.hotkey.ss58_address
@@ -308,14 +309,6 @@ class Validator(aobject):
                 logger.info(
                     f"Set weights attempt {attempt + 1}/{max_attempts} at block: {self.block},time: {time.time()}"
                 )
-
-                # Disable this for now to check validator hanging issue
-                # try:
-                #     await asyncio.wait_for(
-                #         self._ensure_subtensor_ws_connected(), timeout=10
-                #     )
-                # except asyncio.TimeoutError:
-                #     pass
 
                 uids, weights = convert_weights_and_uids_for_emit(
                     uids=uids,
@@ -681,26 +674,6 @@ class Validator(aobject):
     @block.setter
     def block(self, value: int):
         self._block = value
-
-    async def _try_reconnect_subtensor(self):
-        self._block_check_attempts += 1
-        if self._block_check_attempts >= self.MAX_BLOCK_CHECK_ATTEMPTS:
-            logger.error(
-                f"Failed to reconnect after {self.MAX_BLOCK_CHECK_ATTEMPTS} attempts"
-            )
-            return False
-
-        try:
-            logger.info(
-                f"Attempting to reconnect to subtensor (attempt {self._block_check_attempts}/{self.MAX_BLOCK_CHECK_ATTEMPTS})..."
-            )
-
-            self.subtensor = bt.subtensor(config=self.subtensor.config)
-            await asyncio.sleep(1)
-            return True
-        except Exception as e:
-            logger.error(f"Failed to reconnect to subtensor: {e}")
-            return await self._try_reconnect_subtensor()
 
     # ---------------------------------------------------------------------------- #
     #                         VALIDATOR CORE FUNCTIONS                             #
