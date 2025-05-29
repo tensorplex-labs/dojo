@@ -1,6 +1,5 @@
 import asyncio
 import http
-import logging
 from typing import Any, Sequence
 
 import aiohttp
@@ -13,12 +12,12 @@ from pydantic import BaseModel
 from tenacity import (
     AsyncRetrying,
     RetryError,
-    before_sleep_log,
     stop_after_attempt,
     wait_exponential,
 )
 
 from dojo.kami import Kami
+from dojo.logging.utils import tenacity_retry_log
 from dojo.messaging.types import (
     HOTKEY_HEADER,
     MESSAGE_HEADER,
@@ -172,8 +171,7 @@ class Client:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(max_retries),
                 wait=wait_exponential(multiplier=2, max=max_wait_sec),
-                # # TODO: fixup this log level
-                before_sleep=before_sleep_log(logger, logging.INFO),  # type: ignore
+                before_sleep=tenacity_retry_log,
             ):
                 with attempt:
                     _headers = await self._build_headers()
