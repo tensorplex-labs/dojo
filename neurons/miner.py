@@ -81,7 +81,8 @@ class Miner(aobject):
                 request, synapse, "Valid heartbeat request received"
             )
             if should_blacklist:
-                raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=message)
+                # we've received the req, but you're blacklisted and don't retry
+                raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
             return await self._ack_heartbeat(request, synapse)
 

@@ -711,7 +711,7 @@ class Validator(aobject):
 
                 responses = await self.client.batch_send(
                     urls,
-                    [Heartbeat()] * len(urls),
+                    [Heartbeat(ack=False)] * len(urls),
                     self._semaphore_heartbeats,
                     timeout_sec=30,
                 )
