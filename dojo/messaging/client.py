@@ -5,7 +5,6 @@ from typing import Any, Sequence
 
 import aiohttp
 import orjson
-import substrateinterface
 import zstandard as zstd
 from aiohttp.client import ClientSession
 from loguru import logger
@@ -269,6 +268,8 @@ class Client:
 
 # NOTE: example usage below
 async def main():
+    import substrateinterface
+
     # NOTE: example here to generate a valid signature, message, and hotkey
     keypair = substrateinterface.Keypair.create_from_uri("//Alice")
     message = "bingbong"
