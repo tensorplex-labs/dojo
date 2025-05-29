@@ -61,7 +61,8 @@ dependencies = [
   "async-lru==2.0.5",
   "openai>=1.0.0",
   "langfuse==2.48.0",
-  'orjson==3.10.16'
+  'orjson==3.10.16',
+  'zstandard==0.23.0'
 ]
 
 [project.optional-dependencies]
