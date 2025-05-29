@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from loguru import logger
@@ -9,10 +10,12 @@ from dojo.wallet.types import WalletInfo
 def get_wallet_info(
     bittensor_dir: str, wallet_coldkey: str, wallet_hotkey: str
 ) -> WalletInfo:
-    coldkey_path = Path(f"{bittensor_dir}/wallets/{wallet_coldkey}/coldkeypub.txt")
-    hotkey_path = Path(
-        f"{bittensor_dir}/wallets/{wallet_coldkey}/hotkeys/{wallet_hotkey}"
-    )
+    base_dir = os.path.expandvars(bittensor_dir)
+    base_dir = Path(base_dir)
+
+    coldkey_path = base_dir / "wallets" / wallet_coldkey / "coldkeypub.txt"
+    hotkey_path = base_dir / "wallets" / wallet_coldkey / "hotkeys" / wallet_hotkey
+
     ss58_coldkey, ss58_hotkey = "", ""
     try:
         with coldkey_path.open("r") as f:
