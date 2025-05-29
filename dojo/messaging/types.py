@@ -1,5 +1,6 @@
 from typing import Any, Awaitable, Callable, Generic, TypeAlias, TypeVar
 
+import aiohttp
 from fastapi import Request
 from pydantic import BaseModel
 
@@ -14,6 +15,8 @@ class StdResponse(BaseModel, Generic[PydanticModel]):
     body: PydanticModel
     error: str | None = None
     metadata: dict[str, Any] = {}
+    client_response: aiohttp.ClientResponse | None
+    exception: BaseException | None = None
 
 
 SIGNATURE_HEADER = "x-signature"
