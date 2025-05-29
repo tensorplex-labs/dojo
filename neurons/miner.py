@@ -8,7 +8,7 @@ from typing import Dict, Tuple
 
 import bittensor
 from bittensor.utils.networking import ip_to_int, ip_version
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from loguru import logger
 
 from commons.objects import ObjectManager
