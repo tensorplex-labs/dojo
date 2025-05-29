@@ -1,6 +1,5 @@
 import asyncio
 import http
-from pathlib import Path
 from typing import Any, Sequence
 
 import aiohttp
@@ -20,7 +19,6 @@ from dojo.messaging.types import (
     StdResponse,
 )
 from dojo.messaging.utils import encode_body
-from dojo.protocol import Heartbeat
 from dojo.wallet import WalletInfo
 
 
@@ -266,71 +264,71 @@ class Client:
             return False
 
 
-# NOTE: example usage below
-async def main():
-    import substrateinterface
-
-    # NOTE: example here to generate a valid signature, message, and hotkey
-    keypair = substrateinterface.Keypair.create_from_uri("//Alice")
-    message = "bingbong"
-    signature = keypair.sign(message)
-    logger.info(f"Signature: {signature}")
-    logger.info(f"Hotkey: {keypair.ss58_address}")
-    logger.info(f"message: {message}")
-
-    # TODO: this should be miner's axon IP
-    url = "http://127.0.0.1:9001"
-    session = get_client()
-    wallet_info = WalletInfo(
-        coldkey=keypair.ss58_address,
-        hotkey=keypair.ss58_address,
-        coldkey_path=Path("."),
-        hotkey_path=Path("."),
-    )
-    client = Client(session=session, wallet_info=wallet_info)
-    is_healthy = await client.health_check(url)
-    logger.info(f"Server health check: {is_healthy}")
-
-    # # NOTE: testing TaskSynapseObject
-    # task_payload = TaskSynapseObject(
-    #     prompt="Hello",
-    #     task_type=TaskTypeEnum.CODE_GENERATION,
-    #     # completion_responses=[],
-    #     completion_responses=[
-    #         CompletionResponse(
-    #             model="gpt-4",
-    #             completion=CodeAnswer(files=[]),
-    #             completion_id="123",
-    #         )
-    #     ],
-    #     expire_at="2026-10-01T00:00:00Z",
-    # )
-    # json_data = task_payload.model_dump_json()
-    # response, returned_payload = await client.send(url, model=task_payload)
-    # compressed = encode_body(task_payload, client._build_headers())  # pyright: ignore
-
-    heartbeat = Heartbeat(ack=False)
-    response, returned_payload = await client.send(url, model=heartbeat)
-    json_data = heartbeat.model_dump_json()
-    compressed = encode_body(heartbeat, await client._build_headers())
-
-    if response:
-        logger.debug(f"Status: {response.status}")
-        logger.debug(f"Original size: {len(json_data)} bytes")
-        logger.debug(f"Compressed size: {len(compressed)} bytes")
-        logger.debug(f"Compression ratio: {len(compressed) / len(json_data):.2f}")
-
-    if returned_payload:
-        logger.debug(f"Returned payload: {returned_payload}")
-        logger.debug(f"{returned_payload.body=}")
-
-    try:
-        await client.cleanup()
-        await session.close()
-    except Exception:
-        logger.warning("Exception occurred while cleaning up the client session")
-        pass
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# # NOTE: example usage below
+# async def main():
+#     import substrateinterface
+#
+#     # NOTE: example here to generate a valid signature, message, and hotkey
+#     keypair = substrateinterface.Keypair.create_from_uri("//Alice")
+#     message = "bingbong"
+#     signature = keypair.sign(message)
+#     logger.info(f"Signature: {signature}")
+#     logger.info(f"Hotkey: {keypair.ss58_address}")
+#     logger.info(f"message: {message}")
+#
+#     # TODO: this should be miner's axon IP
+#     url = "http://127.0.0.1:9001"
+#     session = get_client()
+#     wallet_info = WalletInfo(
+#         coldkey=keypair.ss58_address,
+#         hotkey=keypair.ss58_address,
+#         coldkey_path=Path("."),
+#         hotkey_path=Path("."),
+#     )
+#     client = Client(session=session, wallet_info=wallet_info)
+#     is_healthy = await client.health_check(url)
+#     logger.info(f"Server health check: {is_healthy}")
+#
+#     # # NOTE: testing TaskSynapseObject
+#     # task_payload = TaskSynapseObject(
+#     #     prompt="Hello",
+#     #     task_type=TaskTypeEnum.CODE_GENERATION,
+#     #     # completion_responses=[],
+#     #     completion_responses=[
+#     #         CompletionResponse(
+#     #             model="gpt-4",
+#     #             completion=CodeAnswer(files=[]),
+#     #             completion_id="123",
+#     #         )
+#     #     ],
+#     #     expire_at="2026-10-01T00:00:00Z",
+#     # )
+#     # json_data = task_payload.model_dump_json()
+#     # response, returned_payload = await client.send(url, model=task_payload)
+#     # compressed = encode_body(task_payload, client._build_headers())  # pyright: ignore
+#
+#     heartbeat = Heartbeat(ack=False)
+#     response, returned_payload = await client.send(url, model=heartbeat)
+#     json_data = heartbeat.model_dump_json()
+#     compressed = encode_body(heartbeat, await client._build_headers())
+#
+#     if response:
+#         logger.debug(f"Status: {response.status}")
+#         logger.debug(f"Original size: {len(json_data)} bytes")
+#         logger.debug(f"Compressed size: {len(compressed)} bytes")
+#         logger.debug(f"Compression ratio: {len(compressed) / len(json_data):.2f}")
+#
+#     if returned_payload:
+#         logger.debug(f"Returned payload: {returned_payload}")
+#         logger.debug(f"{returned_payload.body=}")
+#
+#     try:
+#         await client.cleanup()
+#         await session.close()
+#     except Exception:
+#         logger.warning("Exception occurred while cleaning up the client session")
+#         pass
+#
+#
+# if __name__ == "__main__":
+#     asyncio.run(main())

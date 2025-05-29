@@ -119,7 +119,7 @@ def _register_route_handler(
                 )
 
             try:
-                logger.info(f"Attempting to validate payload: {data=}")
+                logger.debug(f"Attempting to validate payload: {data=}")
                 payload = model.model_validate(data)
             except Exception as e:
                 logger.error(f"Validation error: {str(e)}")
@@ -165,12 +165,12 @@ def _register_route_handler(
     return app
 
 
-if __name__ == "__main__":
-    # Example usage
-    server = Server()
-    # Define your Pydantic model and handler function here
-    # server.serve_synapse(MyModel, my_handler)
-    # asyncio.run(server.initialise())
-    import asyncio
-
-    asyncio.run(server.initialise())
+# if __name__ == "__main__":
+#     # Example usage
+#     server = Server()
+#     # Define your Pydantic model and handler function here
+#     # server.serve_synapse(MyModel, my_handler)
+#     # asyncio.run(server.initialise())
+#     import asyncio
+#
+#     asyncio.run(server.initialise(port=8888))

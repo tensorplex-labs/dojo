@@ -123,7 +123,7 @@ class Validator(aobject):
         self.wallet = bt.wallet(config=self.config)
         logger.info(f"Wallet: {self.wallet}")
         self.metagraph = await self.kami.get_metagraph(self.config.netuid)
-        logger.info(f"Metagraph Loaded: {self.metagraph}")
+        logger.info(f"Metagraph Loaded for {self.metagraph.netuid}")
 
         # TODO: this allows us to call miners
         self.wallet_info = get_wallet_info(

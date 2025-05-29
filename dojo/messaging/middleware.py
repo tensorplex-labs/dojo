@@ -60,7 +60,7 @@ class ZstdMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> ORJSONResponse | Response:
-        logger.info(f"Request headers: {request.headers}")
+        logger.debug(f"Request headers: {request.headers}")
         if request.url.path == "/health":
             return await call_next(request)
 
@@ -69,17 +69,17 @@ class ZstdMiddleware(BaseHTTPMiddleware):
             decompressed_body = await decode_body(request)
             # NOTE: this probably won't work for streaming
             request._body = decompressed_body  # pyright: ignore[reportPrivateUsage]
-            logger.info("Server decompressed request body")
+            logger.debug("Server decompressed request body")
 
         # Process the request
         response = await call_next(request)
-        logger.info(f"Response: {response=}")
+        logger.debug(f"raw response: {response=}")
 
         # FIXME: fix pyright typings bruh
         response_body = [section async for section in response.body_iterator]
         response.body_iterator = iterate_in_threadpool(iter(response_body))
         bytes_response = response_body[0]
-        logger.info(f"response_body={bytes_response.decode()}")
+        logger.debug(f"response_body={bytes_response.decode()}")
 
         accept_encoding = request.headers.get("accept-encoding", "").lower()
         if "zstd" in accept_encoding and response_body:
@@ -94,7 +94,7 @@ class ZstdMiddleware(BaseHTTPMiddleware):
             new_response.headers["content-encoding"] = "zstd"
             new_response.headers["content-length"] = str(len(compressed_body))
 
-            logger.info(
+            logger.debug(
                 f"Compressed response: original_size={len(bytes_response)}, compressed_size={len(compressed_body)}"
             )
             return new_response
@@ -103,7 +103,7 @@ class ZstdMiddleware(BaseHTTPMiddleware):
                 response_content = response_body[0]
                 response.headers["content-length"] = str(len(response_content))
 
-            logger.info(
+            logger.debug(
                 f"Not compressing response: accept_encoding={accept_encoding}, has_body={bool(response_body)}, body_size={len(response_body[0]) if response_body else 0}"
             )
 
