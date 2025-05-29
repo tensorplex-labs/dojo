@@ -39,22 +39,17 @@ services:
     volumes:
       - mainnet-lite-volume:/tmp/blockchain
     command:
-      - --base-path
-      - /tmp/blockchain
-      - --chain
-      - ./chainspecs/raw_spec_finney.json
-      - --rpc-external
-      - --rpc-cors
-      - all
-      - --no-mdns
-      - --in-peers
-      - "500"
-      - --out-peers
-      - "500"
-      - --bootnodes
-      - /dns/bootnode.finney.chain.opentensor.ai/tcp/30333/ws/p2p/12D3KooWRwbMb85RWnT8DSXSYMWQtuDwh4LJzndoRrTDotTR5gDC
-      - --sync
-      - warp
+      - /bin/bash
+      - -c
+      - |
+        node-subtensor \
+          --base-path /tmp/blockchain \
+          --chain raw_spec_finney.json \
+          --rpc-external --rpc-cors all \
+          --no-mdns \
+          --in-peers 500 --out-peers 500 \
+          --bootnodes /dns/bootnode.finney.chain.opentensor.ai/tcp/30333/ws/p2p/12D3KooWRwbMb85RWnT8DSXSYMWQtuDwh4LJzndoRrTDotTR5gDC \
+          --sync warp
 
   testnet-lite-amd64:
     <<: *common-amd64
@@ -62,25 +57,19 @@ services:
     volumes:
       - testnet-lite-volume:/tmp/blockchain
     command:
-      - --base-path
-      - /tmp/blockchain
-      - --chain
-      - ./chainspecs/raw_spec_testfinney.json
-      - --rpc-external
-      - --rpc-cors
-      - all
-      - --no-mdns
-      - --in-peers
-      - "500"
-      - --out-peers
-      - "500"
-      - --bootnodes
-      - /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr
-      - --sync
-      - warp
-      - --reserved-nodes
-      - /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr
-      - --reserved-only
+      - /bin/bash
+      - -c
+      - |
+        node-subtensor \
+          --base-path /tmp/blockchain \
+          --chain raw_spec_testfinney.json \
+          --rpc-external --rpc-cors all \
+          --no-mdns \
+          --in-peers 500 --out-peers 500 \
+          --bootnodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
+          --sync warp
+          --reserved-nodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
+          --reserved-only
 
   common-arm64: &common-arm64 # image: ghcr.io/opentensor/subtensor:v2.0.9-arm64
     image: ghcr.io/opentensor/subtensor:v3.1.0-arm64@sha256:3adc616fb62811007a59ef92942b0bd56fccc877a717c86012d4583566219a29
@@ -114,22 +103,17 @@ services:
     volumes:
       - mainnet-lite-volume:/tmp/blockchain
     command:
-      - --base-path
-      - /tmp/blockchain
-      - --chain
-      - ./chainspecs/raw_spec_finney.json
-      - --rpc-external
-      - --rpc-cors
-      - all
-      - --no-mdns
-      - --in-peers
-      - "500"
-      - --out-peers
-      - "500"
-      - --bootnodes
-      - /dns/bootnode.finney.chain.opentensor.ai/tcp/30333/ws/p2p/12D3KooWRwbMb85RWnT8DSXSYMWQtuDwh4LJzndoRrTDotTR5gDC
-      - --sync
-      - warp
+      - /bin/bash
+      - -c
+      - |
+        node-subtensor \
+          --base-path /tmp/blockchain \
+          --chain ./chainspecs/raw_spec_finney.json \
+          --rpc-external --rpc-cors all \
+          --no-mdns \
+          --in-peers 500 --out-peers 500 \
+          --bootnodes /dns/bootnode.finney.chain.opentensor.ai/tcp/30333/ws/p2p/12D3KooWRwbMb85RWnT8DSXSYMWQtuDwh4LJzndoRrTDotTR5gDC \
+          --sync warp
 
   testnet-lite-arm64:
     <<: *common-arm64
@@ -137,22 +121,16 @@ services:
     volumes:
       - testnet-lite-volume:/tmp/blockchain
     command:
-      - --base-path
-      - /tmp/blockchain
-      - --chain
-      - ./chainspecs/raw_spec_testfinney.json
-      - --rpc-external
-      - --rpc-cors
-      - all
-      - --no-mdns
-      - --in-peers
-      - "500"
-      - --out-peers
-      - "500"
-      - --bootnodes
-      - /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr
-      - --sync
-      - warp
-      - --reserved-nodes
-      - /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr
-      - --reserved-only
+      - /bin/bash
+      - -c
+      - |
+        node-subtensor \
+          --base-path /tmp/blockchain \
+          --chain raw_spec_testfinney.json \
+          --rpc-external --rpc-cors all \
+          --no-mdns \
+          --in-peers 500 --out-peers 500 \
+          --bootnodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
+          --sync warp
+          --reserved-nodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
+          --reserved-only
