@@ -8,11 +8,11 @@ from loguru import logger
 from starlette.concurrency import iterate_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from dojo.kami import Kami
 from dojo.messaging.types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
 from dojo.messaging.utils import (
     create_response,
     decode_body,
-    verify_signature,
 )
 
 compressor = zstd.ZstdCompressor(level=3)
@@ -34,7 +34,8 @@ class SignatureMiddleware(BaseHTTPMiddleware):
                     got: {hotkey=}, {signature=}, {message=}"
             return create_response(body={}, status_code=400, error=message)
 
-        if not verify_signature(hotkey, signature, message):
+        kami = Kami()
+        if not kami.verify(hotkey, signature, message):
             return create_response(
                 body={},
                 status_code=403,

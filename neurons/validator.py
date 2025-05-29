@@ -717,13 +717,15 @@ class Validator(aobject):
                 active_uids: set[int] = set()
                 for uid, (url, response) in enumerate(zip(urls, responses)):
                     if isinstance(response, BaseException):
-                        logger.error("Failed sending to {url} due to {r}")
+                        logger.error(f"Failed sending to {url} due to {response}")
                         continue
 
                     client_resp, std_resp = response
                     if client_resp and std_resp:
-                        if client_resp.status != http.HTTPStatus.OK:
-                            logger.error("Failed sending to {url} due to {r}")
+                        if client_resp.status == http.HTTPStatus.OK:
+                            logger.success(
+                                f"Successfully sent heartbeat to {url}, ack={std_resp.body.ack}"
+                            )
 
                         if std_resp.body.ack:
                             active_uids.add(uid)

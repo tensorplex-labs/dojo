@@ -89,7 +89,7 @@ class Client:
             MESSAGE_HEADER: message,
             **self._compression_headers,
         }
-        logger.debug(f"Sending request with headers: {headers}")
+        logger.trace(f"Sending request with headers: {headers}")
         return headers
 
     async def batch_send(
@@ -278,7 +278,7 @@ async def main():
     logger.info(f"message: {message}")
 
     # TODO: this should be miner's axon IP
-    url = "http://127.0.0.1:8888"
+    url = "http://127.0.0.1:9001"
     session = get_client()
     wallet_info = WalletInfo(
         coldkey=keypair.ss58_address,

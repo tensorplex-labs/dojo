@@ -88,7 +88,7 @@ class Miner(aobject):
         self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
 
     async def start_server(self):
-        await self.server.initialise()
+        await self.server.initialise(port=self.config.axon.port)
 
     async def init_metagraphs(self):
         logger.info("Performing async init for miner")
@@ -160,7 +160,8 @@ class Miner(aobject):
             logger.info("Axon already served, no need to serve again.")
 
         # Start  starts the miner's axon, making it active on the network.
-        self.axon.start()
+        # TODO: disable this so we can bind axon.port
+        # self.axon.start()
 
         logger.info(f"Miner starting at block: {str(self.block)}")
 

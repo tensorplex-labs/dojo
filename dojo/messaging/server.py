@@ -70,25 +70,22 @@ class Server:
         # only be reachable by validators
         self.app = _register_route_handler(self.app, handler, model=synapse)
 
-    async def initialise(self, server_config: uvicorn.Config | None = None) -> bool:
+    async def initialise(self, port: int) -> bool:
         try:
             logger.info(f"Server will support the following routes: {self.app.routes=}")
-            default_config = uvicorn.Config(
+            server_config = uvicorn.Config(
                 app=self.app,
                 host="0.0.0.0",
-                port=8888,
+                port=port,
                 workers=1,
                 log_level="info",
                 reload=False,
             )
-            self.config = default_config
-            if not server_config:
-                logger.info(
-                    f"Server config not provided, using default config: host:{default_config.host}, port: {default_config.port}, log_level: {default_config.log_level}"
-                )
-            server = uvicorn.Server(
-                default_config if not server_config else server_config
+            self.config = server_config
+            logger.info(
+                f"Using server config host:{server_config.host}, port: {server_config.port}, log_level: {server_config.log_level}"
             )
+            server = uvicorn.Server(server_config)
             await server.serve()
             return True
         except Exception as e:

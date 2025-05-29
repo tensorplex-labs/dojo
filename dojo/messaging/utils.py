@@ -1,11 +1,9 @@
 from typing import Any
 
-import substrateinterface  # pyright: ignore[reportMissingTypeStubs]
 import zstandard as zstd
 from fastapi import HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import ORJSONResponse
-from loguru import logger
 from pydantic import BaseModel
 
 from dojo.messaging.types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
@@ -32,23 +30,6 @@ def create_response(
         content["metadata"] = jsonable_encoder(metadata)
 
     return ORJSONResponse(content=content, status_code=status_code)
-
-
-def verify_signature(hotkey: str, signature: str, message: str) -> bool:
-    """
-    returns true if input signature was created by input hotkey for input message.
-    """
-    try:
-        keypair = substrateinterface.Keypair(ss58_address=hotkey, ss58_format=42)
-        if not keypair.verify(data=message, signature=signature):
-            logger.error(f"Invalid signature for address={hotkey}")
-            return False
-
-        logger.success(f"Signature verified, signed by {hotkey}")
-        return True
-    except Exception as e:
-        logger.error(f"Error occurred while verifying signature, exception {e}")
-        return False
 
 
 def encode_body(model: BaseModel, headers: dict[str, Any]) -> bytes:
@@ -99,23 +80,3 @@ def extract_headers(request: Request) -> tuple[str, str, str]:
 
     except Exception:
         return "", "", ""
-
-
-def is_valid_signature(request: Request) -> bool:
-    try:
-        headers: dict[str, Any] = {}
-        for header, value in request.headers.items():
-            if header.startswith("X-"):
-                headers[header] = value
-
-        signature = headers.get(SIGNATURE_HEADER)
-        hotkey = headers.get(HOTKEY_HEADER)
-        message = headers.get(MESSAGE_HEADER)
-        if not signature or not hotkey or not message:
-            return False
-        is_valid = verify_signature(hotkey=hotkey, signature=signature, message=message)
-        logger.success(f"Signature verified, signed by {hotkey}")
-        return is_valid
-    except Exception as e:
-        logger.error(f"Error occurred while verifying signature, exception {e}")
-        return False
