@@ -7,9 +7,8 @@ networks:
     name: subtensor
 
 services:
-  common-amd64: &common-amd64
-    # image: ghcr.io/opentensor/subtensor:v2.0.9-amd64
-    image: ghcr.io/opentensor/subtensor@sha256:e0d22ae345f8c8a241c69aecc4fffd364fd57665e1baf2e0135e8fd57501e2fc
+  common-amd64: &common-amd64 # image: ghcr.io/opentensor/subtensor:v2.0.9-amd64
+    image: ghcr.io/opentensor/subtensor:v3.1.0-amd64@sha256:054e9c989cd5a43a6f70fe8cf76cc7e8947eaed3d9cbd8b3dd5df047f1e7e346
     build:
       context: .
       dockerfile: Dockerfile
@@ -72,9 +71,8 @@ services:
           --reserved-nodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
           --reserved-only
 
-  common-arm64: &common-arm64
-    # image: ghcr.io/opentensor/subtensor:v2.0.9-arm64
-    image: ghcr.io/opentensor/subtensor@sha256:f0f0be6dd2ba7d454ccf907acb948a46376ad8d57910c4043835d45772cd23be
+  common-arm64: &common-arm64 # image: ghcr.io/opentensor/subtensor:v2.0.9-arm64
+    image: ghcr.io/opentensor/subtensor:v3.1.0-arm64@sha256:3adc616fb62811007a59ef92942b0bd56fccc877a717c86012d4583566219a29
     build:
       context: .
       dockerfile: Dockerfile
@@ -110,7 +108,7 @@ services:
       - |
         node-subtensor \
           --base-path /tmp/blockchain \
-          --chain raw_spec_finney.json \
+          --chain ./chainspecs/raw_spec_finney.json \
           --rpc-external --rpc-cors all \
           --no-mdns \
           --in-peers 500 --out-peers 500 \
