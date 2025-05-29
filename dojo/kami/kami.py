@@ -281,7 +281,9 @@ class Kami:
         return await self.post("chain/set-weights", data=payload.model_dump())  # type: ignore TODO: Fix type ignore
 
     async def sign_message(self, message: str) -> str:
-        response = await self.post("substrate/sign-message", data={"message": message})
+        response = await self.post(
+            "substrate/sign-message/sign", data={"message": message}
+        )
         response_data = response.get("data", {})
         signature: str = response_data.get("signature")
         if not response_data or not signature:
