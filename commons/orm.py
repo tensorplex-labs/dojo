@@ -41,7 +41,7 @@ from database.prisma.types import (
     ValidatorTaskUpdateInput,
     ValidatorTaskWhereInput,
 )
-from dojo import TASK_DEADLINE
+from dojo.constants import ValidatorConstants
 from dojo.protocol import (
     DendriteQueryResponse,
     HFLEvent,
@@ -51,6 +51,8 @@ from dojo.protocol import (
     TaskSynapseObject,
     TextFeedbackEvent,
 )
+
+TASK_DEADLINE = ValidatorConstants.TASK_DEADLINE
 
 
 class ORM:

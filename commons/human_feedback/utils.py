@@ -18,7 +18,7 @@ from database.prisma.types import (
     MinerScoreWhereInput,
     ValidatorTaskInclude,
 )
-from dojo import HFL_TASK_DEADLINE
+from dojo.constants import HFLCommonConstants, HFLTaskConstants
 from dojo.protocol import (
     CodeAnswer,
     CompletionResponse,
@@ -155,7 +155,7 @@ def map_human_feedback_to_task_synapse(
             task_id=get_new_uuid(),
             prompt=response_data.base_prompt,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
-            expire_at=set_expire_time(HFL_TASK_DEADLINE),
+            expire_at=set_expire_time(int(HFLTaskConstants.HFL_TASK_DEADLINE)),
         )
 
         # Map the completion responses - create proper CompletionResponse objects
@@ -780,7 +780,11 @@ if __name__ == "__main__":
         await connect_db()
         miner_consensus: tuple[
             dict[str, float], str | None, str | None
-        ] = await evaluate_miner_consensus("", 50, 100)
+        ] = await evaluate_miner_consensus(
+            "",
+            HFLCommonConstants.MIN_THRESHOLD.value,
+            HFLCommonConstants.MAX_THRESHOLD.value,
+        )
         print(miner_consensus)
         await prisma.disconnect()
 

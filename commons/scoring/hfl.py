@@ -16,10 +16,8 @@ from database.prisma.models import (
     MinerScore,
     ValidatorTask,
 )
+from dojo.constants import HFLCommonConstants
 from dojo.protocol import Scores
-
-TF_WEIGHTS = 0.7
-SF_WEIGHT = 0.3
 
 
 async def score_hfl_tasks(
@@ -53,7 +51,9 @@ async def score_hfl_tasks(
 
         for hotkey, tf_score in hotkey_to_tf_score.items():
             hotkey_to_score[hotkey] = (
-                TF_WEIGHTS * tf_score + SF_WEIGHT * hotkey_to_sf_score.get(hotkey, 0.0)
+                HFLCommonConstants.TF_WEIGHT.value * tf_score
+                + HFLCommonConstants.SF_WEIGHT.value
+                * hotkey_to_sf_score.get(hotkey, 0.0)
             )
 
         return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score

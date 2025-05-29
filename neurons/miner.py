@@ -15,8 +15,8 @@ from commons.utils import aget_effective_stake, aobject, get_epoch_time
 
 #                            serve_axon)
 from commons.worker_api.dojo import DojoAPI
-from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import parse_block_headers
+from dojo.constants import ValidatorCommonConstants
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
 from dojo.protocol import (
     Heartbeat,
@@ -28,6 +28,9 @@ from dojo.protocol import (
     TextCriteria,
 )
 from dojo.utils.config import get_config
+
+MINER_STATUS = ValidatorCommonConstants.MINER_STATUS
+VALIDATOR_MIN_STAKE = ValidatorCommonConstants.VALIDATOR_MIN_STAKE
 
 
 class Miner(aobject):

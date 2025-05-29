@@ -10,7 +10,7 @@ from loguru import logger
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import FatalSyntheticGenerationError
-from commons.human_feedback.feedback_loop import FeedbackLoop
+from commons.human_feedback import FeedbackLoop
 from commons.objects import ObjectManager
 from commons.utils import validate_services
 from database.client import connect_db, disconnect_db

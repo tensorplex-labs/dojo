@@ -17,7 +17,6 @@ import torch
 from loguru import logger
 from torch.nn import functional as F
 
-import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import (
     EmptyScores,
@@ -49,6 +48,11 @@ from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
+from dojo.constants import (
+    HFLCommonConstants,
+    ValidatorCommonConstants,
+    ValidatorConstants,
+)
 from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.protocol import (
     CompletionResponse,
@@ -514,6 +518,8 @@ class Validator(aobject):
         """
         hotkeys: list[str] = self.metagraph.hotkeys
 
+        logger.info(f"Hotkeys: {len(hotkeys)}")
+
         # Calculate incentives based on scores
         existing_incentives, new_incentives = self._calculate_incentives(
             metagraph_hotkeys=hotkeys,
@@ -521,7 +527,9 @@ class Validator(aobject):
             scores_tensor=current_scores,
         )
 
-        logger.info(f"Incentives for {score_type} tasks: {new_incentives}")
+        logger.info(
+            f"Incentives for {score_type} tasks: {new_incentives.shape=} {new_incentives=}"
+        )
 
         # Update scores with lock protection
         async with self._scores_alock:
@@ -584,7 +592,7 @@ class Validator(aobject):
                 logger.info(
                     "Detected upgrade from previous version: loading synthetic scores only, initializing HFL scores to zeros"
                 )
-                hfl_scores = torch.zeros(len(synthetic_scores))
+                hfl_scores = torch.zeros(len(synthetic_scores), dtype=torch.float32)
 
             # Neither score was found
             if synthetic_scores is None and hfl_scores is None:
@@ -732,12 +740,12 @@ class Validator(aobject):
             logger.info(
                 f"Validator running... block:{str(self.block)} time: {time.time()}"
             )
-            await asyncio.sleep(dojo.VALIDATOR_STATUS)
+            await asyncio.sleep(ValidatorCommonConstants.VALIDATOR_STATUS)
 
     async def send_heartbeats(self):
         """Perform a health check periodically to ensure and check which miners are reachable"""
         while True:
-            await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
+            await asyncio.sleep(ValidatorConstants.VALIDATOR_HEARTBEAT)
             try:
                 axons = self._retrieve_axons()
                 logger.info(f"Sending heartbeats to {len(axons)} miners")
@@ -783,9 +791,9 @@ class Validator(aobject):
                 # Check if there are any active miners. If no active miners, skip the request generation.
                 if not self._active_miner_uids:
                     logger.info(
-                        f"No active miners to send request to... sleeping for {dojo.VALIDATOR_RUN} seconds"
+                        f"No active miners to send request to... sleeping for {ValidatorConstants.VALIDATOR_RUN} seconds"
                     )
-                    await asyncio.sleep(dojo.VALIDATOR_RUN)
+                    await asyncio.sleep(ValidatorConstants.VALIDATOR_RUN)
                     continue
                 # Group related operations in a single async context
                 async with self._request_alock:
@@ -808,7 +816,7 @@ class Validator(aobject):
 
                 # Sync metagraph and potentially set weights.
                 await self.sync()
-                await asyncio.sleep(dojo.VALIDATOR_RUN)
+                await asyncio.sleep(ValidatorConstants.VALIDATOR_RUN)
             except KeyboardInterrupt:
                 # Handle shutdown gracefully
                 await self.cleanup()
@@ -822,7 +830,7 @@ class Validator(aobject):
             except Exception as err:
                 logger.error(f"Error during validation: {err}")
                 logger.debug(traceback.format_exc())
-                await asyncio.sleep(dojo.VALIDATOR_RUN)
+                await asyncio.sleep(ValidatorConstants.VALIDATOR_RUN)
 
         # Cleanup on exit
         await self.cleanup()
@@ -833,7 +841,7 @@ class Validator(aobject):
         Decoupled from scoring function to allow more frequent updates.
         """
         while True:
-            await asyncio.sleep(dojo.VALIDATOR_UPDATE_TASK)  # 15 minutes
+            await asyncio.sleep(ValidatorConstants.VALIDATOR_UPDATE_TASK)  # 15 minutes
             try:
                 # Grab tasks that were expired TASK_DEADLINE duration ago
                 expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
@@ -863,7 +871,7 @@ class Validator(aobject):
         Uses a buffer period to ensure tasks have had sufficient update cycles.
         """
         while True:
-            await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)  # 60 minutes
+            await asyncio.sleep(ValidatorConstants.VALIDATOR_UPDATE_SCORE)  # 60 minutes
             # for each hotkey, a list of scores from all tasks being scored
             hotkey_to_synthetic_scores = defaultdict(list)
 
@@ -873,7 +881,9 @@ class Validator(aobject):
                 # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
                 now = datetime.now(timezone.utc)
                 expire_from = datetime_as_utc(now - timedelta(hours=2))
-                expire_to = datetime_as_utc(now - timedelta(seconds=dojo.BUFFER_PERIOD))
+                expire_to = datetime_as_utc(
+                    now - timedelta(seconds=ValidatorConstants.BUFFER_PERIOD)
+                )
 
                 logger.info(f" Current time: {now}")
                 logger.info(
@@ -1173,7 +1183,7 @@ class Validator(aobject):
                 task_id=task_id,
                 prompt=data.prompt,
                 task_type=str(TaskTypeEnum.CODE_GENERATION),
-                expire_at=set_expire_time(dojo.TASK_DEADLINE),
+                expire_at=set_expire_time(ValidatorConstants.TASK_DEADLINE),
                 completion_responses=completion_responses,
             )
 
@@ -1905,10 +1915,10 @@ class Validator(aobject):
             eff_stake = aget_effective_stake(hotkey, self.metagraph)
             if (
                 not get_config().ignore_min_stake
-                and eff_stake > dojo.VALIDATOR_MIN_STAKE
+                and eff_stake > ValidatorCommonConstants.VALIDATOR_MIN_STAKE
             ):
                 logger.debug(
-                    f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {dojo.VALIDATOR_MIN_STAKE} to be considered miner"
+                    f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorCommonConstants.VALIDATOR_MIN_STAKE} to be considered miner"
                 )
                 continue
 
@@ -2009,8 +2019,8 @@ class Validator(aobject):
             continue_hfl, reason = await should_continue_hfl(
                 hfl_state=hfl_state,
                 latest_sf_task_id=sf_task_id,
-                max_iterations=dojo.HFL_MAX_ITERATIONS,
-                consensus_threshold=90.0,
+                max_iterations=HFLCommonConstants.MAX_ITERATIONS.value,
+                consensus_threshold=HFLCommonConstants.CONSENSUS_THRESHOLD.value,
             )
 
             if continue_hfl:

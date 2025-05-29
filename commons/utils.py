@@ -206,11 +206,11 @@ def check_stake(subtensor: bt.subtensor, hotkey: str) -> bool:
     """
     returns true if hotkey has enough stake to be a validator and false otherwise.
     """
-    from dojo import VALIDATOR_MIN_STAKE
+    from dojo.constants import ValidatorCommonConstants
 
     stake = get_effective_stake(hotkey, subtensor)
 
-    if stake < VALIDATOR_MIN_STAKE:
+    if stake < ValidatorCommonConstants.VALIDATOR_MIN_STAKE:
         return False
     return True
 

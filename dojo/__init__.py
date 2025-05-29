@@ -3,7 +3,14 @@ import subprocess
 
 from git import Repo
 
-from dojo.utils.config import get_config, source_dotenv
+from dojo.constants import (
+    HFLCommonConstants,
+    HFLTaskConstants,
+    ValidatorCommonConstants,
+    ValidatorConstants,
+    get_mode,
+)
+from dojo.utils.config import source_dotenv
 
 source_dotenv()
 
@@ -50,88 +57,29 @@ def get_spec_version():
     )
 
 
-def get_mode() -> str:
-    mode = get_config().fast_mode
-    print(f"Mode: {mode}")
-    if not mode:
-        return "normal"
-
-    return mode.lower()
-
-
-VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
-TASK_DEADLINE = 6 * 60 * 60
-
-# Define the time intervals for various tasks.
-VALIDATOR_RUN = 900
-VALIDATOR_HEARTBEAT = 200
-
-VALIDATOR_UPDATE_TASK = 600
-VALIDATOR_UPDATE_SCORE = 3600
-BUFFER_PERIOD = 2700
-
-VALIDATOR_STATUS = 60
-MINER_STATUS = 60
-DOJO_TASK_MONITORING = 300
-SF_TASK_CREATION_INTERVAL = 30
-HFL_MAX_ITERATIONS = 3
-ANALYTICS_UPLOAD = 65 * 60
-assert VALIDATOR_UPDATE_SCORE < TASK_DEADLINE
-
-HFL_TF_CREATE_INTERVAL = 3600  # 1 hour for initial TF task creation
-HFL_TF_UPDATE_INTERVAL = 900  # 15 minutes for Text Feedback updates
-HFL_SF_CREATE_INTERVAL = 800  # 13 minutes for Score Feedback task creation
-HFL_SF_UPDATE_INTERVAL = 700  # 11 minutes for Score Feedback updates
-HFL_NEXT_TF_INTERVAL = 1200  # 20 minutes for creating next Text Feedback tasks
-HFL_TASK_DEADLINE = 5 * 60 * 60  # 5 hours
-
-mode = get_mode()
-
-if mode == "high":
-    print(f"Running in fast mode: {mode} for testing purposes...")
-    VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
-    TASK_DEADLINE = 180
-    VALIDATOR_RUN = 300
-    VALIDATOR_HEARTBEAT = 15
-    VALIDATOR_UPDATE_SCORE = 120
-    VALIDATOR_UPDATE_TASK = 30
-    BUFFER_PERIOD = 90
-    VALIDATOR_STATUS = 1200
-    MINER_STATUS = 1200
-    DOJO_TASK_MONITORING = 15
-
-    # Fast mode HFL intervals (roughly 1/10th of normal mode)
-    HFL_TF_CREATE_INTERVAL = 180  # 3 minutes
-    HFL_TF_UPDATE_INTERVAL = 90  # 1.5 minutes
-    HFL_SF_CREATE_INTERVAL = 80  # 80 seconds
-    HFL_SF_UPDATE_INTERVAL = 70  # 70 seconds
-    HFL_NEXT_TF_INTERVAL = 120  # 2 minutes
-    HFL_TASK_DEADLINE = 180  # 3 minutes
-
-elif mode == "medium":
-    print(f"Running in fast mode: {mode} for testing purposes..")
-    VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
-    TASK_DEADLINE = 1200  # 20 minutes
-    VALIDATOR_RUN = 600  # 10 minutes
-    VALIDATOR_HEARTBEAT = 60  # 1 minute
-    VALIDATOR_UPDATE_SCORE = 600  # 10 minutes
-    VALIDATOR_UPDATE_TASK = 120  # 2 minutes
-    BUFFER_PERIOD = 300  # 5 minutes
-    VALIDATOR_STATUS = 600  # 10 minutes
-    MINER_STATUS = 600  # 10 minutes
-    DOJO_TASK_MONITORING = 60  # 1 minute
-
-    HFL_TF_CREATE_INTERVAL = 660  # 10 minutes
-    HFL_TF_UPDATE_INTERVAL = 300  # 5 minutes
-    HFL_SF_CREATE_INTERVAL = 250  # ~4 minutes
-    HFL_SF_UPDATE_INTERVAL = 230  # ~4 minutes
-    HFL_NEXT_TF_INTERVAL = 400  # ~7 minutes
-    HFL_TASK_DEADLINE = 1800  # 30 minutes
-
-
 def get_dojo_api_base_url() -> str:
     base_url = os.getenv("DOJO_API_BASE_URL")
     if base_url is None:
         raise ValueError("DOJO_API_BASE_URL is not set in the environment.")
-
     return base_url
+
+
+# Print mode information
+print(f"Running in {get_mode().value} mode")
+
+
+__all__ = [
+    # Constants
+    "HFLTaskConstants",
+    "ValidatorConstants",
+    "HFLCommonConstants",
+    "ValidatorCommonConstants",
+    "get_mode",
+    # Git functions
+    "get_latest_git_tag",
+    "get_latest_remote_tag",
+    "get_commit_hash",
+    "get_spec_version",
+    # API URL
+    "get_dojo_api_base_url",
+]
