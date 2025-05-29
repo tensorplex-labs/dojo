@@ -237,7 +237,7 @@ class Client:
                                     # parse object to the specific model
                                     pydantic_model = model.model_validate(body)
                                     logger.success(
-                                        "Successfully received response, {context_msg}"
+                                        f"Successfully received response, {context_msg}"
                                     )
                                     return StdResponse(
                                         body=pydantic_model,
