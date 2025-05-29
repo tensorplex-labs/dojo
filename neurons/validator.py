@@ -427,7 +427,7 @@ class Validator(aobject):
         self,
         metagraph_hotkeys: list[str],
         hotkey_to_scores: dict[str, float],
-        scores_tensor: torch.Tensor,
+        current_scores_tensor: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # scores dimensions might have been updated after resyncing... len(uids) != len(self.synthetic_score)
         new_incentives = torch.zeros((len(metagraph_hotkeys),))
@@ -459,8 +459,8 @@ class Validator(aobject):
             # use this logic to ensure
             # 1. rewards and existing_scores are the same length
             # 2. if hotkey is deregistered, the new participant will not benefit from existing scores
-            if uid < len(scores_tensor):
-                existing_incentives[uid] = scores_tensor[uid]
+            if uid < len(current_scores_tensor):
+                existing_incentives[uid] = current_scores_tensor[uid]
 
         assert (
             existing_incentives.shape == new_incentives.shape
@@ -524,7 +524,7 @@ class Validator(aobject):
         existing_incentives, new_incentives = self._calculate_incentives(
             metagraph_hotkeys=hotkeys,
             hotkey_to_scores=hotkey_to_scores,
-            scores_tensor=current_scores,
+            current_scores_tensor=current_scores,
         )
 
         logger.info(
