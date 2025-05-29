@@ -1,7 +1,6 @@
 import asyncio
 import copy
 import gc
-import http
 import math
 import os
 import random
@@ -50,6 +49,7 @@ from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
 from dojo import get_spec_version
 from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
+from dojo.kami.types import AxonInfo
 from dojo.messaging import Client, get_client
 from dojo.protocol import (
     CompletionResponse,
@@ -718,19 +718,14 @@ class Validator(aobject):
 
                 active_uids: set[int] = set()
                 for uid, (url, response) in enumerate(zip(urls, responses)):
-                    if isinstance(response, BaseException):
-                        logger.error(f"Failed sending to {url} due to {response}")
+                    if response.exception or response.error:
+                        logger.error(
+                            f"Failed sending to {url} due to error: {response.error}, exception: {response.exception}"
+                        )
                         continue
 
-                    client_resp, std_resp = response
-                    if client_resp and std_resp:
-                        if client_resp.status == http.HTTPStatus.OK:
-                            logger.success(
-                                f"Successfully sent heartbeat to {url}, ack={std_resp.body.ack}"
-                            )
-
-                        if std_resp.body.ack:
-                            active_uids.add(uid)
+                    if response.body.ack:
+                        active_uids.add(uid)
 
                 async with self._uids_alock:
                     self._active_miner_uids = active_uids
@@ -1586,13 +1581,14 @@ class Validator(aobject):
         return miner_response
 
     async def _get_task_results_from_miner(
-        self, miner_hotkey: str, dojo_task_id: str
+        self, miner_hotkey: str, dojo_task_id: str, max_retries: int = 3
     ) -> list[TaskResult]:
         """Fetch task results from the miner's Axon using Dendrite.
 
         Args:
             miner_hotkey (str): The hotkey of the miner to query
             dojo_task_id (str): The ID of the task to fetch results for
+            max_retries (int): number of max retries for underlying request to target miner
 
         Returns:
             list[TaskResult]: List of task results or empty list if request fails
@@ -1602,51 +1598,35 @@ class Validator(aobject):
             return []
 
         try:
-            try:
-                axon_index = self.metagraph.hotkeys.index(miner_hotkey)
-                coldkey = self.metagraph.coldkeys[axon_index]
-            except ValueError:
-                logger.warning(f"Miner hotkey {miner_hotkey} not found in metagraph")
+            miner_axon: AxonInfo | None = next(
+                (
+                    self.metagraph.axons[i]
+                    for i, hotkey in enumerate(self.metagraph.hotkeys)
+                    if hotkey.lower() == miner_hotkey.lower()
+                ),
+                None,
+            )
+            if not miner_axon:
+                logger.warning(f"Axon not found for {miner_hotkey}")
                 return []
 
-            axon = self.metagraph.axons[axon_index]
-            miner_axon = bt.AxonInfo(
-                ip=axon.ip,
-                port=axon.port,
-                hotkey=miner_hotkey,
-                coldkey=coldkey,
-                version=axon.version,
-                ip_type=axon.ipType,
+            url = f"http://{miner_axon.ip}/{miner_axon.port}"
+            model = TaskResultRequest(dojo_task_id=dojo_task_id)
+            response = await self.client.send(
+                url, model=model, timeout_sec=12, max_retries=max_retries, max_wait=60
             )
-
-            # Send the request via Dendrite and get the response
-            max_retries = 3
-            retry_count = 0
-
-            while retry_count < max_retries:
-                responses: list[
-                    TaskResultRequest
-                ] = await self._semaphore_limited_forward(
-                    self.dendrite,
-                    [miner_axon],
-                    TaskResultRequest(dojo_task_id=dojo_task_id),
-                    timeout=30,
+            if response.error or response.exception:
+                logger.error(
+                    f"Failed to send request to {url} for {miner_hotkey} due to error: {response.error}, exception: {response.exception}"
                 )
 
-                if responses and responses[0] and responses[0].task_results:
-                    logger.info(
-                        f"Received task results from miner {miner_hotkey} for task {dojo_task_id} after {retry_count + 1} attempts"
-                    )
-                    return responses[0].task_results
+            if response.body.task_results:
+                logger.success(
+                    f"Received task results from miner {miner_hotkey} for task {dojo_task_id}"
+                )
+                return response.body.task_results
 
-                retry_count += 1
-                if retry_count < max_retries:
-                    logger.info(
-                        f"Empty results from miner {miner_hotkey} for task {dojo_task_id}, retry {retry_count}/{max_retries}"
-                    )
-                    await asyncio.sleep(2**retry_count)  # Exponential backoff
-
-            logger.info(
+            logger.error(
                 f"No results from miner {miner_hotkey} for task {dojo_task_id} after {max_retries} attempts"
             )
             return []

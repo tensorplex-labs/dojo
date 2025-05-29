@@ -100,7 +100,7 @@ class Client:
         self,
         urls: list[str],
         models: list[PydanticModel],
-        semaphore: asyncio.Semaphore | None = None,
+        semaphore: asyncio.BoundedSemaphore | None = None,
         **kwargs: Any,
     ) -> Sequence[StdResponse[PydanticModel]]:
         """Sends the following payloads to the given URLs concurrently.
@@ -116,7 +116,6 @@ class Client:
             list[Response]: Returns both the aiohttp Response, and the model that
                 was returned from the server, or the exception if the request failed
         """
-
         if semaphore is None:
             logger.info("Attempting to batch sending requests without semaphore")
             responses = await asyncio.gather(
