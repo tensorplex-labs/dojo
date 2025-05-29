@@ -172,8 +172,8 @@ class Client:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(max_retries),
                 wait=wait_exponential(multiplier=2, max=max_wait_sec),
-                # TODO: fixup this log level
-                before=before_sleep_log(logger, logging.INFO),  # type: ignore
+                # # TODO: fixup this log level
+                before_sleep=before_sleep_log(logger, logging.INFO),  # type: ignore
             ):
                 with attempt:
                     _headers = await self._build_headers()

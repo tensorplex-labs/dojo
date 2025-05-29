@@ -12,7 +12,7 @@ ServerHandlerFunc: TypeAlias = Callable[[Request, PydanticModel], Awaitable[Any]
 class StdResponse(BaseModel, Generic[PydanticModel]):
     """Standardized response that preserves error and metadata returned from `server.py`"""
 
-    # WARN: extra ignore to ignore extra fields
+    # WARN: extra ignore to ignore extra fields,
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="ignore")
 
     body: PydanticModel
