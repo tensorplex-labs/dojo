@@ -108,8 +108,10 @@ class Validator(aobject):
         await connect_db()
         self.QUALITY_WEIGHT = 0.8
         self._connection_lock = asyncio.Lock()
-        # considering the payload of heartbeats we can afford higher concurrency
+        # NOTE: considering the payload of heartbeats we can afford higher concurrency
+        # NOTE: the parameter essentially determines the batch size of batch sending requests
         self._semaphore_heartbeats = asyncio.BoundedSemaphore(32)
+        self._semaphore_synthetic_task = asyncio.BoundedSemaphore(10)
 
         self.kami = Kami()
 
@@ -1331,8 +1333,8 @@ class Validator(aobject):
                 self.dendrite.synapse_history.clear()
             await asyncio.sleep(300)
 
-    @staticmethod
     async def _send_requests_to_miners(
+        self,
         dendrite: bt.dendrite,
         axons: List[bt.AxonInfo],
         synapse: TaskSynapseObject,
@@ -1385,7 +1387,7 @@ class Validator(aobject):
                 )
 
                 tasks.append(
-                    Validator._semaphore_limited_forward(
+                    self._semaphore_limited_forward(
                         dendrite,
                         [axon],
                         shuffled_synapse,

@@ -12,6 +12,7 @@ from commons.human_feedback.utils import (
     create_initial_miner_scores,
     map_human_feedback_to_task_synapse,
 )
+from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
@@ -287,6 +288,7 @@ async def get_active_miners_for_hfl(
     return selected_miners
 
 
+# TODO: cleanup params here as staticmethod was removed
 async def send_hfl_request(
     validator: Validator,
     synapse: TaskSynapseObject,
@@ -314,7 +316,8 @@ async def send_hfl_request(
     )
 
     # Send request to miners
-    miner_responses = await validator._send_requests_to_miners(
+    _validator = await ObjectManager.get_validator()
+    miner_responses = await _validator._send_requests_to_miners(
         validator.dendrite,
         axons,
         synapse,
