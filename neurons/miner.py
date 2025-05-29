@@ -3,11 +3,12 @@ import os
 import time
 import traceback
 from datetime import datetime
+from http import HTTPStatus
 from typing import Dict, Tuple
 
 import bittensor
 from bittensor.utils.networking import ip_to_int, ip_version
-from fastapi import Request
+from fastapi import HTTPException, Request
 from loguru import logger
 
 from commons.objects import ObjectManager
@@ -16,8 +17,7 @@ from commons.worker_api.dojo import DojoAPI
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import parse_block_headers
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
-from dojo.messaging import Server
-from dojo.messaging.types import HOTKEY_HEADER
+from dojo.messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 from dojo.protocol import (
     Heartbeat,
     ScoreCriteria,
@@ -77,6 +77,12 @@ class Miner(aobject):
         )
 
         async def heartbeat_adapter(request: Request, synapse: Heartbeat):
+            should_blacklist, message = self._blacklist_function(
+                request, synapse, "Valid heartbeat request received"
+            )
+            if should_blacklist:
+                raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=message)
+
             return await self._ack_heartbeat(request, synapse)
 
         self.server.serve_synapse(synapse=Heartbeat, handler=heartbeat_adapter)
@@ -88,7 +94,9 @@ class Miner(aobject):
         self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
 
     async def start_server(self):
-        await self.server.initialise(port=self.config.axon.port)
+        """Wrapper around starting the server so that a different process may
+        acquire the task handle"""
+        await self.server.initialise(port=self.config.axon.port)  # type: ignore
 
     async def init_metagraphs(self):
         logger.info("Performing async init for miner")
@@ -96,8 +104,8 @@ class Miner(aobject):
         self.block = await self.kami.get_current_block()
         # The metagraph holds the state of the network, letting us know about other validators and miners.
         self.subnet_metagraph: SubnetMetagraph = await self.kami.get_metagraph(
-            self.config.netuid
-        )  # type: ignore
+            self.config.netuid  # type: ignore
+        )
         self.root_metagraph: SubnetMetagraph = await self.kami.get_metagraph(0)
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
@@ -356,14 +364,8 @@ class Miner(aobject):
             synapse, "scoring result", "Valid scoring result request from validator"
         )
 
-    def extract_synapse_info(self, synapse: bittensor.Synapse) -> str:
-        caller_hotkey = synapse.dendrite.hotkey
-        ip_addr = synapse.dendrite.ip or "Unknown IP"
-        return f"Hotkey: {caller_hotkey}, IP: {ip_addr}"
-
-    # TODO: add this into ack_heartbeat
-    async def _blacklist_function(
-        self, synapse, request_tag: str, valid_msg: str
+    def _blacklist_function(
+        self, request: Request, synapse: PydanticModel, valid_msg: str
     ) -> Tuple[bool, str]:
         """
         Common blacklist logic for any forward function to validate an incoming synapse.
@@ -377,20 +379,18 @@ class Miner(aobject):
         Returns:
             Tuple[bool, str]: (blacklisted: bool, message: str)
         """
-        dendrite = synapse.dendrite
-        ip_addr = getattr(dendrite, "ip", "Unknown IP")
-        caller_hotkey = getattr(dendrite, "hotkey", None)
-
-        # Log the IP address of the incoming request and the hotkey
+        ip_addr = (
+            f"{request.client.host}/{request.client.port}" if request.client else ""
+        )
+        caller_hotkey = request.headers.get(HOTKEY_HEADER)
         logger.info(
-            f"Incoming {request_tag} request from IP: {ip_addr} with hotkey: {caller_hotkey}"
+            f"⬇️ Incoming {synapse.__class__.__name__} request from IP: {ip_addr} with hotkey: {caller_hotkey}"
         )
 
         if not caller_hotkey or caller_hotkey not in self.subnet_metagraph.hotkeys:
-            logger.warning(f"Blacklisting unrecognized hotkey {caller_hotkey}")
-            return True, "Unrecognized hotkey"
-
-        logger.debug(f"Got {request_tag} request from {caller_hotkey}")
+            message = f"Blacklisting unrecognized hotkey {caller_hotkey}"
+            logger.warning(message)
+            return True, message
 
         if get_config().ignore_min_stake:
             message = (

@@ -6,6 +6,7 @@
 - uses AsyncRetrying from tenacity, and asyncio.BoundedSemaphore by default for controlling batching & concurrency
 - fully typed, so you can simply access your Synapse's fields directly from `response.body`
 - dedicated function for batch sending to target URLs
+- explicitly raise HTTPExceptions in code where server logic will propagate to client
 
 
 - server (typically miner)

@@ -35,6 +35,26 @@ class Server:
         self.server_task = None
         self.config = None
 
+    def add_global_exception_handler(self) -> None:
+        """Register exception handlers to standardize error responses"""
+
+        @self.app.exception_handler(Exception)
+        async def global_exception_handler(  # pyright: ignore[reportUnusedFunction]
+            request: Request, exc: Exception
+        ) -> ORJSONResponse:
+            """Convert all exceptions to standardized response format"""
+            logger.error(f"Global exception: {str(exc)}", exc_info=True)
+            if hasattr(exc, "status_code"):
+                status_code = exc.status_code  # type: ignore
+            else:
+                status_code = 500
+
+            return create_response(
+                error=str(exc),  # Use exc, not exc.__cause__
+                body={},
+                status_code=status_code,  # Pass int, not exception object
+            )
+
     def _add_http_exception_handler(self) -> None:
         """Register exception handlers to standardize error responses"""
 
