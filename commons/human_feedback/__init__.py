@@ -1,14 +1,14 @@
 """Human Feedback Loop (HFL) module for collecting and processing miner feedback."""
 
-from commons.human_feedback.exceptions import (
+from .exceptions import (
     HFLError,
     HFLProcessingError,
     InsufficientResponsesError,
     NoNewExpiredTasksYet,
 )
-from commons.human_feedback.feedback_loop import FeedbackLoop
-from commons.human_feedback.types import HFLConstants, HFLInterval
-from commons.human_feedback.utils import should_continue_hfl
+from .feedback_loop import FeedbackLoop
+from .types import HFLConstants, HFLInterval, SanitizationResult
+from .utils import should_continue_hfl
 
 __all__ = [
     "FeedbackLoop",
@@ -19,4 +19,5 @@ __all__ = [
     "HFLConstants",
     "HFLInterval",
     "should_continue_hfl",
+    "SanitizationResult",
 ]

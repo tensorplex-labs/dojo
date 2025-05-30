@@ -2,19 +2,13 @@
 
 import asyncio
 import traceback
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dataset.types import MinerFeedback, TextFeedbackRequest
 from commons.hfl_helpers import HFLManager
-from commons.human_feedback.sanitize import sanitize_miner_feedback
-from commons.human_feedback.types import HFLInterval
-from commons.human_feedback.utils import (
-    create_initial_miner_scores,
-    extract_text_feedback_from_results,
-)
 from commons.orm import ORM
 from commons.utils import get_new_uuid, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
@@ -29,7 +23,16 @@ from dojo.protocol import (
     TextCriteria,
     TextFeedbackEvent,
 )
-from neurons.validator import Validator
+
+from .sanitize import sanitize_miner_feedback
+from .types import HFLInterval
+from .utils import (
+    create_initial_miner_scores,
+    extract_text_feedback_from_results,
+)
+
+if TYPE_CHECKING:
+    from neurons.validator import Validator
 
 
 async def create_text_feedback_task(
@@ -98,7 +101,7 @@ async def create_text_feedback_task(
 
 
 async def fetch_miner_feedback_for_task(
-    validator: Validator, task: ValidatorTask
+    validator: "Validator", task: ValidatorTask
 ) -> tuple[list[MinerFeedback], list[MinerResponse]]:
     """
     Fetch and process miner feedback for a task.

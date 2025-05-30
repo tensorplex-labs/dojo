@@ -6,7 +6,7 @@ from collections import defaultdict
 from loguru import logger
 from pydantic import ValidationError
 
-from commons.human_feedback.types import HFLConstants
+from commons.human_feedback import HFLConstants
 from commons.orm import ORM
 from commons.stats import calculate_icc
 from database.prisma.enums import HFLStatusEnum

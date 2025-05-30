@@ -8,7 +8,6 @@ from datetime import datetime, timedelta, timezone
 from loguru import logger
 
 from commons.dataset.types import HumanFeedbackResponse
-from commons.human_feedback.types import HFLConstants, HFLInterval
 from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
 from database.client import connect_db, prisma
 from database.prisma import Json
@@ -29,6 +28,8 @@ from dojo.protocol import (
     TaskTypeEnum,
     TextFeedbackScore,
 )
+
+from .types import HFLConstants, HFLInterval
 
 
 def extract_text_feedback_from_results(
@@ -643,10 +644,6 @@ async def create_initial_miner_scores(
 
         # Step 3: Extract and group criteria values from task results
         # Example result: {"model_123": {"score": [80, 70], "text": ["Good code", "Needs improvement"]}}
-
-        from commons.human_feedback.utils import (
-            extract_criteria_values_by_model_and_type,
-        )
 
         model_to_criteria_values = extract_criteria_values_by_model_and_type(
             task_results
