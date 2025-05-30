@@ -4,8 +4,8 @@ import subprocess
 from git import Repo
 from loguru import logger
 
-from dojo.constants import ValidatorConstant, ValidatorInterval, get_mode
-from dojo.utils.config import source_dotenv
+from dojo.constants import ValidatorConstant, ValidatorInterval
+from dojo.utils.config import get_mode, source_dotenv
 
 source_dotenv()
 

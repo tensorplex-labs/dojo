@@ -1,30 +1,14 @@
 import os
-from enum import Enum, IntEnum
+from enum import IntEnum
 
 
-class Mode(str, Enum):
-    NORMAL = "normal"
-    HIGH = "high"
-    MEDIUM = "medium"
-
-
-def get_mode() -> Mode:
-    """Get the current mode from environment or config"""
-    from dojo.utils.config import get_config
-
-    mode = get_config().fast_mode
-    if not mode:
-        return Mode.NORMAL
-    return Mode(mode.lower())
-
-
-class CommonConstants(IntEnum):
+class AnalyticsConstants(IntEnum):
     """Constants that don't vary with mode"""
 
     ANALYTICS_UPLOAD = 65 * 60  # 65 minutes
 
 
-class BaseValidatorConstants(IntEnum):
+class NormalValidatorConstants(IntEnum):
     """Base constants for synthetic task execution and monitoring"""
 
     TASK_DEADLINE = 6 * 60 * 60  # 6 hours
@@ -66,11 +50,13 @@ class HighValidatorConstants(IntEnum):
 
 
 def get_validator_constants() -> (
-    type[BaseValidatorConstants | MediumValidatorConstants | HighValidatorConstants]
+    type[NormalValidatorConstants | MediumValidatorConstants | HighValidatorConstants]
 ):
+    from dojo.utils.config import Mode, get_mode
+
     mode = get_mode()
     return {
-        Mode.NORMAL: BaseValidatorConstants,
+        Mode.NORMAL: NormalValidatorConstants,
         Mode.HIGH: HighValidatorConstants,
         Mode.MEDIUM: MediumValidatorConstants,
     }[mode]
@@ -80,8 +66,13 @@ class ValidatorConstant(IntEnum):
     """Validator-specific constants"""
 
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
-    MINER_STATUS = 60
     VALIDATOR_STATUS = 60
+
+
+class MinerConstant(IntEnum):
+    """Miner-specific constants"""
+
+    MINER_STATUS = 60
 
 
 # Export the constants directly

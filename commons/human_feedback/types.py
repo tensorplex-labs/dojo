@@ -68,7 +68,7 @@ HFLIntervalType: TypeAlias = BaseHFLInterval | MediumHFLInterval | HighHFLInterv
 
 def get_hfl_interval() -> HFLIntervalType:
     """Get HFL timing constants based on mode"""
-    from dojo import get_mode
+    from dojo.utils.config import get_mode
 
     mode = get_mode()
     logger.info(f"HFLInterval: {mode.lower()}")

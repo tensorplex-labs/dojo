@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 
@@ -9,6 +10,12 @@ from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
 base_path = Path.cwd()
+
+
+class Mode(str, Enum):
+    NORMAL = "normal"
+    HIGH = "high"
+    MEDIUM = "medium"
 
 
 def check_config(config: bt.config):
@@ -208,3 +215,12 @@ def source_dotenv():
         return
 
     load_dotenv()
+
+
+def get_mode() -> Mode:
+    """Get the current mode from environment or config"""
+
+    mode = get_config().fast_mode
+    if not mode:
+        return Mode.NORMAL
+    return Mode(mode.lower())
