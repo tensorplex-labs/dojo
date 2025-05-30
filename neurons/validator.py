@@ -417,14 +417,13 @@ class Validator(aobject):
 
     def _calculate_incentives(
         self,
-        metagraph_hotkeys: list[str],
         hotkey_to_scores: dict[str, float],
         current_scores_tensor: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # scores dimensions might have been updated after resyncing... len(uids) != len(self.synthetic_score)
         # same-length initialization is needed for EMA calculation later
-        new_incentives = torch.zeros((len(metagraph_hotkeys),))
-        existing_incentives = torch.zeros((len(metagraph_hotkeys),))
+        new_incentives = torch.zeros((len(self.metagraph.hotkeys),))
+        existing_incentives = torch.zeros((len(self.metagraph.hotkeys),))
 
         # Handle NaN values
         hotkey_to_scores = {
@@ -433,10 +432,10 @@ class Validator(aobject):
         }
 
         # Copy existing scores for current UIDs
-        existing_size = min(len(current_scores_tensor), len(metagraph_hotkeys))
+        existing_size = min(len(current_scores_tensor), len(self.metagraph.hotkeys))
         existing_incentives[:existing_size] = current_scores_tensor[:existing_size]
 
-        for _, (hotkey, value) in enumerate(hotkey_to_scores.items()):
+        for hotkey, value in hotkey_to_scores.items():
             # search metagraph for hotkey and grab uid
             try:
                 uid: int = self.metagraph.hotkeys.index(hotkey)
@@ -462,12 +461,13 @@ class Validator(aobject):
         """
         # Update synthetic scores if available
         if hotkey_to_synthetic_scores:
-            await self._update_score_type(
-                score_type="synthetic",
+            logger.info(f"Updating synthetic scores with {hotkey_to_synthetic_scores}")
+            self.synthetic_score = await self._calculate_score_ema(
                 hotkey_to_scores=hotkey_to_synthetic_scores,
                 current_scores=self.synthetic_score,
                 moving_average_alpha=self.config.neuron.moving_average_alpha,
             )
+            logger.info(f"Synthetic scores after update: {self.synthetic_score}")
         else:
             logger.warning(
                 "hotkey_to_synthetic_scores is empty, skipping synthetic score update"
@@ -477,24 +477,24 @@ class Validator(aobject):
 
         # Update HFL scores if available
         if hotkey_to_hfl_scores:
-            await self._update_score_type(
-                score_type="hfl",
+            logger.info(f"Updating HFL scores with {hotkey_to_hfl_scores}")
+            self.hfl_scores = await self._calculate_score_ema(
                 hotkey_to_scores=hotkey_to_hfl_scores,
                 current_scores=self.hfl_scores,
                 moving_average_alpha=self.config.weights.hfl_ema_alpha,
             )
+            logger.info(f"HFL scores after update: {self.hfl_scores}")
         else:
             logger.warning("hotkey_to_hfl_scores is empty, skipping HFL score update")
             async with self._scores_alock:
                 self.hfl_scores = self._resize_score_tensor(self.hfl_scores)
 
-    async def _update_score_type(
+    async def _calculate_score_ema(
         self,
-        score_type: str,
         hotkey_to_scores: dict[str, float],
         current_scores: torch.Tensor,
         moving_average_alpha: float,
-    ) -> None:
+    ) -> torch.Tensor:
         """
         Updates a specific type of score using exponential moving average.
 
@@ -504,25 +504,19 @@ class Validator(aobject):
             current_scores: Current tensor of scores to be updated
             moving_average_alpha: Alpha value for the exponential moving average
         """
-        hotkeys: list[str] = self.metagraph.hotkeys
-
-        logger.info(f"Hotkeys: {len(hotkeys)}")
 
         # Calculate incentives based on scores
         existing_incentives, new_incentives = self._calculate_incentives(
-            metagraph_hotkeys=hotkeys,
             hotkey_to_scores=hotkey_to_scores,
             current_scores_tensor=current_scores,
         )
 
-        logger.info(
-            f"Incentives for {score_type} tasks: {new_incentives.shape=} {new_incentives=}"
-        )
+        logger.info(f"Incentives for scores: {new_incentives.shape=} {new_incentives=}")
 
         # Update scores with lock protection
         async with self._scores_alock:
             _terminal_plot(
-                f"{score_type} scores before update, block: {self.block}",
+                f"Scores before update, block: {self.block}",
                 current_scores.numpy(),
             )
 
@@ -535,17 +529,11 @@ class Validator(aobject):
             updated_scores = torch.clamp(updated_scores, min=0.0)
 
             _terminal_plot(
-                f"{score_type} scores after update, block: {self.block}",
+                f"Scores after update, block: {self.block}",
                 updated_scores.numpy(),
             )
 
-            # Update the appropriate score tensor
-            if score_type == "synthetic":
-                self.synthetic_score = updated_scores
-            else:  # score_type == "hfl"
-                self.hfl_scores = updated_scores
-
-        logger.info(f"Updated {score_type} scores: {updated_scores}")
+        return updated_scores
 
     async def save_state(
         self,
