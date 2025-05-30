@@ -349,6 +349,7 @@ async def get_task_synapse_for_retry(task_id: str) -> TaskSynapseObject | None:
         from database.mappers import map_validator_task_to_task_synapse_object
 
         task_synapse = map_validator_task_to_task_synapse_object(task)
+        # TODO reduce dealine to 2 hours
         task_synapse.expire_at = set_expire_time(int(dojo.HFL_TASK_DEADLINE))
         if task_synapse.completion_responses:
             for completion in task_synapse.completion_responses:
@@ -404,6 +405,7 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                     sanitized_criteria.append(criterion)
                     continue
 
+                # TODO: KIV for oom
                 # Get text feedback
                 text_feedback = (
                     criterion["text_feedback"].strip()

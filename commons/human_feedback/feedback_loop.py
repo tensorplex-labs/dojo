@@ -321,6 +321,7 @@ class FeedbackLoop:
                     retry_count = task.HFLState.tf_retry_count or 0
                     MAX_RETRY_ATTEMPTS = 5
 
+                    # TODO put constant type
                     if response_count >= 3:
                         # Process task with sufficient responses
                         logger.info(
@@ -355,7 +356,7 @@ class FeedbackLoop:
                         # Store selected responses
                         selected_responses_by_task[task.id] = selected_responses
 
-                    elif retry_count < MAX_RETRY_ATTEMPTS:
+                    elif response_count <= 3 and retry_count < MAX_RETRY_ATTEMPTS:
                         # Handle task with insufficient responses needing retry
                         task_synapse = await get_task_synapse_for_retry(task.id)
 
@@ -422,7 +423,7 @@ class FeedbackLoop:
                             f"Saved {count} miner responses for task {task.id}, retry count: {updated_hfl_state.tf_retry_count}"
                         )
 
-                    else:
+                    elif response_count <= 3 and retry_count >= MAX_RETRY_ATTEMPTS:
                         # Handle task with insufficient responses at max retries
                         logger.warning(
                             f"Task {task.id} failed to get enough responses after {MAX_RETRY_ATTEMPTS} attempts. "
