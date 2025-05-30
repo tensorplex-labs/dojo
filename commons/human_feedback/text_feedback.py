@@ -10,6 +10,7 @@ from commons.dataset.synthetic import SyntheticAPI
 from commons.dataset.types import MinerFeedback, TextFeedbackRequest
 from commons.hfl_helpers import HFLManager
 from commons.human_feedback.sanitize import sanitize_miner_feedback
+from commons.human_feedback.types import HFLInterval
 from commons.human_feedback.utils import (
     create_initial_miner_scores,
     extract_text_feedback_from_results,
@@ -19,7 +20,6 @@ from commons.utils import get_new_uuid, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, MinerResponse, ValidatorTask
 from database.prisma.types import ValidatorTaskInclude
-from dojo.constants import HFLTaskConstants
 from dojo.protocol import (
     CriteriaType,
     CriteriaTypeEnum,
@@ -80,7 +80,7 @@ async def create_text_feedback_task(
             previous_task_id=validator_task.task_id,
             prompt=prompt,
             task_type=TaskTypeEnum.TEXT_FEEDBACK,
-            expire_at=set_expire_time(int(HFLTaskConstants.HFL_TASK_DEADLINE)),
+            expire_at=set_expire_time(int(HFLInterval.TASK_DEADLINE)),
             completion_responses=[
                 selected_completion
             ],  # Only include the selected completion
@@ -349,9 +349,7 @@ async def get_task_synapse_for_retry(task_id: str) -> TaskSynapseObject | None:
         from database.mappers import map_validator_task_to_task_synapse_object
 
         task_synapse = map_validator_task_to_task_synapse_object(task)
-        task_synapse.expire_at = set_expire_time(
-            int(HFLTaskConstants.HFL_TASK_DEADLINE)
-        )
+        task_synapse.expire_at = set_expire_time(int(HFLInterval.TASK_DEADLINE))
         if task_synapse.completion_responses:
             for completion in task_synapse.completion_responses:
                 if not completion.criteria_types or len(completion.criteria_types) == 0:

@@ -6,6 +6,7 @@ from collections import defaultdict
 from loguru import logger
 from pydantic import ValidationError
 
+from commons.human_feedback.types import HFLConstants
 from commons.orm import ORM
 from commons.stats import calculate_icc
 from database.prisma.enums import HFLStatusEnum
@@ -16,11 +17,10 @@ from database.prisma.models import (
     MinerScore,
     ValidatorTask,
 )
-from dojo.constants import HFLCommonConstants
 from dojo.protocol import Scores
 
-TF_WEIGHT = HFLCommonConstants.TF_WEIGHT.value
-SF_WEIGHT = HFLCommonConstants.SF_WEIGHT.value
+TF_WEIGHT = HFLConstants.TF_WEIGHT.value
+SF_WEIGHT = HFLConstants.SF_WEIGHT.value
 
 
 async def score_hfl_tasks(

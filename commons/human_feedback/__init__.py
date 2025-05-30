@@ -7,6 +7,8 @@ from commons.human_feedback.exceptions import (
     NoNewExpiredTasksYet,
 )
 from commons.human_feedback.feedback_loop import FeedbackLoop
+from commons.human_feedback.types import HFLConstants, HFLInterval
+from commons.human_feedback.utils import should_continue_hfl
 
 __all__ = [
     "FeedbackLoop",
@@ -14,4 +16,7 @@ __all__ = [
     "HFLProcessingError",
     "HFLError",
     "InsufficientResponsesError",
+    "HFLConstants",
+    "HFLInterval",
+    "should_continue_hfl",
 ]

@@ -24,15 +24,6 @@ class CommonConstants(IntEnum):
     ANALYTICS_UPLOAD = 65 * 60  # 65 minutes
 
 
-class HFLCommonConstants(Enum):
-    MAX_ITERATIONS = 3
-    MIN_THRESHOLD = 50
-    MAX_THRESHOLD = 101  # turn back to 90 on mainnet
-    CONSENSUS_THRESHOLD = 101  # turn back to 90 on mainnet
-    TF_WEIGHT = 0.7
-    SF_WEIGHT = 0.3
-
-
 class BaseValidatorConstants(IntEnum):
     """Base constants for synthetic task execution and monitoring"""
 
@@ -74,39 +65,6 @@ class HighValidatorConstants(IntEnum):
     DOJO_TASK_MONITORING = 15
 
 
-class BaseHFLTaskConstants(IntEnum):
-    """Base Human Feedback Loop task constants"""
-
-    HFL_TF_CREATE_INTERVAL = 3600  # 1 hour for initial TF task creation
-    HFL_TF_UPDATE_INTERVAL = 900  # 15 minutes for Text Feedback updates
-    HFL_SF_CREATE_INTERVAL = 800  # 13 minutes for Score Feedback task creation
-    HFL_SF_UPDATE_INTERVAL = 700  # 11 minutes for Score Feedback updates
-    HFL_NEXT_TF_INTERVAL = 1200  # 20 minutes for creating next Text Feedback tasks
-    HFL_TASK_DEADLINE = 5 * 60 * 60  # 5 hours
-
-
-class MediumHFLTaskConstants(IntEnum):
-    """HFL task constants for medium-speed testing mode"""
-
-    HFL_TF_CREATE_INTERVAL = 660  # 10 minutes
-    HFL_TF_UPDATE_INTERVAL = 300  # 5 minutes
-    HFL_SF_CREATE_INTERVAL = 250  # ~4 minutes
-    HFL_SF_UPDATE_INTERVAL = 230  # ~4 minutes
-    HFL_NEXT_TF_INTERVAL = 400  # ~7 minutes
-    HFL_TASK_DEADLINE = 1800  # 30 minutes
-
-
-class HighHFLTaskConstants(IntEnum):
-    """HFL task constants for high-speed testing mode"""
-
-    HFL_TF_CREATE_INTERVAL = 180  # 3 minutes
-    HFL_TF_UPDATE_INTERVAL = 90  # 1.5 minutes
-    HFL_SF_CREATE_INTERVAL = 80  # 80 seconds
-    HFL_SF_UPDATE_INTERVAL = 70  # 70 seconds
-    HFL_NEXT_TF_INTERVAL = 120  # 2 minutes
-    HFL_TASK_DEADLINE = 180  # 3 minutes
-
-
 def get_validator_constants() -> (
     type[BaseValidatorConstants | MediumValidatorConstants | HighValidatorConstants]
 ):
@@ -118,18 +76,7 @@ def get_validator_constants() -> (
     }[mode]
 
 
-def get_hfl_task_constants() -> (
-    type[BaseHFLTaskConstants | MediumHFLTaskConstants | HighHFLTaskConstants]
-):
-    mode = get_mode()
-    return {
-        Mode.NORMAL: BaseHFLTaskConstants,
-        Mode.HIGH: HighHFLTaskConstants,
-        Mode.MEDIUM: MediumHFLTaskConstants,
-    }[mode]
-
-
-class ValidatorCommonConstants(IntEnum):
+class ValidatorConstant(IntEnum):
     """Validator-specific constants"""
 
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
@@ -138,12 +85,11 @@ class ValidatorCommonConstants(IntEnum):
 
 
 # Export the constants directly
-ValidatorConstants = get_validator_constants()
-HFLTaskConstants = get_hfl_task_constants()
+ValidatorInterval = get_validator_constants()
 
 
 # Validation
 assert (
-    ValidatorConstants.VALIDATOR_UPDATE_SCORE.value
-    < ValidatorConstants.TASK_DEADLINE.value
+    ValidatorInterval.VALIDATOR_UPDATE_SCORE.value
+    < ValidatorInterval.TASK_DEADLINE.value
 )

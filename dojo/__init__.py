@@ -2,14 +2,9 @@ import os
 import subprocess
 
 from git import Repo
+from loguru import logger
 
-from dojo.constants import (
-    HFLCommonConstants,
-    HFLTaskConstants,
-    ValidatorCommonConstants,
-    ValidatorConstants,
-    get_mode,
-)
+from dojo.constants import ValidatorConstant, ValidatorInterval, get_mode
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
@@ -65,15 +60,13 @@ def get_dojo_api_base_url() -> str:
 
 
 # Print mode information
-print(f"Running in {get_mode().value} mode")
+logger.info(f"Running in {get_mode().value} mode")
 
 
 __all__ = [
     # Constants
-    "HFLTaskConstants",
-    "ValidatorConstants",
-    "HFLCommonConstants",
-    "ValidatorCommonConstants",
+    "ValidatorInterval",
+    "ValidatorConstant",
     "get_mode",
     # Git functions
     "get_latest_git_tag",

@@ -20,14 +20,14 @@ from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
-from dojo.constants import CommonConstants, ValidatorCommonConstants
+from dojo.constants import CommonConstants, ValidatorConstant
 from dojo.kami import Kami, SubnetMetagraph
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 
 VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
 
 ANALYTICS_UPLOAD = CommonConstants.ANALYTICS_UPLOAD
-VALIDATOR_MIN_STAKE = ValidatorCommonConstants.VALIDATOR_MIN_STAKE
+VALIDATOR_MIN_STAKE = ValidatorConstant.VALIDATOR_MIN_STAKE
 
 
 async def _get_all_miner_hotkeys(subnet_metagraph: SubnetMetagraph) -> List[str]:

@@ -27,6 +27,7 @@ from commons.exceptions import (
     SyntheticGenerationError,
 )
 from commons.hfl_helpers import HFLManager
+from commons.human_feedback.types import HFLConstants
 from commons.human_feedback.utils import should_continue_hfl
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager
@@ -48,11 +49,7 @@ from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
 from dojo import get_latest_git_tag, get_latest_remote_tag, get_spec_version
-from dojo.constants import (
-    HFLCommonConstants,
-    ValidatorCommonConstants,
-    ValidatorConstants,
-)
+from dojo.constants import ValidatorConstant, ValidatorInterval
 from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.protocol import (
     CompletionResponse,
@@ -396,6 +393,7 @@ class Validator(aobject):
 
         # Check if the metagraph axon info has changed.
         if previous_axons == current_axons:
+            logger.info("Metagraph axon info has not changed, skipping resync")
             return
 
         logger.info(
@@ -410,18 +408,13 @@ class Validator(aobject):
 
         # Check to see if the metagraph has changed size.
         # If so, we need to add new hotkeys and moving averages.
-        if len(previous_hotkeys) < len(current_hotkeys):
+        if len(previous_hotkeys) != len(current_hotkeys):
             # Update the size of the moving average scores.
-            new_scores = torch.zeros(len(current_hotkeys))
-            min_len = min(len(previous_hotkeys), len(self.synthetic_score))
-            new_scores[:min_len] = self.synthetic_score[:min_len]
-
-            new_hfl_scores = torch.zeros(len(current_hotkeys))
-            min_len = min(len(previous_hotkeys), len(self.hfl_scores))
-            new_hfl_scores[:min_len] = self.hfl_scores[:min_len]
             async with self._scores_alock:
-                self.synthetic_score = torch.clamp(new_scores, min=0.0)
-                self.hfl_scores = torch.clamp(new_hfl_scores, min=0.0)
+                synthetic_score = self._resize_score_tensor(self.synthetic_score)
+                hfl_scores = self._resize_score_tensor(self.hfl_scores)
+                self.synthetic_score = torch.clamp(synthetic_score, min=0.0)
+                self.hfl_scores = torch.clamp(hfl_scores, min=0.0)
 
     def _calculate_incentives(
         self,
@@ -430,37 +423,29 @@ class Validator(aobject):
         current_scores_tensor: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # scores dimensions might have been updated after resyncing... len(uids) != len(self.synthetic_score)
+        # same-length initialization is needed for EMA calculation later
         new_incentives = torch.zeros((len(metagraph_hotkeys),))
         existing_incentives = torch.zeros((len(metagraph_hotkeys),))
-        nan_value_indices = np.isnan(list(hotkey_to_scores.values()))
-        if nan_value_indices.any():
-            logger.warning(f"NaN values detected in rewards: {hotkey_to_scores}")
-            # Set NaN values to 0.0
-            hotkey_to_scores = {
-                key: (0.0 if np.isnan(value) else value)
-                for key, value in hotkey_to_scores.items()
-            }
 
-        for index, (hotkey, value) in enumerate(hotkey_to_scores.items()):
-            # handle nan values
-            if nan_value_indices[index]:
-                new_incentives[hotkey] = 0.0  # type: ignore
+        # Handle NaN values
+        hotkey_to_scores = {
+            key: (0.0 if np.isnan(value) else value)
+            for key, value in hotkey_to_scores.items()
+        }
+
+        # Copy existing scores for current UIDs
+        existing_size = min(len(current_scores_tensor), len(metagraph_hotkeys))
+        existing_incentives[:existing_size] = current_scores_tensor[:existing_size]
+
+        for _, (hotkey, value) in enumerate(hotkey_to_scores.items()):
             # search metagraph for hotkey and grab uid
             try:
                 uid: int = self.metagraph.hotkeys.index(hotkey)
+                logger.info(f"Score for hotkey {hotkey} is {value}")
+                new_incentives[uid] = value
             except ValueError:
                 logger.warning("Old hotkey found from previous metagraph")
                 continue
-
-            logger.info(f"Score for hotkey {hotkey} is {value}")
-            new_incentives[uid] = value
-
-            # scores_tensor is a tensor already based on uids
-            # use this logic to ensure
-            # 1. rewards and existing_scores are the same length
-            # 2. if hotkey is deregistered, the new participant will not benefit from existing scores
-            if uid < len(current_scores_tensor):
-                existing_incentives[uid] = current_scores_tensor[uid]
 
         assert (
             existing_incentives.shape == new_incentives.shape
@@ -488,6 +473,8 @@ class Validator(aobject):
             logger.warning(
                 "hotkey_to_synthetic_scores is empty, skipping synthetic score update"
             )
+            async with self._scores_alock:
+                self.synthetic_score = self._resize_score_tensor(self.synthetic_score)
 
         # Update HFL scores if available
         if hotkey_to_hfl_scores:
@@ -499,6 +486,8 @@ class Validator(aobject):
             )
         else:
             logger.warning("hotkey_to_hfl_scores is empty, skipping HFL score update")
+            async with self._scores_alock:
+                self.hfl_scores = self._resize_score_tensor(self.hfl_scores)
 
     async def _update_score_type(
         self,
@@ -740,12 +729,12 @@ class Validator(aobject):
             logger.info(
                 f"Validator running... block:{str(self.block)} time: {time.time()}"
             )
-            await asyncio.sleep(ValidatorCommonConstants.VALIDATOR_STATUS)
+            await asyncio.sleep(ValidatorConstant.VALIDATOR_STATUS)
 
     async def send_heartbeats(self):
         """Perform a health check periodically to ensure and check which miners are reachable"""
         while True:
-            await asyncio.sleep(ValidatorConstants.VALIDATOR_HEARTBEAT)
+            await asyncio.sleep(ValidatorInterval.VALIDATOR_HEARTBEAT)
             try:
                 axons = self._retrieve_axons()
                 logger.info(f"Sending heartbeats to {len(axons)} miners")
@@ -791,9 +780,9 @@ class Validator(aobject):
                 # Check if there are any active miners. If no active miners, skip the request generation.
                 if not self._active_miner_uids:
                     logger.info(
-                        f"No active miners to send request to... sleeping for {ValidatorConstants.VALIDATOR_RUN} seconds"
+                        f"No active miners to send request to... sleeping for {ValidatorInterval.VALIDATOR_RUN} seconds"
                     )
-                    await asyncio.sleep(ValidatorConstants.VALIDATOR_RUN)
+                    await asyncio.sleep(ValidatorInterval.VALIDATOR_RUN)
                     continue
                 # Group related operations in a single async context
                 async with self._request_alock:
@@ -816,7 +805,7 @@ class Validator(aobject):
 
                 # Sync metagraph and potentially set weights.
                 await self.sync()
-                await asyncio.sleep(ValidatorConstants.VALIDATOR_RUN)
+                await asyncio.sleep(ValidatorInterval.VALIDATOR_RUN)
             except KeyboardInterrupt:
                 # Handle shutdown gracefully
                 await self.cleanup()
@@ -830,7 +819,7 @@ class Validator(aobject):
             except Exception as err:
                 logger.error(f"Error during validation: {err}")
                 logger.debug(traceback.format_exc())
-                await asyncio.sleep(ValidatorConstants.VALIDATOR_RUN)
+                await asyncio.sleep(ValidatorInterval.VALIDATOR_RUN)
 
         # Cleanup on exit
         await self.cleanup()
@@ -841,7 +830,7 @@ class Validator(aobject):
         Decoupled from scoring function to allow more frequent updates.
         """
         while True:
-            await asyncio.sleep(ValidatorConstants.VALIDATOR_UPDATE_TASK)  # 15 minutes
+            await asyncio.sleep(ValidatorInterval.VALIDATOR_UPDATE_TASK)  # 15 minutes
             try:
                 # Grab tasks that were expired TASK_DEADLINE duration ago
                 expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
@@ -871,7 +860,7 @@ class Validator(aobject):
         Uses a buffer period to ensure tasks have had sufficient update cycles.
         """
         while True:
-            await asyncio.sleep(ValidatorConstants.VALIDATOR_UPDATE_SCORE)  # 60 minutes
+            await asyncio.sleep(ValidatorInterval.VALIDATOR_UPDATE_SCORE)  # 60 minutes
             # for each hotkey, a list of scores from all tasks being scored
             hotkey_to_synthetic_scores = defaultdict(list)
 
@@ -882,7 +871,7 @@ class Validator(aobject):
                 now = datetime.now(timezone.utc)
                 expire_from = datetime_as_utc(now - timedelta(hours=2))
                 expire_to = datetime_as_utc(
-                    now - timedelta(seconds=ValidatorConstants.BUFFER_PERIOD)
+                    now - timedelta(seconds=ValidatorInterval.BUFFER_PERIOD)
                 )
 
                 logger.info(f" Current time: {now}")
@@ -1183,7 +1172,7 @@ class Validator(aobject):
                 task_id=task_id,
                 prompt=data.prompt,
                 task_type=str(TaskTypeEnum.CODE_GENERATION),
-                expire_at=set_expire_time(ValidatorConstants.TASK_DEADLINE),
+                expire_at=set_expire_time(ValidatorInterval.TASK_DEADLINE),
                 completion_responses=completion_responses,
             )
 
@@ -1915,10 +1904,10 @@ class Validator(aobject):
             eff_stake = aget_effective_stake(hotkey, self.metagraph)
             if (
                 not get_config().ignore_min_stake
-                and eff_stake > ValidatorCommonConstants.VALIDATOR_MIN_STAKE
+                and eff_stake > ValidatorConstant.VALIDATOR_MIN_STAKE
             ):
                 logger.debug(
-                    f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorCommonConstants.VALIDATOR_MIN_STAKE} to be considered miner"
+                    f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE} to be considered miner"
                 )
                 continue
 
@@ -2019,8 +2008,8 @@ class Validator(aobject):
             continue_hfl, reason = await should_continue_hfl(
                 hfl_state=hfl_state,
                 latest_sf_task_id=sf_task_id,
-                max_iterations=HFLCommonConstants.MAX_ITERATIONS.value,
-                consensus_threshold=HFLCommonConstants.CONSENSUS_THRESHOLD.value,
+                max_iterations=HFLConstants.MAX_ITERATIONS.value,
+                consensus_threshold=HFLConstants.CONSENSUS_THRESHOLD.value,
             )
 
             if continue_hfl:
@@ -2147,3 +2136,21 @@ class Validator(aobject):
         )
 
         return scoring_result, participating_hotkeys
+
+    def _resize_score_tensor(
+        self,
+        current_tensor: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Resize a score tensor to match current metagraph size while preserving existing scores.
+
+        Args:
+            current_tensor: The tensor to resize
+
+        Returns:
+            torch.Tensor: Resized tensor with preserved scores
+        """
+        new_tensor = torch.zeros(len(self.metagraph.hotkeys))
+        min_size = min(len(current_tensor), len(self.metagraph.hotkeys))
+        new_tensor[:min_size] = current_tensor[:min_size]
+        return new_tensor
