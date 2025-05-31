@@ -121,7 +121,7 @@ async def main():
             logger.error(f"Task {task.get_name()} raised an exception: {e}")
             pass
 
-    logger.info("Exiting main function.")
+    logger.info("Done, exiting main function.")
 
 
 if __name__ == "__main__":

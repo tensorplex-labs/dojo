@@ -9,12 +9,13 @@ from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.hfl_helpers import HFLManager
+from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskUpdateInput
-from dojo.protocol import ScoreFeedbackEvent, TaskSynapseObject, TextFeedbackEvent
+from dojo.protocol import ScoreFeedbackEvent, SyntheticTaskSynapse, TextFeedbackEvent
 
 from .utils import (
     create_initial_miner_scores,
@@ -70,7 +71,7 @@ async def create_score_feedback_task(
             )
             return None
 
-        # Map the raw response to a TaskSynapseObject
+        # Map the raw response to a SyntheticTaskSynapse
         task_synapse = map_human_feedback_to_task_synapse(
             improved_task_data,
             original_model_name=tf_task.completions[0].model,
@@ -79,7 +80,7 @@ async def create_score_feedback_task(
 
         if not task_synapse or not task_synapse.completion_responses:
             logger.error(
-                "Failed to map improved task data to TaskSynapseObject or no completion responses"
+                "Failed to map improved task data to SyntheticTaskSynapse or no completion responses"
             )
             return None
 
@@ -99,7 +100,7 @@ async def create_score_feedback_task(
             return None
 
         # Send to miners
-        miner_responses: list[TaskSynapseObject] | None = await send_hfl_request(
+        miner_responses: list[SyntheticTaskSynapse] | None = await send_hfl_request(
             validator=validator,
             synapse=task_synapse,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
@@ -291,12 +292,13 @@ async def get_active_miners_for_hfl(
     return selected_miners
 
 
+# TODO: cleanup params here as staticmethod was removed
 async def send_hfl_request(
     validator: "Validator",
-    synapse: TaskSynapseObject,
+    synapse: SyntheticTaskSynapse,
     task_type: TaskTypeEnum,
     axons: list[AxonInfo],
-) -> list[TaskSynapseObject] | None:
+) -> list[SyntheticTaskSynapse] | None:
     """
     Send Human Feedback Loop requests to miners.
 
@@ -318,7 +320,8 @@ async def send_hfl_request(
     )
 
     # Send request to miners
-    miner_responses = await validator._send_requests_to_miners(
+    _validator = await ObjectManager.get_validator()
+    miner_responses = await _validator.send_synthetic_task(
         validator.dendrite,
         axons,
         synapse,

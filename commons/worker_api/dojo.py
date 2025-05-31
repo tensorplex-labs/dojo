@@ -10,7 +10,13 @@ from loguru import logger
 from commons.exceptions import CreateTaskFailed
 from commons.utils import loaddotenv
 from dojo import get_dojo_api_base_url
-from dojo.protocol import CodeAnswer, MultimediaAnswer, TaskSynapseObject, TaskTypeEnum
+from dojo.protocol import (
+    CodeAnswer,
+    MultimediaAnswer,
+    SyntheticTaskSynapse,
+    TaskTypeEnum,
+)
+from dojo.utils.retry_utils import async_retry
 
 DOJO_API_BASE_URL = get_dojo_api_base_url()
 # to be able to get the curlify requests
@@ -41,36 +47,22 @@ class DojoAPI:
         return response.json()
 
     @classmethod
+    @async_retry(max_retries=5, jitter=True)
     async def get_task_results_by_dojo_task_id(
         cls, dojo_task_id: str
     ) -> List[Dict] | None:
         """Gets task results from dojo task id to prepare for scoring later on"""
 
-        for attempt in range(cls.MAX_RETRIES):
-            try:
-                task_results_response = await cls._get_task_results_by_dojo_task_id(
-                    dojo_task_id
-                )
-                task_results = task_results_response.get("body", {}).get("taskResults")
-                if task_results:
-                    return task_results
-                return None
-            except Exception as e:
-                if attempt < cls.MAX_RETRIES - 1:
-                    delay = cls.BASE_DELAY * 2**attempt + random.uniform(0, 1)
-                    logger.warning(
-                        f"Error occurred while getting task results for dojo task id {dojo_task_id}: {e}. "
-                        f"Retrying in {delay:.2f} seconds..."
-                    )
-                    await asyncio.sleep(delay)
-
-        logger.error(
-            f"Failed to get task results for dojo task id {dojo_task_id} after {cls.MAX_RETRIES} retries"
+        task_results_response = await cls._get_task_results_by_dojo_task_id(
+            dojo_task_id
         )
+        task_results = task_results_response.get("body", {}).get("taskResults")
+        if task_results:
+            return task_results
         return None
 
     @staticmethod
-    def serialize_task_request(data: TaskSynapseObject):
+    def serialize_task_request(data: SyntheticTaskSynapse):
         # Use a mapping for task_modality to avoid if-else logic
         # TODO: KIV
         if data.task_type in (
@@ -115,7 +107,7 @@ class DojoAPI:
     @classmethod
     async def create_task(
         cls,
-        task_request: TaskSynapseObject,
+        task_request: SyntheticTaskSynapse,
     ) -> List[str]:
         response_data = {"text": "", "json": {}}
         # Simplified title assignment

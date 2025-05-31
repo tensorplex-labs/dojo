@@ -392,12 +392,7 @@ async def create_miner_responses(
             created_at=current_time,
             updated_at=current_time,
             result_data=result_data,
-            dojo_task_id=dojo_task_id,
-            stake_amount=None,
-            finalised_loss=None,
-            potential_loss=None,
-            finalised_reward=None,
-            potential_reward=None,
+            task_id=dojo_task_id,
         )
 
         # Convert the TaskResult to a JSON string
@@ -813,12 +808,7 @@ async def create_tf_miner_responses(
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
             result_data=[result],
-            dojo_task_id=dojo_task_id,
-            stake_amount=None,
-            finalised_loss=None,
-            potential_loss=None,
-            finalised_reward=None,
-            potential_reward=None,
+            task_id=dojo_task_id,
         )
 
         # Create the miner response with properly serialized JSON

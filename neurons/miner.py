@@ -3,49 +3,54 @@ import os
 import time
 import traceback
 from datetime import datetime
+from http import HTTPStatus
 from typing import Dict, Tuple
 
 import bittensor
 from bittensor.utils.networking import ip_to_int, ip_version
+from fastapi import HTTPException
 from loguru import logger
 
-# from commons.exceptions import FatalSubtensorConnectionError
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject, get_epoch_time
-
-#                            serve_axon)
 from commons.worker_api.dojo import DojoAPI
 from dojo.chain import parse_block_headers
 from dojo.constants import MinerConstant, ValidatorConstant
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
+from dojo.messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 from dojo.protocol import (
     Heartbeat,
     ScoreCriteria,
     ScoringResult,
+    SyntheticTaskSynapse,
     TaskResult,
-    TaskResultRequest,
-    TaskSynapseObject,
+    TaskResultSynapse,
     TextCriteria,
 )
+from dojo.utils import BoundedDict
 from dojo.utils.config import get_config
 
 
-class Miner(aobject):
-    _should_exit: bool = False
-    kami: Kami
+def optimize_payload_for_transport(synapse: SyntheticTaskSynapse):
+    if synapse.completion_responses:
+        for response in synapse.completion_responses:
+            response.completion = None
+    return synapse
 
+
+class Miner(aobject):
     async def __init__(self):
-        self._last_block = None
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
-        self.kami = Kami()
+        self.kami: Kami = Kami()
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
         self.wallet = bittensor.wallet(config=self.config)
         logger.info(f"Wallet: {self.wallet}")
-        # The axon handles request processing, allowing validators to send this miner requests.
+        # TODO: replace axon this once all functions done
+        self.server = Server()
         self.axon = bittensor.axon(wallet=self.wallet, port=self.config.axon.port)
         logger.info(f"Axon: {self.axon}")
 
@@ -60,35 +65,58 @@ class Miner(aobject):
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
         )
 
-        # Attach determiners which functions are called when servicing a request.
-
-        # Note: The synapse parameter in blacklist functions is a different instance from the one in forward functions.
-        # The blacklist synapse comes from the request headers and is used for initial validation,
-        # while the forward synapse contains the full request body.
-
         logger.info("Attaching forward function to miner axon.")
+        # TODO: remove completely...
         self.axon.attach(
-            forward_fn=self.forward_task_request,
-            blacklist_fn=self.blacklist_task_request,
-            priority_fn=self.priority_ranking,
-        ).attach(
             forward_fn=self.forward_score_result,
             blacklist_fn=self.blacklist_score_result_request,
-        ).attach(
-            forward_fn=self.ack_heartbeat,
-            blacklist_fn=self.blacklist_heartbeat_request,
         )
 
-        # Attach a handler for TaskResultRequest to return task results
-        self.axon.attach(
-            forward_fn=self.forward_task_result_request,
-            blacklist_fn=self.blacklist_task_result_request,
+        async def heartbeat_adapter(request: Request, synapse: Heartbeat):
+            blacklist_reason = self.blacklist_function(request, synapse)
+            if blacklist_reason:
+                # we've received the req, but you're blacklisted and don't retry
+                raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
+
+            return await self.heartbeat_handler(request, synapse)
+
+        self.server.serve_synapse(synapse=Heartbeat, handler=heartbeat_adapter)
+
+        async def synthetic_task_adapter(
+            request: Request, synapse: SyntheticTaskSynapse
+        ):
+            blacklist_reason = self.blacklist_function(request, synapse)
+            if blacklist_reason:
+                # we've received the req, but you're blacklisted and don't retry
+                raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
+
+            return await self.synthetic_task_handler(request, synapse)
+
+        self.server.serve_synapse(
+            synapse=SyntheticTaskSynapse, handler=synthetic_task_adapter
         )
 
-        # Instantiate runners
-        self.should_exit: bool = False
+        # TODO: score result request
+        async def task_result_adapter(request: Request, synapse: TaskResultSynapse):
+            blacklist_reason = self.blacklist_function(request, synapse)
+            if blacklist_reason:
+                # we've received the req, but you're blacklisted and don't retry
+                raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
+
+            return await self.task_result_handler(request, synapse)
+
+        self.server.serve_synapse(
+            synapse=TaskResultSynapse, handler=task_result_adapter
+        )
+
+        self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
         # log all incoming requests
-        self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
+        self.hotkey_to_request: Dict[str, SyntheticTaskSynapse] = {}
+
+    async def start_server(self):
+        """Wrapper around starting the server so that a different process may
+        acquire the task handle"""
+        await self.server.initialise(port=self.config.axon.port)  # type: ignore
 
     async def init_metagraphs(self):
         logger.info("Performing async init for miner")
@@ -96,8 +124,8 @@ class Miner(aobject):
         self.block = await self.kami.get_current_block()
         # The metagraph holds the state of the network, letting us know about other validators and miners.
         self.subnet_metagraph: SubnetMetagraph = await self.kami.get_metagraph(
-            self.config.netuid
-        )  # type: ignore
+            self.config.netuid  # type: ignore
+        )
         self.root_metagraph: SubnetMetagraph = await self.kami.get_metagraph(0)
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
@@ -115,7 +143,6 @@ class Miner(aobject):
         2. Starts the miner's axon, making it active on the network.
         3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting weights.
 
-        The miner continues its operations until `should_exit` is set to True or an external interruption occurs.
         During each epoch of its operation, the miner waits for new blocks on the Bittensor network, updates its
         knowledge of the network (metagraph), and sets its weights. This process ensures the miner remains active
         and up-to-date with the network's latest state.
@@ -146,8 +173,6 @@ class Miner(aobject):
             version=1,
         )
 
-        # serve_success = await serve_axon(self.subtensor, self.axon, self.config)
-
         if not await self.check_if_axon_served(axon_payload):
             serve_success = await self.kami.serve_axon(axon_payload)
             if serve_success.get("statusCode", None) == 200:
@@ -161,17 +186,14 @@ class Miner(aobject):
             logger.info("Axon already served, no need to serve again.")
 
         # Start  starts the miner's axon, making it active on the network.
-        self.axon.start()
+        # TODO: disable this so we can bind axon.port
+        # self.axon.start()
 
         logger.info(f"Miner starting at block: {str(self.block)}")
 
         # This loop maintains the miner's operations until intentionally stopped.
         try:
             while True:
-                # Check if we should exit.
-                if self.should_exit:
-                    break
-
                 # Sync metagraph and potentially set weights.
                 await self.sync()
                 await asyncio.sleep(12)
@@ -190,17 +212,14 @@ class Miner(aobject):
 
     async def _cleanup(self):
         self.axon.stop()
+        await self.server.shutdown()
         await self.kami.close()
 
-    async def ack_heartbeat(self, synapse: Heartbeat) -> Heartbeat:
-        caller_hotkey = (
-            synapse.dendrite.hotkey if synapse.dendrite else "unknown hotkey"
-        )
+    async def heartbeat_handler(
+        self, request: Request, synapse: Heartbeat
+    ) -> Heartbeat:
+        caller_hotkey = request.headers.get(HOTKEY_HEADER)
         logger.info(f"⬇️ Received heartbeat synapse from {caller_hotkey}")
-        if not synapse:
-            logger.error("Invalid synapse object")
-            return synapse
-
         synapse.ack = True
         logger.info(f"⬆️ Respondng to heartbeat synapse: {synapse}")
         return synapse
@@ -263,116 +282,112 @@ class Miner(aobject):
 
         return synapse
 
-    async def forward_task_request(
-        self, synapse: TaskSynapseObject
-    ) -> TaskSynapseObject:
+    async def synthetic_task_handler(
+        self, request: Request, synapse: SyntheticTaskSynapse
+    ) -> SyntheticTaskSynapse:
         # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
-        if not synapse or not synapse.completion_responses:
-            logger.error("Invalid synapse: missing synapse or completion_responses")
-            return synapse
+        caller_hotkey = request.headers.get(HOTKEY_HEADER)
+        synapse_name = synapse.__class__.__name__
+        logger.info(
+            f"⬇️ Received {synapse_name} from {caller_hotkey} with expire_at: {synapse.expire_at}"
+        )
+        if caller_hotkey:
+            self.hotkey_to_request[caller_hotkey] = synapse
 
-        if not synapse.dendrite or not synapse.dendrite.hotkey:
-            logger.error("Invalid synapse: missing dendrite information")
-            return synapse
-
-        try:
-            logger.info(
-                f"Miner received task id: {synapse.task_id} from {synapse.dendrite.hotkey}, with expire_at: {synapse.expire_at}"
+        if not synapse.completion_responses:
+            raise HTTPException(
+                status_code=HTTPStatus.OK,
+                detail="Invalid synapse: missing completion_responses",
             )
 
-            self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
-
-            # Create task and store ID
+        try:
             if task_ids := await DojoAPI.create_task(synapse):
-                synapse.dojo_task_id = task_ids[0]
-                # Clear completion field in completion_responses to optimize network traffic
-                for response in synapse.completion_responses:
-                    response.completion = None
+                dojo_task_id = task_ids[0]
+                # # TODO: actually we don't even need this, since LLM API makes it irrelevant
+                # # touchpoints: validator db as well
+                # synapse.dojo_task_id = dojo_task_id
+
+                self.vali_to_dojo_task_id[synapse.task_id] = dojo_task_id
+                synapse.ack = True
+                synapse = optimize_payload_for_transport(synapse)
             else:
                 logger.error("Failed to create task: no task IDs returned")
 
         except Exception as e:
             logger.error(
-                f"Error processing request id: {getattr(synapse, 'task_id', 'unknown')}: {str(e)}"
+                f"Error processing validator task id: {synapse.task_id}: {str(e)}"
             )
-            logger.debug(f"Detailed error: {traceback.format_exc()}")
+            logger.debug(traceback.print_exc())
 
         return synapse
 
-    async def forward_task_result_request(
-        self, synapse: TaskResultRequest
-    ) -> TaskResultRequest:
+    async def task_result_handler(
+        self, request: Request, synapse: TaskResultSynapse
+    ) -> TaskResultSynapse:
         """Handle a TaskResultRequest from a validator, fetching the task result from the DojoAPI."""
-        if not synapse or not synapse.dojo_task_id:
-            logger.error("Invalid TaskResultRequest: missing dojo_task_id")
-            return synapse
+        caller_hotkey = request.headers.get(HOTKEY_HEADER)
+        synapse_name = synapse.__class__.__name__
+        logger.info(f"⬇️ Received {synapse_name} from {caller_hotkey}")
+        if not synapse.validator_task_id:
+            message = (
+                f"validator_task_id should not be empty {synapse.validator_task_id}"
+            )
+            logger.error(message)
+            raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
         try:
-            logger.info(
-                f"Received TaskResultRequest for dojo task id: {synapse.dojo_task_id}"
-            )
+            dojo_task_id = self.vali_to_dojo_task_id.get(synapse.validator_task_id)
+            if not dojo_task_id:
+                message = f"Did not serve request from validator with {synapse.validator_task_id}"
+                logger.error(message)
+                raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
-            # Fetch task results from DojoAPI using task_id
-            task_results = await DojoAPI.get_task_results_by_dojo_task_id(
-                synapse.dojo_task_id
-            )
-
-            transformed_results = []
-            if task_results:
-                transformed_results = [
-                    {**result, "dojo_task_id": result.pop("task_id", None)}
-                    for result in (r.copy() for r in task_results)
-                ]
-
-                # Convert transformed results to TaskResult objects
-                synapse.task_results = [
-                    TaskResult(**result) for result in transformed_results
-                ]
-            else:
+            task_results = await DojoAPI.get_task_results_by_dojo_task_id(dojo_task_id)
+            if not task_results:
                 logger.debug(
-                    f"No task result found for dojo task id: {synapse.dojo_task_id}"
+                    f"No task result found for dojo task id: {synapse.validator_task_id}"
                 )
+                synapse.task_results = []
+                return synapse
 
+            synapse.task_results = [
+                TaskResult.model_validate(result) for result in task_results
+            ]
         except Exception as e:
-            logger.error(f"Error handling TaskResultRequest: {e}")
+            logger.error(f"Error while handling {synapse_name}: {e}")
             traceback.print_exc()
 
         return synapse
 
     async def blacklist_task_request(
-        self, synapse: TaskSynapseObject
+        self, synapse: SyntheticTaskSynapse
     ) -> Tuple[bool, str]:
-        return await self._blacklist_function(
+        return await self.blacklist_function(
             synapse, "validator", "Valid task request received from validator"
         )
 
     async def blacklist_task_result_request(
-        self, synapse: TaskResultRequest
+        self, synapse: TaskResultSynapse
     ) -> Tuple[bool, str]:
-        return await self._blacklist_function(
+        return await self.blacklist_function(
             synapse, "task result", "Valid task result request from validator"
         )
 
     async def blacklist_heartbeat_request(self, synapse: Heartbeat) -> Tuple[bool, str]:
-        return await self._blacklist_function(
+        return await self.blacklist_function(
             synapse, "heartbeat", "Valid heartbeat request from validator"
         )
 
     async def blacklist_score_result_request(
         self, synapse: ScoringResult
     ) -> Tuple[bool, str]:
-        return await self._blacklist_function(
+        return await self.blacklist_function(
             synapse, "scoring result", "Valid scoring result request from validator"
         )
 
-    def extract_synapse_info(self, synapse: bittensor.Synapse) -> str:
-        caller_hotkey = synapse.dendrite.hotkey
-        ip_addr = synapse.dendrite.ip or "Unknown IP"
-        return f"Hotkey: {caller_hotkey}, IP: {ip_addr}"
-
-    async def _blacklist_function(
-        self, synapse, request_tag: str, valid_msg: str
-    ) -> Tuple[bool, str]:
+    def blacklist_function(
+        self, request: Request, synapse: PydanticModel
+    ) -> str | None:
         """
         Common blacklist logic for any forward function to validate an incoming synapse.
         Note: Validate network-level security concerns using the header-based synapse, not the request body data
@@ -380,25 +395,22 @@ class Miner(aobject):
         Parameters:
             synapse: The incoming synapse object (Heartbeat, ScoringResult, etc.)
             request_tag: A tag used for logging (e.g., "heartbeat", "scoring result").
-            valid_msg: The success message if the synapse is allowed.
 
         Returns:
-            Tuple[bool, str]: (blacklisted: bool, message: str)
+            str: blacklisted reason
         """
-        dendrite = synapse.dendrite
-        ip_addr = getattr(dendrite, "ip", "Unknown IP")
-        caller_hotkey = getattr(dendrite, "hotkey", None)
-
-        # Log the IP address of the incoming request and the hotkey
+        ip_addr = (
+            f"{request.client.host}/{request.client.port}" if request.client else ""
+        )
+        caller_hotkey = request.headers.get(HOTKEY_HEADER)
         logger.info(
-            f"Incoming {request_tag} request from IP: {ip_addr} with hotkey: {caller_hotkey}"
+            f"⬇️ Incoming {synapse.__class__.__name__} request from IP: {ip_addr} with hotkey: {caller_hotkey}"
         )
 
         if not caller_hotkey or caller_hotkey not in self.subnet_metagraph.hotkeys:
-            logger.warning(f"Blacklisting unrecognized hotkey {caller_hotkey}")
-            return True, "Unrecognized hotkey"
-
-        logger.debug(f"Got {request_tag} request from {caller_hotkey}")
+            message = f"Blacklisting unrecognized hotkey {caller_hotkey}"
+            logger.warning(message)
+            return message
 
         if get_config().ignore_min_stake:
             message = (
@@ -406,20 +418,17 @@ class Miner(aobject):
                 "YOU SHOULD NOT SEE THIS when you are running a miner on mainnet"
             )
             logger.warning(message)
-            return (
-                False,
-                f"Ignored minimum validator stake requirement of {ValidatorConstant.VALIDATOR_MIN_STAKE}",
-            )
+            return None
 
         effective_stake = aget_effective_stake(caller_hotkey, self.subnet_metagraph)
         if effective_stake < float(ValidatorConstant.VALIDATOR_MIN_STAKE):
             message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"
             logger.warning(message)
-            return True, message
+            return message
 
-        return False, valid_msg
+        return None
 
-    async def priority_ranking(self, synapse: TaskSynapseObject) -> float:
+    async def priority_ranking(self, synapse: SyntheticTaskSynapse) -> float:
         """
         The priority function determines the order in which requests are handled. Higher-priority
         requests are processed before others. Miners may receive messages from multiple entities at
@@ -448,7 +457,7 @@ class Miner(aobject):
         logger.info("Metagraph updated")
 
     async def log_miner_status(self):
-        while not self._should_exit:
+        while True:
             logger.info(f"Miner running... block:{str(self.block)} time: {time.time()}")
             await asyncio.sleep(MinerConstant.MINER_STATUS)
 
@@ -509,11 +518,13 @@ class Miner(aobject):
 
     @property
     def block(self):
-        return self._last_block
+        if not hasattr(self, "_block"):
+            self._block = 0
+        return self._block
 
     @block.setter
     def block(self, value: int):
-        self._last_block = value
+        self._block = value
 
     async def block_headers_callback(self, block: dict):
         logger.trace(f"Received block headers{block}")
@@ -525,14 +536,12 @@ class Miner(aobject):
         while True:
             block = await self.kami.get_current_block()
             if block and block != self.block:
-                self._last_block = block
-                logger.debug(f"Updated block to {self._last_block}")
+                self.block = block
+                logger.debug(f"Updated block to {self.block}")
 
             if os.getenv("FAST_MODE"):
                 continue
 
-            logger.info(
-                f"Updated block to {self._last_block}"
-            )  # log new block if non fast_mode
+            logger.info(f"Updated block to {self.block}")
 
             await asyncio.sleep(12)

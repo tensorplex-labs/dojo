@@ -141,39 +141,8 @@ class SyntheticQA(BaseModel):
         return self
 
 
-class FeedbackRequest(bt.Synapse):
-    epoch_timestamp: float = Field(
-        default_factory=get_epoch_time,
-        description="Epoch timestamp for the request",
-    )
-    request_id: str = Field(
-        default_factory=get_new_uuid,
-        description="Unique identifier for the request",
-    )
-    prompt: str = Field(
-        description="Prompt or query from the user sent the LLM",
-    )
-    completion_responses: List[CompletionResponse] = Field(
-        description="List of completions for the prompt",
-    )
-    task_type: str = Field(description="Type of task")
-    criteria_types: List[CriteriaType] = Field(
-        description="Types of criteria for the task",
-    )
-    # task id from miner
-    dojo_task_id: str | None = Field(
-        description="Dojo task ID for the request", default=None
-    )
-    expire_at: str = Field(
-        description="Expired time for Dojo task which will be used by miner to create task"
-    )
-    ground_truth: dict[str, int] = Field(
-        description="Mapping of unique identifiers to their ground truth values",
-        default_factory=dict,
-    )
-
-
-class TaskSynapseObject(bt.Synapse):
+class SyntheticTaskSynapse(bt.Synapse):
+    ack: bool = Field(description="Acknowledgement of the synapse", default=False)
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the task",
@@ -196,6 +165,7 @@ class TaskSynapseObject(bt.Synapse):
         description="List of completions for the task",
         default=None,
     )
+    # FIXME: need to remove this or something, it's useless atm
     dojo_task_id: str | None = Field(
         description="Dojo task ID returned by miner", default=None
     )
@@ -221,15 +191,15 @@ class ScoringResult(bt.Synapse):
     )
 
 
-class Heartbeat(bt.Synapse):
+class Heartbeat(BaseModel):
     ack: bool = Field(description="Acknowledgement of the heartbeat", default=False)
 
 
 # TODO rename this to be a Task or something
 class DendriteQueryResponse(BaseModel):
     model_config = ConfigDict(frozen=False)
-    validator_task: TaskSynapseObject
-    miner_responses: List[TaskSynapseObject]
+    validator_task: SyntheticTaskSynapse
+    miner_responses: List[SyntheticTaskSynapse]
 
 
 class Result(BaseModel):
@@ -238,23 +208,21 @@ class Result(BaseModel):
 
 
 class TaskResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: str = Field(description="Task ID")
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
     status: str = Field(description="Status of the task result")
     result_data: list[Result] = Field(description="List of Result data for the task")
-    dojo_task_id: str = Field(description="ID of the associated dojo task")
+    task_id: str = Field(description="ID of the associated dojo task")
     worker_id: str = Field(description="ID of the worker who completed the task")
-    # Below not in used at the moment
-    stake_amount: float | None = Field(description="Stake amount", default=None)
-    potential_reward: float | None = Field(description="Potential reward", default=None)
-    potential_loss: float | None = Field(description="Potential loss", default=None)
-    finalised_reward: float | None = Field(description="Finalised reward", default=None)
-    finalised_loss: float | None = Field(description="Finalised loss", default=None)
 
 
-class TaskResultRequest(bt.Synapse):
-    dojo_task_id: str = Field(description="The ID of the task to retrieve results for")
+class TaskResultSynapse(BaseModel):
+    validator_task_id: str = Field(
+        description="The ID of the task to retrieve results for"
+    )
     task_results: list[TaskResult] = Field(
         description="List of TaskResult objects", default=[]
     )

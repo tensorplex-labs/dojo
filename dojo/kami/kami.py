@@ -151,13 +151,17 @@ class Kami:
         Returns:
             list[AxonInfo]: The list of axons for the given netuid.
         """
-        get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
-        metagraph = get_metagraph.get("data", {})
-        axons = metagraph.get("axons", [])
-        if len(axons) == 0:
+        metagraph = await self.get_metagraph(netuid=netuid)
+        if len(metagraph.axons) == 0:
             logger.warning("No axons found in metagraph response.")
 
-        return [AxonInfo.model_validate(axon) for axon in axons]
+        for hotkey, coldkey, axon in zip(
+            metagraph.hotkeys, metagraph.coldkeys, metagraph.axons
+        ):
+            axon.coldkey = coldkey
+            axon.hotkey = hotkey
+
+        return [AxonInfo.model_validate(axon) for axon in metagraph.axons]
 
     async def get_current_block(self) -> int:
         """
@@ -279,3 +283,32 @@ class Kami:
                 data=cr_payload.model_dump(),  # type: ignore TODO: Fix type ignore
             )
         return await self.post("chain/set-weights", data=payload.model_dump())  # type: ignore TODO: Fix type ignore
+
+    async def sign_message(self, message: str) -> str:
+        response = await self.post(
+            "substrate/sign-message/sign", data={"message": message}
+        )
+        response_data = response.get("data", {})
+        signature: str = response_data.get("signature")
+        if not response_data or not signature:
+            logger.error(
+                f"Failed to sign message using Kami due to {response_data.get('error')}"
+            )
+        return signature
+
+    async def verify(self, hotkey: str, message: str, signature: str) -> bool:
+        if not signature.startswith("0x"):
+            raise ValueError("Expected signature to be a hex string!")
+
+        response = await self.post(
+            "substrate/sign-message/verify",
+            data={"message": message, "signature": signature, "signeeAddress": hotkey},
+        )
+        response_data = response.get("data", {})
+        is_valid: bool = response_data.get("valid", False)
+        if not response_data:
+            logger.error(
+                f"Failed to get response from Kami while verifying signature: {signature}"
+            )
+
+        return is_valid
