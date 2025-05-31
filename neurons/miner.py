@@ -23,11 +23,12 @@ from dojo.protocol import (
     ScoreCriteria,
     ScoringResult,
     TaskResult,
-    TaskResultRequest,
+    TaskResultSynapse,
     TaskSynapseObject,
     TextCriteria,
 )
 from dojo.utils.config import get_config
+from dojo.utils.dict_utils import BoundedDict
 
 
 class Miner(aobject):
@@ -78,7 +79,7 @@ class Miner(aobject):
 
         async def heartbeat_adapter(request: Request, synapse: Heartbeat):
             should_blacklist, message = self._blacklist_function(
-                request, synapse, "Valid heartbeat request received"
+                request, synapse, f"Valid {synapse.__class__.__name__} request received"
             )
             if should_blacklist:
                 # we've received the req, but you're blacklisted and don't retry
@@ -87,10 +88,21 @@ class Miner(aobject):
             return await self._ack_heartbeat(request, synapse)
 
         self.server.serve_synapse(synapse=Heartbeat, handler=heartbeat_adapter)
+
         # TODO: task request request
         # TODO: score result request
         # TODO: task result request
+        async def task_result_adapter(request: Request, synapse: TaskResultSynapse):
+            should_blacklist, message = self._blacklist_function(
+                request, synapse, f"Valid {synapse.__class__.__name__} request received"
+            )
+            if should_blacklist:
+                # we've received the req, but you're blacklisted and don't retry
+                raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
+            return await self.forward_task_result_request(request, synapse)
+
+        self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
         # log all incoming requests
         self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
 
@@ -300,25 +312,31 @@ class Miner(aobject):
         return synapse
 
     async def forward_task_result_request(
-        self, synapse: TaskResultRequest
-    ) -> TaskResultRequest:
+        self, request: Request, synapse: TaskResultSynapse
+    ) -> TaskResultSynapse:
         """Handle a TaskResultRequest from a validator, fetching the task result from the DojoAPI."""
-        if not synapse or not synapse.dojo_task_id:
+        if not synapse.validator_task_id:
             logger.error("Invalid TaskResultRequest: missing dojo_task_id")
-            return synapse
+            raise HTTPException(
+                status_code=HTTPStatus.OK,
+                detail=f"validator_task_id should not be empty {synapse.validator_task_id}",
+            )
 
         try:
             logger.info(
-                f"Received TaskResultRequest for dojo task id: {synapse.dojo_task_id}"
+                f"Received TaskResultRequest for dojo task id: {synapse.validator_task_id}"
             )
 
-            # Fetch task results from DojoAPI using task_id
-            task_results = await DojoAPI.get_task_results_by_dojo_task_id(
-                synapse.dojo_task_id
-            )
+            dojo_task_id = self.vali_to_dojo_task_id.get(synapse.validator_task_id)
+            if not dojo_task_id:
+                message = f"Did not serve request from validator with {synapse.validator_task_id}"
+                logger.error(message)
+                raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
+            task_results = await DojoAPI.get_task_results_by_dojo_task_id(dojo_task_id)
             transformed_results = []
             if task_results:
+                # TODO: simple fix is to change the schema bruh
                 transformed_results = [
                     {**result, "dojo_task_id": result.pop("task_id", None)}
                     for result in (r.copy() for r in task_results)
@@ -330,7 +348,7 @@ class Miner(aobject):
                 ]
             else:
                 logger.debug(
-                    f"No task result found for dojo task id: {synapse.dojo_task_id}"
+                    f"No task result found for dojo task id: {synapse.validator_task_id}"
                 )
 
         except Exception as e:
@@ -347,7 +365,7 @@ class Miner(aobject):
         )
 
     async def blacklist_task_result_request(
-        self, synapse: TaskResultRequest
+        self, synapse: TaskResultSynapse
     ) -> Tuple[bool, str]:
         return await self._blacklist_function(
             synapse, "task result", "Valid task result request from validator"

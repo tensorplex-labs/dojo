@@ -238,6 +238,8 @@ class Result(BaseModel):
 
 
 class TaskResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: str = Field(description="Task ID")
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
@@ -247,8 +249,10 @@ class TaskResult(BaseModel):
     worker_id: str = Field(description="ID of the worker who completed the task")
 
 
-class TaskResultRequest(bt.Synapse):
-    dojo_task_id: str = Field(description="The ID of the task to retrieve results for")
+class TaskResultSynapse(BaseModel):
+    validator_task_id: str = Field(
+        description="The ID of the task to retrieve results for"
+    )
     task_results: list[TaskResult] = Field(
         description="List of TaskResult objects", default=[]
     )

@@ -61,7 +61,7 @@ from dojo.protocol import (
     ScoringResult,
     SyntheticQA,
     TaskResult,
-    TaskResultRequest,
+    TaskResultSynapse,
     TaskSynapseObject,
     TextFeedbackEvent,
 )
@@ -1611,7 +1611,8 @@ class Validator(aobject):
                 return []
 
             url = f"http://{miner_axon.ip}/{miner_axon.port}"
-            model = TaskResultRequest(dojo_task_id=dojo_task_id)
+            # TODO: change to validator task id, it's not validator's job to know dojo task id
+            model = TaskResultSynapse(validator_task_id=dojo_task_id)
             response = await self.client.send(
                 url, model=model, timeout_sec=12, max_retries=max_retries, max_wait=60
             )
