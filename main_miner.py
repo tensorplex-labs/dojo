@@ -21,6 +21,10 @@ async def shutdown_miner():
 
 async def main():
     miner = await ObjectManager.get_miner()
+    if not miner:
+        logger.error("Miner not found")
+        return
+
     tasks = [
         asyncio.create_task(miner.log_miner_status()),
         asyncio.create_task(miner.run()),

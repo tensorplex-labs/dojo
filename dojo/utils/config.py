@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 
@@ -9,6 +10,12 @@ from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
 base_path = Path.cwd()
+
+
+class Mode(str, Enum):
+    NORMAL = "normal"
+    HIGH = "high"
+    MEDIUM = "medium"
 
 
 def check_config(config: bt.config):
@@ -109,8 +116,10 @@ def add_args(parser):
 
     parser.add_argument(
         "--fast_mode",
-        action="store_true",
+        type=str,
+        choices=["high", "medium", "normal"],
         help="Whether to run in fast mode, for developers to test locally.",
+        default="normal",
     )
 
     parser.add_argument(
@@ -123,6 +132,19 @@ def add_args(parser):
         "--simulation_bad_miner",
         action="store_true",
         help="Set miner simluation to a bad one",
+    )
+
+    parser.add_argument(
+        "--kami.port",
+        type=int,
+        help="Port for Kami connection",
+    )
+
+    parser.add_argument(
+        "--kami.host",
+        type=str,
+        help="Host for Kami connection",
+        default="localhost",
     )
 
     epoch_length = 100
@@ -148,6 +170,13 @@ def add_args(parser):
 
         parser.add_argument(
             "--neuron.moving_average_alpha",
+            type=float,
+            help="Moving average alpha parameter, how much to add of the new observation.",
+            default=0.3,
+        )
+
+        parser.add_argument(
+            "--weights.hfl_ema_alpha",
             type=float,
             help="Moving average alpha parameter, how much to add of the new observation.",
             default=0.3,
@@ -186,3 +215,12 @@ def source_dotenv():
         return
 
     load_dotenv()
+
+
+def get_mode() -> Mode:
+    """Get the current mode from environment or config"""
+
+    mode = get_config().fast_mode
+    if not mode:
+        return Mode.NORMAL
+    return Mode(mode.lower())

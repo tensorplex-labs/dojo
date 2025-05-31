@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 import bittensor as bt
@@ -8,14 +8,22 @@ from strenum import StrEnum
 from commons.utils import get_epoch_time, get_new_uuid
 
 
+class SanitizedResultEnum(StrEnum):
+    INVALID = "invalid"
+    VALID = "valid"
+
+
 class TaskTypeEnum(StrEnum):
     TEXT_TO_THREE_D = "TEXT_TO_THREE_D"
     TEXT_TO_IMAGE = "TEXT_TO_IMAGE"
     CODE_GENERATION = "CODE_GENERATION"
+    TEXT_FEEDBACK = "TEXT_FEEDBACK"
+    SCORE_FEEDBACK = "SCORE_FEEDBACK"
 
 
 class CriteriaTypeEnum(StrEnum):
     SCORE = "score"
+    TEXT = "text"
 
 
 class Scores(BaseModel):
@@ -36,6 +44,14 @@ class Scores(BaseModel):
     cubic_reward_score: float | None = Field(
         description="Cubic reward score of the miner", default=None
     )
+    icc_score: float | None = Field(description="ICC score of the miner", default=None)
+
+
+class TextFeedbackScore(BaseModel):
+    tf_score: float | None = Field(description="Score of the completion", default=None)
+    text_feedback: str | None = Field(
+        description="Text feedback of the completion", default=None
+    )
 
 
 class ScoreCriteria(BaseModel):
@@ -47,7 +63,16 @@ class ScoreCriteria(BaseModel):
     scores: Scores | None = Field(description="Scores of the completion", default=None)
 
 
-CriteriaType = ScoreCriteria
+class TextCriteria(BaseModel):
+    type: str = Field(default=CriteriaTypeEnum.TEXT.value, frozen=True)
+    query: str = Field(description="Query for the task", frozen=True)
+    text_feedback: str = Field(description="Text feedback for the task", frozen=True)
+    score: TextFeedbackScore | None = Field(
+        description="Text feedback score for the task", default=None
+    )
+
+
+CriteriaType = ScoreCriteria | TextCriteria
 
 
 class CodeFileObject(BaseModel):
@@ -255,3 +280,25 @@ class AnalyticsData(BaseModel):
 
 class AnalyticsPayload(BaseModel):
     tasks: List[AnalyticsData]
+
+
+class HFLEvent(BaseModel):
+    type: str = Field(description="Type of the event")
+    task_id: str = Field(description="ID of the task")
+    syn_req_id: str = Field(description="ID of the synthetic request", default="")
+    iteration: int = Field(description="Iteration of the event", default=0)
+    message: str = Field(description="Message of the event", default="")
+    timestamp: datetime = Field(
+        description="Timestamp of the event",
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
+
+
+# TODO: Add more data as needed
+class TextFeedbackEvent(HFLEvent):
+    type: str = Field(description="Type of the event", default="TEXT_FEEDBACK")
+
+
+# TODO: Add more data as needed
+class ScoreFeedbackEvent(HFLEvent):
+    type: str = Field(description="Type of the event", default="SCORE_FEEDBACK")

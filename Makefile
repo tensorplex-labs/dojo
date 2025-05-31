@@ -80,9 +80,6 @@ dojo-cli:
 extract-dataset:
 	docker compose -f docker-compose.validator.yaml run --remove-orphans extract-dataset
 
-fill-score-column:
-	docker compose -f docker-compose.validator.yaml run --remove-orphans fill-score-column
-
 migration:
 	docker compose -f docker-compose.validator.yaml run --rm migration
 
@@ -116,9 +113,12 @@ subtensor-mainnet:
 	fi
 
 subtensor-testnet:
+	@echo "Detected architecture: $(ARCH)"
 	@if [ "$(ARCH)" = "arm64" ] || [ "$(ARCH)" = "aarch64" ]; then \
+		echo "Starting ARM64 testnet container..."; \
 		docker compose -f docker-compose.subtensor.yaml up -d testnet-lite-arm64; \
 	elif [ "$(ARCH)" = "amd64" ] || [ "$(ARCH)" = "x86_64" ]; then \
+		echo "Starting AMD64 testnet container..."; \
 		docker compose -f docker-compose.subtensor.yaml up -d testnet-lite-amd64; \
 	else \
 	    echo "Unsupported architecture: $(ARCH)"; \
@@ -141,5 +141,22 @@ watchtower:
 watchtower-down:
 	docker compose -f docker-compose.shared.yaml down watchtower
 
+back-up-scores:
+	docker cp validator:/app/scores/miner_scores.pt scores/miner_scores.pt.bak
+
+
+install-hfl-miner:
+	chmod +x ./scripts/hfl/hfl_miner.sh
+	./scripts/hfl/hfl_miner.sh
+
+# ---------------------------------------------------------------------------- #
+#                                   KAMI                                       #
+# ---------------------------------------------------------------------------- #
+
+kami:
+	docker compose -f docker-compose.shared.yaml up -d kami
+
+kami-down:
+	docker compose -f docker-compose.shared.yaml down kami
 back-up-scores:
 	docker cp validator:/app/scores/miner_scores.pt scores/miner_scores.pt.bak
