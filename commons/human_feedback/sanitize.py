@@ -11,7 +11,7 @@ from langfuse.decorators import langfuse_context, observe
 from loguru import logger
 from openai import AsyncOpenAI
 
-from commons.human_feedback.types import SanitizationResult
+from .types import SanitizationResult
 
 # CONSTANT VARS
 MODERATION_LLM = "meta-llama/llama-guard-4-12b"
