@@ -31,10 +31,65 @@ class ParameterReturnChecker(BaseChecker):
         # Get parameter names (excluding 'self')
         param_names = {arg.name for arg in node.args.args if arg.name != "self"}
 
-        # Check all return statements
+        # Check if function has any substantial logic beyond just returning
+        if self._has_substantial_logic(node):
+            # If function has substantial logic, assume parameters might be modified
+            return
+
+        # Check all return statements for simple cases
         for child in node.nodes_of_class(nodes.Return):
             if child.value:
                 self._check_return_value(child.value, param_names, child)
+
+    def _has_substantial_logic(self, node: nodes.FunctionDef) -> bool:
+        """Check if function has substantial logic that might modify parameters."""
+        # Count non-trivial statements (excluding docstrings and simple returns)
+        statements = []
+
+        for child in node.body:
+            if isinstance(child, nodes.Expr):
+                # Skip docstrings (string expressions)
+                if isinstance(child.value, nodes.Const) and isinstance(
+                    child.value.value, str
+                ):
+                    continue
+            elif isinstance(child, nodes.Return):
+                # Skip simple return statements for now
+                continue
+            elif isinstance(child, nodes.Pass):
+                # Skip pass statements
+                continue
+
+            statements.append(child)
+
+        # If there are any non-trivial statements, assume the function might modify parameters
+        if statements:
+            return True
+
+        # Additional checks for modification patterns
+        for child in node.nodes_of_class(
+            (
+                nodes.Assign,
+                nodes.AnnAssign,
+                nodes.AugAssign,
+                nodes.Call,
+                nodes.For,
+                nodes.While,
+                nodes.If,
+            )
+        ):
+            if isinstance(child, nodes.Assign | nodes.AnnAssign | nodes.AugAssign):
+                # Any assignment might modify parameters
+                return True
+            elif isinstance(child, nodes.Call):
+                # Method calls might modify parameters
+                if isinstance(child.func, nodes.Attribute):
+                    return True
+            elif isinstance(child, nodes.For | nodes.While | nodes.If):
+                # Control flow suggests non-trivial logic
+                return True
+
+        return False
 
     def _check_return_value(self, return_value, param_names, return_node):
         """Check if return value contains unchanged parameters."""
@@ -46,7 +101,6 @@ class ParameterReturnChecker(BaseChecker):
                     node=return_node,
                     args=(return_value.name,),
                 )
-
         elif isinstance(return_value, nodes.Tuple | nodes.List):
             # Tuple/list return: return (x, param, y)
             for element in return_value.elts:
@@ -56,7 +110,6 @@ class ParameterReturnChecker(BaseChecker):
                         node=return_node,
                         args=(element.name,),
                     )
-
         elif isinstance(return_value, nodes.Dict):
             # Dict return: return {"key": param}
             for value in return_value.values:
