@@ -8,6 +8,7 @@ import time
 import traceback
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from http import HTTPStatus
 from typing import AsyncGenerator, Dict, List, TypeAlias
 
 import aiohttp
@@ -1210,7 +1211,7 @@ class Validator(aobject):
 
         miner_responses: List[
             SyntheticTaskSynapse
-        ] = await self._send_requests_to_miners(self.dendrite, axons, synapse, True)
+        ] = await self._send_requests_to_miners(self.dendrite, axons, synapse)
         valid_count = 0
         fails = []
         for response in miner_responses:
@@ -1319,7 +1320,6 @@ class Validator(aobject):
         dendrite: bt.dendrite,
         axons: List[bt.AxonInfo],
         synapse: SyntheticTaskSynapse,
-        shuffled: bool = True,
     ) -> list[SyntheticTaskSynapse]:
         """
         Send requests to miners in batches for parallel processing.
@@ -1328,65 +1328,51 @@ class Validator(aobject):
             dendrite: Dendrite instance for network communication
             axons: List of miner axons to send requests to
             synapse: Original task synapse object
-            shuffled: Whether to shuffle the synapse completions
         Returns:
             list[SyntheticTaskSynapse]: Flattened list of all miner responses
         """
-        all_responses = []
-        batch_size = 10
-
         if not synapse.completion_responses:
             logger.warning("No completion responses to send... skipping")
-            return all_responses
+            return []
 
-        for i in range(0, len(axons), batch_size):
-            batch_axons = axons[i : i + batch_size]
-            tasks = []
+        axons = self._retrieve_axons()
+        urls = [f"http://{axon.ip}:{axon.port}" for axon in axons]
+        logger.info(f"Sending heartbeats to {len(axons)} miners")
 
-            for axon in batch_axons:
-                # Only shuffle if shuffled flag is True, otherwise use original order
-                completions = (
-                    random.sample(
-                        synapse.completion_responses,
-                        k=len(synapse.completion_responses),
-                    )
-                    if shuffled
-                    else synapse.completion_responses.copy()
-                )
-
-                # Apply obfuscation to each completion's files
-                # TODO re-nable obfuscation
-                # await Validator._obfuscate_completion_files(shuffled_completions)
-
-                shuffled_synapse = SyntheticTaskSynapse(
-                    epoch_timestamp=synapse.epoch_timestamp,
-                    task_id=synapse.task_id,
-                    prompt=synapse.prompt,
-                    task_type=synapse.task_type,
-                    expire_at=synapse.expire_at,
-                    completion_responses=completions,
-                )
-
-                tasks.append(
-                    self._semaphore_limited_forward(
-                        dendrite,
-                        [axon],
-                        shuffled_synapse,
-                    )
-                )
-
-            # Gather results for this batch and flatten the list
-            batch_responses = await asyncio.gather(*tasks)
-            flat_batch_responses = [
-                response for sublist in batch_responses for response in sublist
-            ]
-            all_responses.extend(flat_batch_responses)
-
-            logger.info(
-                f"Processed batch {i // batch_size + 1} of {(len(axons) - 1) // batch_size + 1}"
+        synapses = [
+            SyntheticTaskSynapse(
+                epoch_timestamp=synapse.epoch_timestamp,
+                task_id=synapse.task_id,
+                prompt=synapse.prompt,
+                task_type=synapse.task_type,
+                expire_at=synapse.expire_at,
+                completion_responses=random.sample(
+                    synapse.completion_responses,
+                    k=len(synapse.completion_responses),
+                ),
             )
+            for _ in range(len(urls))
+        ]
 
-        return all_responses
+        responses = await self.client.batch_send(
+            urls,
+            synapses,
+            self._semaphore_synthetic_task,
+            timeout_sec=30,
+        )
+
+        valid_response_count = 0
+        for r in responses:
+            if (
+                r.client_response
+                and r.client_response.status == HTTPStatus.OK
+                and not r.error
+                and not r.exception
+            ):
+                valid_response_count += 1
+
+        logger.debug(f"Received {valid_response_count} from miners")
+        return [r.body for r in responses]
 
     @staticmethod
     async def _semaphore_limited_forward(dendrite, axons, synapse, timeout=12):
