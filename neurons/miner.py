@@ -65,23 +65,11 @@ class Miner(aobject):
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
         )
 
-        # Attach determiners which functions are called when servicing a request.
-
-        # Note: The synapse parameter in blacklist functions is a different instance from the one in forward functions.
-        # The blacklist synapse comes from the request headers and is used for initial validation,
-        # while the forward synapse contains the full request body.
-
         logger.info("Attaching forward function to miner axon.")
+        # TODO: remove completely...
         self.axon.attach(
-            forward_fn=self.synthetic_task_handler,
-            blacklist_fn=self.blacklist_task_request,
-            priority_fn=self.priority_ranking,
-        ).attach(
             forward_fn=self.forward_score_result,
             blacklist_fn=self.blacklist_score_result_request,
-        ).attach(
-            forward_fn=self.task_result_handler,
-            blacklist_fn=self.blacklist_task_result_request,
         )
 
         async def heartbeat_adapter(request: Request, synapse: Heartbeat):
