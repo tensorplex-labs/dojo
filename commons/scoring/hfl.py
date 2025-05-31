@@ -6,6 +6,7 @@ from collections import defaultdict
 from loguru import logger
 from pydantic import ValidationError
 
+from commons.human_feedback import HFLConstants
 from commons.orm import ORM
 from commons.stats import calculate_icc
 from database.prisma.enums import HFLStatusEnum
@@ -18,8 +19,8 @@ from database.prisma.models import (
 )
 from dojo.protocol import Scores
 
-TF_WEIGHTS = 0.7
-SF_WEIGHT = 0.3
+TF_WEIGHT = HFLConstants.TF_WEIGHT.value
+SF_WEIGHT = HFLConstants.SF_WEIGHT.value
 
 
 async def score_hfl_tasks(
@@ -53,7 +54,7 @@ async def score_hfl_tasks(
 
         for hotkey, tf_score in hotkey_to_tf_score.items():
             hotkey_to_score[hotkey] = (
-                TF_WEIGHTS * tf_score + SF_WEIGHT * hotkey_to_sf_score.get(hotkey, 0.0)
+                TF_WEIGHT * tf_score + SF_WEIGHT * hotkey_to_sf_score.get(hotkey, 0.0)
             )
 
         return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
@@ -91,6 +92,12 @@ async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
                 miner_raw_scores.append(scores.raw_score)
 
         hotkey_to_raw_scores[miner_response.hotkey] = miner_raw_scores
+
+    if len(hotkey_to_raw_scores) < 2:
+        logger.warning(
+            f"Not enough raw scores to calculate ICC for task {task.id}, returning empty dict"
+        )
+        return {}
 
     hotkey_to_icc = calculate_icc(hotkey_to_scores=hotkey_to_raw_scores)
     return hotkey_to_icc

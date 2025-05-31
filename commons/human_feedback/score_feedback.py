@@ -2,16 +2,13 @@
 
 import traceback
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from bittensor.core.chain_data.axon_info import AxonInfo
 from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
-from commons.hfl_heplers import HFLManager
-from commons.human_feedback.utils import (
-    create_initial_miner_scores,
-    map_human_feedback_to_task_synapse,
-)
+from commons.hfl_helpers import HFLManager
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_time
@@ -19,11 +16,18 @@ from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskUpdateInput
 from dojo.protocol import ScoreFeedbackEvent, TaskSynapseObject, TextFeedbackEvent
-from neurons.validator import Validator
+
+from .utils import (
+    create_initial_miner_scores,
+    map_human_feedback_to_task_synapse,
+)
+
+if TYPE_CHECKING:
+    from neurons.validator import Validator
 
 
 async def create_score_feedback_task(
-    validator: Validator,
+    validator: "Validator",
     tf_task: ValidatorTask,
     hfl_state: HFLState,
 ) -> ValidatorTask | None:
@@ -140,7 +144,7 @@ async def create_score_feedback_task(
 
 
 async def process_score_feedback_task(
-    validator: Validator,
+    validator: "Validator",
     sf_task: ValidatorTask,
     hfl_state: HFLState,
 ) -> bool:
@@ -290,7 +294,7 @@ async def get_active_miners_for_hfl(
 
 # TODO: cleanup params here as staticmethod was removed
 async def send_hfl_request(
-    validator: Validator,
+    validator: "Validator",
     synapse: TaskSynapseObject,
     task_type: TaskTypeEnum,
     axons: list[AxonInfo],

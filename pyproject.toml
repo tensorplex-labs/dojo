@@ -80,21 +80,25 @@ Repository = "https://github.com/tensorplex-labs/dojo"
 [tool.commitizen]
 name = "cz_conventional_commits"
 
-[tool.pylint]
-disable = "all"
+# NOTE: tool naming here is dependent on `name` attr in extension
+[tool.pylint."custom-import-rules"]
+# NOTE: consider these part of our library and where we want to import from
+# top-level modules
+local-import-prefixes = ["commons", "database", "dojo", "neurons"]
+
+[tool.pylint.main]
+# NOTE: this should be the .py file
+load-plugins = ["tools.import_rules_checker"]
+jobs = 0 # Use all available CPUs
+init-hook = 'import sys; sys.path.append("."); sys.path.append("tools")' # Python path (if needed)
+
+[tool.pylint.messages_control]
+disable = ["all"]
+# Disable all messages by default, then enable specific ones
 enable = [
-  "unused-import", # W0611: Unused import
-  "unused-variable", # W0612: Unused variable
-  "unused-argument", # W0613: Unused argument
-  "unused-wildcard-import", # W0614: Unused wildcard import
-  "unused-private-member", # W0238: Unused private member
-  "unused-format-string-argument", # W1304: Unused format string argument
-  "unused-format-string-key", # W1303: Unused format string key
-  "unreachable", # W0101: Unreachable code
-  "unnecessary-pass", # W0107: Unnecessary pass statement
-  "global-at-module-level" # W0604: Using global at module level (redundant)
+  "prefer-shorter-import",
+  "import-not-in-all"
 ]
-ignore = "venv,node_modules,build,database/prisma,.nox,.venv"
 
 [tool.pyright]
 exclude = ["**/__pycache__", "database/prisma", "wandb", ".nox"]

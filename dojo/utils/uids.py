@@ -13,8 +13,8 @@ def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
 
 def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
     """Check if uid is a validator."""
-    from dojo import VALIDATOR_MIN_STAKE
+    from dojo import ValidatorConstant
 
     hotkey = metagraph.hotkeys[uid]
     effective_stake = get_effective_stake(hotkey, metagraph.subtensor)
-    return effective_stake < VALIDATOR_MIN_STAKE
+    return effective_stake < ValidatorConstant.VALIDATOR_MIN_STAKE

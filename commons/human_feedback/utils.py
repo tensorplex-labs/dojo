@@ -18,7 +18,6 @@ from database.prisma.types import (
     MinerScoreWhereInput,
     ValidatorTaskInclude,
 )
-from dojo import HFL_TASK_DEADLINE
 from dojo.protocol import (
     CodeAnswer,
     CompletionResponse,
@@ -29,6 +28,8 @@ from dojo.protocol import (
     TaskTypeEnum,
     TextFeedbackScore,
 )
+
+from .types import HFLConstants, HFLInterval
 
 
 def extract_text_feedback_from_results(
@@ -155,7 +156,7 @@ def map_human_feedback_to_task_synapse(
             task_id=get_new_uuid(),
             prompt=response_data.base_prompt,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
-            expire_at=set_expire_time(HFL_TASK_DEADLINE),
+            expire_at=set_expire_time(int(HFLInterval.TASK_DEADLINE)),
         )
 
         # Map the completion responses - create proper CompletionResponse objects
@@ -644,10 +645,6 @@ async def create_initial_miner_scores(
         # Step 3: Extract and group criteria values from task results
         # Example result: {"model_123": {"score": [80, 70], "text": ["Good code", "Needs improvement"]}}
 
-        from commons.human_feedback.utils import (
-            extract_criteria_values_by_model_and_type,
-        )
-
         model_to_criteria_values = extract_criteria_values_by_model_and_type(
             task_results
         )
@@ -780,7 +777,11 @@ if __name__ == "__main__":
         await connect_db()
         miner_consensus: tuple[
             dict[str, float], str | None, str | None
-        ] = await evaluate_miner_consensus("", 50, 100)
+        ] = await evaluate_miner_consensus(
+            "",
+            HFLConstants.MIN_THRESHOLD.value,
+            HFLConstants.MAX_THRESHOLD.value,
+        )
         print(miner_consensus)
         await prisma.disconnect()
 

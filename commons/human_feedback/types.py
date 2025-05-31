@@ -1,6 +1,10 @@
 """Type definitions for Human Feedback Loop functionality."""
 
 from dataclasses import dataclass
+from enum import Enum, IntEnum
+from typing import TypeAlias
+
+from loguru import logger
 
 
 @dataclass
@@ -11,3 +15,68 @@ class SanitizationResult:
 
     is_safe: bool
     sanitized_feedback: str
+
+
+# Constants as Types
+class HFLConstants(Enum):
+    """Core HFL constants that don't vary with mode"""
+
+    MAX_ITERATIONS = 3
+    MIN_THRESHOLD = 50
+    MAX_THRESHOLD = 101  # turn back to 90 on mainnet
+    CONSENSUS_THRESHOLD = 101  # turn back to 90 on mainnet
+    TF_WEIGHT = 0.7
+    SF_WEIGHT = 0.3
+
+
+class BaseHFLInterval(IntEnum):
+    """Base timing constants for Human Feedback Loop"""
+
+    TF_CREATE_INTERVAL = 3600  # 1 hour for initial TF task creation
+    TF_UPDATE_INTERVAL = 900  # 15 minutes for Text Feedback updates
+    SF_CREATE_INTERVAL = 800  # 13 minutes for Score Feedback task creation
+    SF_UPDATE_INTERVAL = 700  # 11 minutes for Score Feedback updates
+    NEXT_TF_INTERVAL = 1200  # 20 minutes for creating next Text Feedback tasks
+    TASK_DEADLINE = 5 * 60 * 60  # 5 hours
+
+
+class MediumHFLInterval(IntEnum):
+    """Medium-speed timing constants"""
+
+    TF_CREATE_INTERVAL = 660  # 10 minutes
+    TF_UPDATE_INTERVAL = 300  # 5 minutes
+    SF_CREATE_INTERVAL = 250  # ~4 minutes
+    SF_UPDATE_INTERVAL = 230  # ~4 minutes
+    NEXT_TF_INTERVAL = 400  # ~7 minutes
+    TASK_DEADLINE = 1800  # 30 minutes
+
+
+class HighHFLInterval(IntEnum):
+    """High-speed timing constants"""
+
+    TF_CREATE_INTERVAL = 180  # 3 minutes
+    TF_UPDATE_INTERVAL = 90  # 1.5 minutes
+    SF_CREATE_INTERVAL = 80  # 80 seconds
+    SF_UPDATE_INTERVAL = 70  # 70 seconds
+    NEXT_TF_INTERVAL = 120  # 2 minutes
+    TASK_DEADLINE = 180  # 3 minutes
+
+
+# Type Aliases
+HFLIntervalType: TypeAlias = BaseHFLInterval | MediumHFLInterval | HighHFLInterval
+
+
+def get_hfl_interval() -> HFLIntervalType:
+    """Get HFL timing constants based on mode"""
+    from dojo.utils.config import get_mode
+
+    mode = get_mode()
+    logger.info(f"HFLInterval: {mode.lower()}")
+    return {
+        "normal": BaseHFLInterval,
+        "high": HighHFLInterval,
+        "medium": MediumHFLInterval,
+    }[mode.lower()]
+
+
+HFLInterval = get_hfl_interval()
