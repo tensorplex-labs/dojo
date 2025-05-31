@@ -78,12 +78,10 @@ class Miner(aobject):
         )
 
         async def heartbeat_adapter(request: Request, synapse: Heartbeat):
-            should_blacklist, message = self._blacklist_function(
-                request, synapse, f"Valid {synapse.__class__.__name__} request received"
-            )
-            if should_blacklist:
+            blacklist_reason = self._blacklist_function(request, synapse)
+            if blacklist_reason:
                 # we've received the req, but you're blacklisted and don't retry
-                raise HTTPException(status_code=HTTPStatus.OK, detail=message)
+                raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
 
             return await self._heartbeat_handler(request, synapse)
 
@@ -92,12 +90,10 @@ class Miner(aobject):
         # TODO: task request request
         # TODO: score result request
         async def task_result_adapter(request: Request, synapse: TaskResultSynapse):
-            should_blacklist, message = self._blacklist_function(
-                request, synapse, f"Valid {synapse.__class__.__name__} request received"
-            )
-            if should_blacklist:
+            blacklist_reason = self._blacklist_function(request, synapse)
+            if blacklist_reason:
                 # we've received the req, but you're blacklisted and don't retry
-                raise HTTPException(status_code=HTTPStatus.OK, detail=message)
+                raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
 
             return await self.task_result_handler(request, synapse)
 
@@ -381,8 +377,8 @@ class Miner(aobject):
         )
 
     def _blacklist_function(
-        self, request: Request, synapse: PydanticModel, valid_msg: str
-    ) -> Tuple[bool, str]:
+        self, request: Request, synapse: PydanticModel
+    ) -> str | None:
         """
         Common blacklist logic for any forward function to validate an incoming synapse.
         Note: Validate network-level security concerns using the header-based synapse, not the request body data
@@ -390,10 +386,9 @@ class Miner(aobject):
         Parameters:
             synapse: The incoming synapse object (Heartbeat, ScoringResult, etc.)
             request_tag: A tag used for logging (e.g., "heartbeat", "scoring result").
-            valid_msg: The success message if the synapse is allowed.
 
         Returns:
-            Tuple[bool, str]: (blacklisted: bool, message: str)
+            str: blacklisted reason
         """
         ip_addr = (
             f"{request.client.host}/{request.client.port}" if request.client else ""
@@ -406,7 +401,7 @@ class Miner(aobject):
         if not caller_hotkey or caller_hotkey not in self.subnet_metagraph.hotkeys:
             message = f"Blacklisting unrecognized hotkey {caller_hotkey}"
             logger.warning(message)
-            return True, message
+            return message
 
         if get_config().ignore_min_stake:
             message = (
@@ -414,18 +409,15 @@ class Miner(aobject):
                 "YOU SHOULD NOT SEE THIS when you are running a miner on mainnet"
             )
             logger.warning(message)
-            return (
-                False,
-                f"Ignored minimum validator stake requirement of {ValidatorConstant.VALIDATOR_MIN_STAKE}",
-            )
+            return f"Ignored minimum validator stake requirement of {ValidatorConstant.VALIDATOR_MIN_STAKE}"
 
         effective_stake = aget_effective_stake(caller_hotkey, self.subnet_metagraph)
         if effective_stake < float(ValidatorConstant.VALIDATOR_MIN_STAKE):
             message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"
             logger.warning(message)
-            return True, message
+            return message
 
-        return False, valid_msg
+        return None
 
     async def priority_ranking(self, synapse: TaskSynapseObject) -> float:
         """
