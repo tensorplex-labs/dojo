@@ -141,38 +141,6 @@ class SyntheticQA(BaseModel):
         return self
 
 
-class FeedbackRequest(bt.Synapse):
-    epoch_timestamp: float = Field(
-        default_factory=get_epoch_time,
-        description="Epoch timestamp for the request",
-    )
-    request_id: str = Field(
-        default_factory=get_new_uuid,
-        description="Unique identifier for the request",
-    )
-    prompt: str = Field(
-        description="Prompt or query from the user sent the LLM",
-    )
-    completion_responses: List[CompletionResponse] = Field(
-        description="List of completions for the prompt",
-    )
-    task_type: str = Field(description="Type of task")
-    criteria_types: List[CriteriaType] = Field(
-        description="Types of criteria for the task",
-    )
-    # task id from miner
-    dojo_task_id: str | None = Field(
-        description="Dojo task ID for the request", default=None
-    )
-    expire_at: str = Field(
-        description="Expired time for Dojo task which will be used by miner to create task"
-    )
-    ground_truth: dict[str, int] = Field(
-        description="Mapping of unique identifiers to their ground truth values",
-        default_factory=dict,
-    )
-
-
 class TaskSynapseObject(bt.Synapse):
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
