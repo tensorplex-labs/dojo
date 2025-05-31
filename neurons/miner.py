@@ -303,10 +303,12 @@ class Miner(aobject):
         try:
             if task_ids := await DojoAPI.create_task(synapse):
                 dojo_task_id = task_ids[0]
-                # TODO: actually we don't even need this, since LLM API makes it irrelevant
-                # touchpoints: validator db as well
-                synapse.dojo_task_id = dojo_task_id
+                # # TODO: actually we don't even need this, since LLM API makes it irrelevant
+                # # touchpoints: validator db as well
+                # synapse.dojo_task_id = dojo_task_id
+
                 self.vali_to_dojo_task_id[synapse.task_id] = dojo_task_id
+                synapse.ack = True
                 synapse = optimize_payload_for_transport(synapse)
             else:
                 logger.error("Failed to create task: no task IDs returned")

@@ -51,7 +51,7 @@ from dojo import get_spec_version
 from dojo.constants import ValidatorConstant, ValidatorInterval
 from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.kami.types import AxonInfo
-from dojo.messaging import Client, get_client
+from dojo.messaging import Client, StdResponse, get_client
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -1154,12 +1154,43 @@ class Validator(aobject):
 
         return None, None, {}, {}
 
+    def _log_request_failures(self, miner_responses, axons):
+        try:
+            valid_count = 0
+            fails = []
+            for response, axon in zip(miner_responses, axons):
+                status_code = (
+                    response.client_response.status if response.client_response else -1
+                )
+                try:
+                    logger.info(
+                        f"Miner hotkey: {axon.hotkey}, ack: {response.ack}, status_code: {status_code}"
+                    )
+                    if (
+                        response.body.ack
+                        and response.client_response
+                        and response.client_response.status == HTTPStatus.OK
+                    ):
+                        valid_count += 1
+                    else:
+                        fails.append((axon.hotkey, status_code, response.body.ack))
+                except Exception:
+                    fails.append((axon.hotkey, status_code, response))
+                    continue
+
+            logger.info(f"Fails: {fails}")
+            logger.info(f"Valid miner responses: {valid_count}")
+        except Exception as e:
+            logger.warning(
+                f"Error occurred while trying to log request info, exception: {str(e)}"
+            )
+            pass
+
     async def send_request(
         self,
-        synapse: SyntheticTaskSynapse | None = None,
-        ground_truth: dict[str, int] | None = None,
+        synapse: SyntheticTaskSynapse,
+        ground_truth: dict[str, int],
         obfuscated_model_to_model: ObfuscatedModelMap | None = None,
-        subset_size: int | None = None,
         synthetic_metadata: dict | None = None,
     ) -> ValidatorTask | None:
         """Send task requests to miners and process their responses.
@@ -1171,36 +1202,14 @@ class Validator(aobject):
             synthetic_task: Whether this is a synthetic task
             subset_size: Optional size to limit number of miners queried
         """
-        if not synapse:
-            logger.warning("No synapse provided... skipping")
-            return
-
-        if not self._active_miner_uids:
-            logger.info("No active miners to send request to... skipping")
-            return
 
         if not synapse.completion_responses:
-            logger.warning("No completion responses to send... skipping")
+            logger.error("No completion responses to send")
             return
 
         start = get_epoch_time()
         active_miner_uids = await self.get_active_miner_uids()
-
-        # TODO remove
-        logger.info(f"Active miners: {active_miner_uids}")
-        logger.info(f"Active miners set: {self._active_miner_uids}")
-
-        # If subset_size specified, randomly select that many miners
-        if subset_size is not None:
-            subset_size = min(subset_size, len(active_miner_uids))
-            active_miner_uids = random.sample(active_miner_uids, subset_size)
-            logger.info(
-                f"Selected {subset_size} random miners from {len(self._active_miner_uids)} active miners"
-            )
-
-        # axons = [self.metagraph.axons[uid] for uid in sel_miner_uids]
         axons = self._retrieve_axons(active_miner_uids)
-
         if not axons:
             logger.warning("🤷 No axons to query ... skipping")
             return
@@ -1209,50 +1218,29 @@ class Validator(aobject):
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{active_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
-        miner_responses: List[SyntheticTaskSynapse] = await self.send_synthetic_tasks(
-            self.dendrite, axons, synapse
-        )
-        valid_count = 0
-        fails = []
-        for response in miner_responses:
-            try:
-                status_code = response.dendrite.status_code
-            except Exception:
-                status_code = None
-            try:
-                logger.info(
-                    f"Miner hotkey: {response.axon.hotkey}, dojo_task_id: {response.dojo_task_id}, status_code: {status_code}"
-                )
-                if response.dojo_task_id:
-                    valid_count += 1
-                else:
-                    fails.append(
-                        (response.axon.hotkey, status_code, response.dojo_task_id)
-                    )
-            except Exception as e:
-                logger.error(f"Error logging miner response: {e}")
-                logger.info("dendrite", response.dendrite)
-                fails.append((response.axon.hotkey, status_code, response))
-                continue
+        miner_responses = await self.send_synthetic_task(synapse, axons)
+        self._log_request_failures(miner_responses, axons)
 
-        logger.info(f"Fails: {fails}")
-        logger.info(f"Valid miner responses: {valid_count}")
         valid_miner_responses: List[SyntheticTaskSynapse] = []
-        for response in miner_responses:
+        for response, axon in zip(miner_responses, axons):
             try:
-                if not response.dojo_task_id:
+                if (
+                    not response.body.ack
+                    or not response.client_response
+                    or not response.client_response == HTTPStatus.OK
+                ):
                     continue
 
-                # map obfuscated model names back to the original model names
-                if obfuscated_model_to_model and response.completion_responses:
+                # NOTE: map obfuscated model names back to the original model names
+                if obfuscated_model_to_model and response.body.completion_responses:
                     real_model_ids = []
-                    for i, completion in enumerate(response.completion_responses):
+                    for i, completion in enumerate(response.body.completion_responses):
                         found_model_id = obfuscated_model_to_model.get(
                             completion.model, None
                         )
                         real_model_ids.append(found_model_id)
                         if found_model_id:
-                            response.completion_responses[i].model = found_model_id
+                            response.body.completion_responses[i].model = found_model_id
                             synapse.completion_responses[i].model = found_model_id
 
                     if any(c is None for c in real_model_ids):
@@ -1261,19 +1249,14 @@ class Validator(aobject):
                         )
                         continue
 
-                response.miner_hotkey = response.axon.hotkey if response.axon else None
-                # Get coldkey from metagraph using hotkey index
-                if response.axon and response.axon.hotkey:
-                    try:
-                        hotkey_index = self.metagraph.hotkeys.index(
-                            response.axon.hotkey
-                        )
-                        response.miner_coldkey = self.metagraph.coldkeys[hotkey_index]
-                    except ValueError:
-                        response.miner_coldkey = None
-                else:
-                    response.miner_coldkey = None
-                valid_miner_responses.append(response)
+                # NOTE: why do we do this here? why do we really need it?
+                response.body.miner_hotkey = axon.hotkey
+                response.body.miner_coldkey = axon.coldkey
+                if not axon.hotkey or not axon.coldkey:
+                    logger.warning(
+                        f"Axon hotkey/coldkey information is missing. {axon.coldkey=}, {axon.hotkey=}, check Kami client implementation"
+                    )
+                valid_miner_responses.append(response.body)
 
             except Exception as e:
                 logger.error(f"Error processing miner response: {e}")
@@ -1315,12 +1298,9 @@ class Validator(aobject):
                 self.dendrite.synapse_history.clear()
             await asyncio.sleep(300)
 
-    async def send_synthetic_tasks(
-        self,
-        dendrite: bt.dendrite,
-        axons: List[bt.AxonInfo],
-        synapse: SyntheticTaskSynapse,
-    ) -> list[SyntheticTaskSynapse]:
+    async def send_synthetic_task(
+        self, synapse: SyntheticTaskSynapse, axons: list[AxonInfo] = []
+    ) -> list[StdResponse[SyntheticTaskSynapse]]:
         """
         Send requests to miners in batches for parallel processing.
 
@@ -1335,7 +1315,10 @@ class Validator(aobject):
             logger.warning("No completion responses to send... skipping")
             return []
 
-        axons = self._retrieve_axons()
+        active_uids = await self.get_active_miner_uids()
+        if not axons:
+            axons = self._retrieve_axons(uids=active_uids)
+
         urls = [f"http://{axon.ip}:{axon.port}" for axon in axons]
         logger.info(f"Sending heartbeats to {len(axons)} miners")
 
@@ -1361,18 +1344,7 @@ class Validator(aobject):
             timeout_sec=30,
         )
 
-        valid_response_count = 0
-        for r in responses:
-            if (
-                r.client_response
-                and r.client_response.status == HTTPStatus.OK
-                and not r.error
-                and not r.exception
-            ):
-                valid_response_count += 1
-
-        logger.debug(f"Received {valid_response_count} from miners")
-        return [r.body for r in responses]
+        return responses
 
     @staticmethod
     async def _semaphore_limited_forward(dendrite, axons, synapse, timeout=12):
@@ -1804,11 +1776,11 @@ class Validator(aobject):
 
         return miner_uids
 
-    def _retrieve_axons(self, uids: list[int] = []) -> list[bt.AxonInfo]:
+    def _retrieve_axons(self, uids: list[int] = []) -> list[AxonInfo]:
         # Return miner UIDs based on stakes
         logger.debug(f"Retrieving axons for uids: {uids}")
 
-        axons: list[bt.AxonInfo] = []
+        miner_axons: list[AxonInfo] = []
         for uid, axon in enumerate(self.metagraph.axons):
             if uids and uid not in uids:
                 continue
@@ -1817,7 +1789,6 @@ class Validator(aobject):
                 continue
 
             hotkey = self.metagraph.hotkeys[uid]
-            coldkey = self.metagraph.coldkeys[uid]
 
             # TODO: misleading async
             eff_stake = aget_effective_stake(hotkey, self.metagraph)
@@ -1829,19 +1800,9 @@ class Validator(aobject):
                     f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE} to be considered miner"
                 )
                 continue
+            miner_axons.append(axon)
 
-            # NOTE: why are we even using bt.AxonInfo anymore?
-            new_axon = bt.AxonInfo(
-                ip=axon.ip,
-                port=axon.port,
-                hotkey=hotkey,
-                coldkey=coldkey,
-                version=axon.version,
-                ip_type=axon.ipType,
-            )
-            axons.append(new_axon)
-
-        return axons
+        return miner_axons
 
     def _classify_miner_results(
         self,

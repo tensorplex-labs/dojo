@@ -500,6 +500,7 @@ class ORM:
 
         return False, failed_batch_indices
 
+    # FIXME: caller is using both ground_truth field from Synapse and ground truth, make up your mind...
     @staticmethod
     async def save_task(
         validator_task: SyntheticTaskSynapse,

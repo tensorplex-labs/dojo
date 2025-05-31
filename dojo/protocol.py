@@ -142,6 +142,7 @@ class SyntheticQA(BaseModel):
 
 
 class SyntheticTaskSynapse(bt.Synapse):
+    ack: bool = Field(description="Acknowledgement of the synapse", default=False)
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the task",
@@ -164,6 +165,7 @@ class SyntheticTaskSynapse(bt.Synapse):
         description="List of completions for the task",
         default=None,
     )
+    # FIXME: need to remove this or something, it's useless atm
     dojo_task_id: str | None = Field(
         description="Dojo task ID returned by miner", default=None
     )
