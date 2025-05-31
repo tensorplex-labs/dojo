@@ -27,8 +27,8 @@ from dojo.protocol import (
     TaskSynapseObject,
     TextCriteria,
 )
+from dojo.utils import BoundedDict
 from dojo.utils.config import get_config
-from dojo.utils.dict_utils import BoundedDict
 
 
 class Miner(aobject):
@@ -73,7 +73,7 @@ class Miner(aobject):
             forward_fn=self.forward_score_result,
             blacklist_fn=self.blacklist_score_result_request,
         ).attach(
-            forward_fn=self.forward_task_result_request,
+            forward_fn=self.task_result_handler,
             blacklist_fn=self.blacklist_task_result_request,
         )
 
@@ -85,13 +85,12 @@ class Miner(aobject):
                 # we've received the req, but you're blacklisted and don't retry
                 raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
-            return await self._ack_heartbeat(request, synapse)
+            return await self._heartbeat_handler(request, synapse)
 
         self.server.serve_synapse(synapse=Heartbeat, handler=heartbeat_adapter)
 
         # TODO: task request request
         # TODO: score result request
-        # TODO: task result request
         async def task_result_adapter(request: Request, synapse: TaskResultSynapse):
             should_blacklist, message = self._blacklist_function(
                 request, synapse, f"Valid {synapse.__class__.__name__} request received"
@@ -100,7 +99,7 @@ class Miner(aobject):
                 # we've received the req, but you're blacklisted and don't retry
                 raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
-            return await self.forward_task_result_request(request, synapse)
+            return await self.task_result_handler(request, synapse)
 
         self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
         # log all incoming requests
@@ -210,7 +209,9 @@ class Miner(aobject):
         await self.server.shutdown()
         await self.kami.close()
 
-    async def _ack_heartbeat(self, request: Request, synapse: Heartbeat) -> Heartbeat:
+    async def _heartbeat_handler(
+        self, request: Request, synapse: Heartbeat
+    ) -> Heartbeat:
         caller_hotkey = request.headers.get(HOTKEY_HEADER)
         logger.info(f"⬇️ Received heartbeat synapse from {caller_hotkey}")
         synapse.ack = True
@@ -315,22 +316,21 @@ class Miner(aobject):
 
         return synapse
 
-    async def forward_task_result_request(
+    async def task_result_handler(
         self, request: Request, synapse: TaskResultSynapse
     ) -> TaskResultSynapse:
         """Handle a TaskResultRequest from a validator, fetching the task result from the DojoAPI."""
+        caller_hotkey = request.headers.get(HOTKEY_HEADER)
+        synapse_name = synapse.__class__.__name__
+        logger.info(f"⬇️ Received {synapse_name} from {caller_hotkey}")
         if not synapse.validator_task_id:
-            logger.error("Invalid TaskResultRequest: missing dojo_task_id")
-            raise HTTPException(
-                status_code=HTTPStatus.OK,
-                detail=f"validator_task_id should not be empty {synapse.validator_task_id}",
+            message = (
+                f"validator_task_id should not be empty {synapse.validator_task_id}"
             )
+            logger.error(message)
+            raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
         try:
-            logger.info(
-                f"Received TaskResultRequest for dojo task id: {synapse.validator_task_id}"
-            )
-
             dojo_task_id = self.vali_to_dojo_task_id.get(synapse.validator_task_id)
             if not dojo_task_id:
                 message = f"Did not serve request from validator with {synapse.validator_task_id}"
@@ -338,18 +338,18 @@ class Miner(aobject):
                 raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
             task_results = await DojoAPI.get_task_results_by_dojo_task_id(dojo_task_id)
-            if task_results:
-                # Convert transformed results to TaskResult objects
-                synapse.task_results = [
-                    TaskResult.model_validate(result) for result in task_results
-                ]
-            else:
+            if not task_results:
                 logger.debug(
                     f"No task result found for dojo task id: {synapse.validator_task_id}"
                 )
+                synapse.task_results = []
+                return synapse
 
+            synapse.task_results = [
+                TaskResult.model_validate(result) for result in task_results
+            ]
         except Exception as e:
-            logger.error(f"Error handling TaskResultRequest: {e}")
+            logger.error(f"Error while handling {synapse_name}: {e}")
             traceback.print_exc()
 
         return synapse
