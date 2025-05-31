@@ -422,7 +422,7 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                     )
                 else:
                     logger.warning(
-                        f"Sanitization failed for dojo_task_id: {task_result.dojo_task_id} with text feedback: {text_feedback}"
+                        f"Sanitization failed for dojo_task_id: {task_result.task_id} with text feedback: {text_feedback}"
                     )
                     # Replace with "invalid" if not valid
                     sanitized_criterion = criterion.copy()

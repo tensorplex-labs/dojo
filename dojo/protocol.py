@@ -245,7 +245,7 @@ class TaskResult(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp")
     status: str = Field(description="Status of the task result")
     result_data: list[Result] = Field(description="List of Result data for the task")
-    dojo_task_id: str = Field(description="ID of the associated dojo task")
+    task_id: str = Field(description="ID of the associated dojo task")
     worker_id: str = Field(description="ID of the worker who completed the task")
 
 
