@@ -245,12 +245,6 @@ class TaskResult(BaseModel):
     result_data: list[Result] = Field(description="List of Result data for the task")
     dojo_task_id: str = Field(description="ID of the associated dojo task")
     worker_id: str = Field(description="ID of the worker who completed the task")
-    # Below not in used at the moment
-    stake_amount: float | None = Field(description="Stake amount", default=None)
-    potential_reward: float | None = Field(description="Potential reward", default=None)
-    potential_loss: float | None = Field(description="Potential loss", default=None)
-    finalised_reward: float | None = Field(description="Finalised reward", default=None)
-    finalised_loss: float | None = Field(description="Finalised loss", default=None)
 
 
 class TaskResultRequest(bt.Synapse):
