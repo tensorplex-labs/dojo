@@ -31,6 +31,13 @@ from dojo.utils import BoundedDict
 from dojo.utils.config import get_config
 
 
+def optimize_payload_for_transport(synapse: SyntheticTaskSynapse):
+    if synapse.completion_responses:
+        for response in synapse.completion_responses:
+            response.completion = None
+    return synapse
+
+
 class Miner(aobject):
     async def __init__(self):
         self.config = ObjectManager.get_config()
@@ -66,7 +73,7 @@ class Miner(aobject):
 
         logger.info("Attaching forward function to miner axon.")
         self.axon.attach(
-            forward_fn=self.forward_task_request,
+            forward_fn=self.synthetic_task_handler,
             blacklist_fn=self.blacklist_task_request,
             priority_fn=self.priority_ranking,
         ).attach(
@@ -78,24 +85,41 @@ class Miner(aobject):
         )
 
         async def heartbeat_adapter(request: Request, synapse: Heartbeat):
-            blacklist_reason = self._blacklist_function(request, synapse)
+            blacklist_reason = self.blacklist_function(request, synapse)
             if blacklist_reason:
                 # we've received the req, but you're blacklisted and don't retry
                 raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
 
-            return await self._heartbeat_handler(request, synapse)
+            return await self.heartbeat_handler(request, synapse)
 
         self.server.serve_synapse(synapse=Heartbeat, handler=heartbeat_adapter)
 
-        # TODO: task request request
+        async def synthetic_task_adapter(
+            request: Request, synapse: SyntheticTaskSynapse
+        ):
+            blacklist_reason = self.blacklist_function(request, synapse)
+            if blacklist_reason:
+                # we've received the req, but you're blacklisted and don't retry
+                raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
+
+            return await self.synthetic_task_handler(request, synapse)
+
+        self.server.serve_synapse(
+            synapse=SyntheticTaskSynapse, handler=synthetic_task_adapter
+        )
+
         # TODO: score result request
         async def task_result_adapter(request: Request, synapse: TaskResultSynapse):
-            blacklist_reason = self._blacklist_function(request, synapse)
+            blacklist_reason = self.blacklist_function(request, synapse)
             if blacklist_reason:
                 # we've received the req, but you're blacklisted and don't retry
                 raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
 
             return await self.task_result_handler(request, synapse)
+
+        self.server.serve_synapse(
+            synapse=TaskResultSynapse, handler=task_result_adapter
+        )
 
         self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
         # log all incoming requests
@@ -205,7 +229,7 @@ class Miner(aobject):
         await self.server.shutdown()
         await self.kami.close()
 
-    async def _heartbeat_handler(
+    async def heartbeat_handler(
         self, request: Request, synapse: Heartbeat
     ) -> Heartbeat:
         caller_hotkey = request.headers.get(HOTKEY_HEADER)
@@ -272,43 +296,40 @@ class Miner(aobject):
 
         return synapse
 
-    async def forward_task_request(
-        self, synapse: SyntheticTaskSynapse
+    async def synthetic_task_handler(
+        self, request: Request, synapse: SyntheticTaskSynapse
     ) -> SyntheticTaskSynapse:
         # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
-        if not synapse or not synapse.completion_responses:
-            logger.error("Invalid synapse: missing synapse or completion_responses")
-            return synapse
+        caller_hotkey = request.headers.get(HOTKEY_HEADER)
+        synapse_name = synapse.__class__.__name__
+        logger.info(
+            f"⬇️ Received {synapse_name} from {caller_hotkey} with expire_at: {synapse.expire_at}"
+        )
+        if caller_hotkey:
+            self.hotkey_to_request[caller_hotkey] = synapse
 
-        if not synapse.dendrite or not synapse.dendrite.hotkey:
-            logger.error("Invalid synapse: missing dendrite information")
-            return synapse
-
-        try:
-            logger.info(
-                f"Miner received task id: {synapse.task_id} from {synapse.dendrite.hotkey}, with expire_at: {synapse.expire_at}"
+        if not synapse.completion_responses:
+            raise HTTPException(
+                status_code=HTTPStatus.OK,
+                detail="Invalid synapse: missing completion_responses",
             )
 
-            self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
-
-            # Create task and store ID
+        try:
             if task_ids := await DojoAPI.create_task(synapse):
                 dojo_task_id = task_ids[0]
                 # TODO: actually we don't even need this, since LLM API makes it irrelevant
                 # touchpoints: validator db as well
                 synapse.dojo_task_id = dojo_task_id
-                self.vali_to_dojo_task_id[synapse.validator_task_id] = dojo_task_id
-                # Clear completion field in completion_responses to optimize network traffic
-                for response in synapse.completion_responses:
-                    response.completion = None
+                self.vali_to_dojo_task_id[synapse.task_id] = dojo_task_id
+                synapse = optimize_payload_for_transport(synapse)
             else:
                 logger.error("Failed to create task: no task IDs returned")
 
         except Exception as e:
             logger.error(
-                f"Error processing request id: {getattr(synapse, 'task_id', 'unknown')}: {str(e)}"
+                f"Error processing validator task id: {synapse.task_id}: {str(e)}"
             )
-            logger.debug(f"Detailed error: {traceback.format_exc()}")
+            logger.debug(traceback.print_exc())
 
         return synapse
 
@@ -353,30 +374,30 @@ class Miner(aobject):
     async def blacklist_task_request(
         self, synapse: SyntheticTaskSynapse
     ) -> Tuple[bool, str]:
-        return await self._blacklist_function(
+        return await self.blacklist_function(
             synapse, "validator", "Valid task request received from validator"
         )
 
     async def blacklist_task_result_request(
         self, synapse: TaskResultSynapse
     ) -> Tuple[bool, str]:
-        return await self._blacklist_function(
+        return await self.blacklist_function(
             synapse, "task result", "Valid task result request from validator"
         )
 
     async def blacklist_heartbeat_request(self, synapse: Heartbeat) -> Tuple[bool, str]:
-        return await self._blacklist_function(
+        return await self.blacklist_function(
             synapse, "heartbeat", "Valid heartbeat request from validator"
         )
 
     async def blacklist_score_result_request(
         self, synapse: ScoringResult
     ) -> Tuple[bool, str]:
-        return await self._blacklist_function(
+        return await self.blacklist_function(
             synapse, "scoring result", "Valid scoring result request from validator"
         )
 
-    def _blacklist_function(
+    def blacklist_function(
         self, request: Request, synapse: PydanticModel
     ) -> str | None:
         """
