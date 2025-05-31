@@ -296,7 +296,11 @@ class Miner(aobject):
 
             # Create task and store ID
             if task_ids := await DojoAPI.create_task(synapse):
-                synapse.dojo_task_id = task_ids[0]
+                dojo_task_id = task_ids[0]
+                # TODO: actually we don't even need this, since LLM API makes it irrelevant
+                # touchpoints: validator db as well
+                synapse.dojo_task_id = dojo_task_id
+                self.vali_to_dojo_task_id[synapse.validator_task_id] = dojo_task_id
                 # Clear completion field in completion_responses to optimize network traffic
                 for response in synapse.completion_responses:
                     response.completion = None
@@ -334,17 +338,10 @@ class Miner(aobject):
                 raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
             task_results = await DojoAPI.get_task_results_by_dojo_task_id(dojo_task_id)
-            transformed_results = []
             if task_results:
-                # TODO: simple fix is to change the schema bruh
-                transformed_results = [
-                    {**result, "dojo_task_id": result.pop("task_id", None)}
-                    for result in (r.copy() for r in task_results)
-                ]
-
                 # Convert transformed results to TaskResult objects
                 synapse.task_results = [
-                    TaskResult(**result) for result in transformed_results
+                    TaskResult.model_validate(result) for result in task_results
                 ]
             else:
                 logger.debug(
