@@ -11,7 +11,7 @@ from dojo.protocol import (
     CriteriaType,
     ScoreCriteria,
     Scores,
-    TaskSynapseObject,
+    SyntheticTaskSynapse,
 )
 
 
@@ -152,7 +152,7 @@ class Scoring:
     def ground_truth_scoring(
         criteria: CriteriaType,
         ground_truth: dict[str, int],
-        miner_responses: List[TaskSynapseObject],
+        miner_responses: List[SyntheticTaskSynapse],
     ) -> tuple[
         torch.Tensor,
         np.ndarray,
@@ -168,7 +168,7 @@ class Scoring:
         Args:
             criteria (CriteriaType): Criteria type
             ground_truth (dict[str, int]): Ground truth, where key is completion id and value is rank.
-            miner_responses (List[TaskSynapseObject]): Miner responses
+            miner_responses (List[SyntheticTaskSynapse]): Miner responses
 
         Raises:
             ValueError: If miner responses are empty or contain None values.
@@ -270,9 +270,9 @@ class Scoring:
     @classmethod
     def calculate_score(
         cls,
-        validator_task: TaskSynapseObject,
-        miner_responses: List[TaskSynapseObject],
-    ) -> List[TaskSynapseObject]:
+        validator_task: SyntheticTaskSynapse,
+        miner_responses: List[SyntheticTaskSynapse],
+    ) -> List[SyntheticTaskSynapse]:
         """Calculates scores for miners.
 
         Args:
@@ -345,9 +345,9 @@ class Scoring:
     def score_by_criteria(
         cls,
         criteria: CriteriaType,
-        valid_responses: List[TaskSynapseObject],
+        valid_responses: List[SyntheticTaskSynapse],
         ground_truth: Dict[str, int],
-    ) -> List[TaskSynapseObject]:
+    ) -> List[SyntheticTaskSynapse]:
         """Calculates and assigns scores based on criteria type."""
         if not isinstance(criteria, ScoreCriteria):
             raise NotImplementedError("Only score criteria is supported")

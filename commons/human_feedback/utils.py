@@ -23,8 +23,8 @@ from dojo.protocol import (
     CompletionResponse,
     SanitizedResultEnum,
     ScoreCriteria,
+    SyntheticTaskSynapse,
     TaskResult,
-    TaskSynapseObject,
     TaskTypeEnum,
     TextFeedbackScore,
 )
@@ -140,19 +140,19 @@ def map_human_feedback_to_task_synapse(
     response_data: HumanFeedbackResponse,
     original_model_name: str | None = None,
     original_completion_id: str | None = None,
-) -> TaskSynapseObject | None:
+) -> SyntheticTaskSynapse | None:
     """
-    Map the HumanFeedbackResponse to a TaskSynapseObject.
+    Map the HumanFeedbackResponse to a SyntheticTaskSynapse.
 
     Args:
         response_data: HumanFeedbackResponse object from Synthetic API
 
     Returns:
-        A TaskSynapseObject ready to be sent to miners, or None if conversion fails
+        A SyntheticTaskSynapse ready to be sent to miners, or None if conversion fails
     """
     try:
         # Create a new synthetic task for scoring
-        task_synapse = TaskSynapseObject(
+        task_synapse = SyntheticTaskSynapse(
             task_id=get_new_uuid(),
             prompt=response_data.base_prompt,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,

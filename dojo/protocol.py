@@ -141,7 +141,7 @@ class SyntheticQA(BaseModel):
         return self
 
 
-class TaskSynapseObject(bt.Synapse):
+class SyntheticTaskSynapse(bt.Synapse):
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the task",
@@ -196,8 +196,8 @@ class Heartbeat(BaseModel):
 # TODO rename this to be a Task or something
 class DendriteQueryResponse(BaseModel):
     model_config = ConfigDict(frozen=False)
-    validator_task: TaskSynapseObject
-    miner_responses: List[TaskSynapseObject]
+    validator_task: SyntheticTaskSynapse
+    miner_responses: List[SyntheticTaskSynapse]
 
 
 class Result(BaseModel):

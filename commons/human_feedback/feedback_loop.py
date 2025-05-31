@@ -15,7 +15,7 @@ from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import MinerResponse
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskInclude
-from dojo.protocol import DendriteQueryResponse, TaskSynapseObject
+from dojo.protocol import DendriteQueryResponse, SyntheticTaskSynapse
 
 from .score_feedback import (
     create_score_feedback_task,
@@ -131,7 +131,7 @@ class FeedbackLoop:
                 f"Started HFL with state ID: {hfl_state.id}, original task: {selected_task.task_id}, TF task: {validator_task.id}"
             )
 
-    async def select_validator_task(self) -> Tuple[TaskSynapseObject, str] | None:
+    async def select_validator_task(self) -> Tuple[SyntheticTaskSynapse, str] | None:
         """
         Selects a validator task from the latest expired tasks within a specific time window.
         Time window:
@@ -142,7 +142,7 @@ class FeedbackLoop:
         of the miners scored it the highest.
 
         Returns:
-            Tuple[TaskSynapseObject, str] | None: A tuple of (validator task, completion_id) if criteria are met;
+            Tuple[SyntheticTaskSynapse, str] | None: A tuple of (validator task, completion_id) if criteria are met;
         """
         expire_from, expire_to = get_time_window_for_tasks(
             hours_ago_start=1, hours_ago_end=0
@@ -182,7 +182,7 @@ class FeedbackLoop:
 
     async def _evaluate_task(
         self, dendrite_response: DendriteQueryResponse
-    ) -> Tuple[TaskSynapseObject, str] | None:
+    ) -> Tuple[SyntheticTaskSynapse, str] | None:
         """
         Evaluates a single task based on its miner scores from the MinerScore table.
         For each completion in the task, computes what percentage of miners scored it
@@ -193,10 +193,10 @@ class FeedbackLoop:
             dendrite_response (DendriteQueryResponse): Contains the validator task and related miner responses.
 
         Returns:
-            Optional[Tuple[TaskSynapseObject, str]]: Tuple of (validator task, completion_id) if criteria are met;
+            Optional[Tuple[SyntheticTaskSynapse, str]]: Tuple of (validator task, completion_id) if criteria are met;
             otherwise None.
         """
-        validator_task: TaskSynapseObject = dendrite_response.validator_task
+        validator_task: SyntheticTaskSynapse = dendrite_response.validator_task
 
         if not validator_task.task_id:
             logger.debug("Task ID is missing")
@@ -644,7 +644,7 @@ class FeedbackLoop:
         Flow:
         1. Query tasks with TF_SCHEDULED HFL states
         2. For each task:
-            - Map the SF task to a TaskSynapseObject
+            - Map the SF task to a SyntheticTaskSynapse
             - Create the next TF task based on the best completion
             - Update HFL state to TF_PENDING
         """
@@ -698,7 +698,7 @@ class FeedbackLoop:
                         )
                         continue
 
-                    # Directly map the sf_task to a TaskSynapseObject
+                    # Directly map the sf_task to a SyntheticTaskSynapse
                     from database.mappers import (
                         map_validator_task_to_task_synapse_object,
                     )
@@ -706,7 +706,7 @@ class FeedbackLoop:
                     improved_task = map_validator_task_to_task_synapse_object(sf_task)
                     if not improved_task:
                         logger.error(
-                            f"Failed to map task {sf_task.id} to TaskSynapseObject"
+                            f"Failed to map task {sf_task.id} to SyntheticTaskSynapse"
                         )
                         continue
 

@@ -60,9 +60,9 @@ from dojo.protocol import (
     ScoreCriteria,
     ScoringResult,
     SyntheticQA,
+    SyntheticTaskSynapse,
     TaskResult,
     TaskResultSynapse,
-    TaskSynapseObject,
     TextFeedbackEvent,
 )
 from dojo.utils.config import get_config
@@ -848,7 +848,7 @@ class Validator(aobject):
                     for task in task_batch:
                         # Check if this is a regular task or an HFL task
                         try:
-                            validator_task: TaskSynapseObject = task.validator_task
+                            validator_task: SyntheticTaskSynapse = task.validator_task
 
                             if validator_task.task_type == TaskTypeEnum.CODE_GENERATION:
                                 # Regular task flow
@@ -1086,7 +1086,7 @@ class Validator(aobject):
     async def _generate_synthetic_request(
         self,
     ) -> tuple[
-        TaskSynapseObject | None,
+        SyntheticTaskSynapse | None,
         dict[str, int] | None,
         ObfuscatedModelMap,
         SyntheticMetadata,
@@ -1095,7 +1095,7 @@ class Validator(aobject):
         Generate a synthetic request for code generation tasks.
 
         Returns:
-            tuple[TaskSynapseObject | None, dict[str, int] | ObfuscatedModelMap]: Tuple containing the generated task synapse object
+            tuple[SyntheticTaskSynapse | None, dict[str, int] | ObfuscatedModelMap]: Tuple containing the generated task synapse object
             and ground truth, or None if generation fails
         """
         task_id = get_new_uuid()
@@ -1120,7 +1120,7 @@ class Validator(aobject):
             obfuscated_model_to_model, completion_responses = (
                 self.obfuscate_model_names(data.responses)
             )
-            synapse = TaskSynapseObject(
+            synapse = SyntheticTaskSynapse(
                 task_id=task_id,
                 prompt=data.prompt,
                 task_type=str(TaskTypeEnum.CODE_GENERATION),
@@ -1155,7 +1155,7 @@ class Validator(aobject):
 
     async def send_request(
         self,
-        synapse: TaskSynapseObject | None = None,
+        synapse: SyntheticTaskSynapse | None = None,
         ground_truth: dict[str, int] | None = None,
         obfuscated_model_to_model: ObfuscatedModelMap | None = None,
         subset_size: int | None = None,
@@ -1208,9 +1208,9 @@ class Validator(aobject):
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{active_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
-        miner_responses: List[TaskSynapseObject] = await self._send_requests_to_miners(
-            self.dendrite, axons, synapse, True
-        )
+        miner_responses: List[
+            SyntheticTaskSynapse
+        ] = await self._send_requests_to_miners(self.dendrite, axons, synapse, True)
         valid_count = 0
         fails = []
         for response in miner_responses:
@@ -1236,7 +1236,7 @@ class Validator(aobject):
 
         logger.info(f"Fails: {fails}")
         logger.info(f"Valid miner responses: {valid_count}")
-        valid_miner_responses: List[TaskSynapseObject] = []
+        valid_miner_responses: List[SyntheticTaskSynapse] = []
         for response in miner_responses:
             try:
                 if not response.dojo_task_id:
@@ -1318,9 +1318,9 @@ class Validator(aobject):
         self,
         dendrite: bt.dendrite,
         axons: List[bt.AxonInfo],
-        synapse: TaskSynapseObject,
+        synapse: SyntheticTaskSynapse,
         shuffled: bool = True,
-    ) -> list[TaskSynapseObject]:
+    ) -> list[SyntheticTaskSynapse]:
         """
         Send requests to miners in batches for parallel processing.
 
@@ -1330,7 +1330,7 @@ class Validator(aobject):
             synapse: Original task synapse object
             shuffled: Whether to shuffle the synapse completions
         Returns:
-            list[TaskSynapseObject]: Flattened list of all miner responses
+            list[SyntheticTaskSynapse]: Flattened list of all miner responses
         """
         all_responses = []
         batch_size = 10
@@ -1358,7 +1358,7 @@ class Validator(aobject):
                 # TODO re-nable obfuscation
                 # await Validator._obfuscate_completion_files(shuffled_completions)
 
-                shuffled_synapse = TaskSynapseObject(
+                shuffled_synapse = SyntheticTaskSynapse(
                     epoch_timestamp=synapse.epoch_timestamp,
                     task_id=synapse.task_id,
                     prompt=synapse.prompt,
@@ -1445,7 +1445,7 @@ class Validator(aobject):
 
     async def _update_task_results(
         self, task: DendriteQueryResponse
-    ) -> List[TaskSynapseObject]:
+    ) -> List[SyntheticTaskSynapse]:
         """
         Returns a list of updated miner responses
         """
@@ -1454,14 +1454,14 @@ class Validator(aobject):
             task_id
         )
 
-        updated_miner_responses: List[TaskSynapseObject] = []
+        updated_miner_responses: List[SyntheticTaskSynapse] = []
 
         batch_size = 30
         # Returns ceiling of the division to get number of batches to process
         num_batches = math.ceil(len(task.miner_responses) / batch_size)
 
         for i in range(0, len(task.miner_responses), batch_size):
-            batch: list[TaskSynapseObject] = task.miner_responses[i : i + batch_size]
+            batch: list[SyntheticTaskSynapse] = task.miner_responses[i : i + batch_size]
 
             # Get the miner UIDs and create identifier tuples for logging
             miner_uids: list[
@@ -1479,7 +1479,7 @@ class Validator(aobject):
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for result in results:
-                if isinstance(result, TaskSynapseObject):
+                if isinstance(result, SyntheticTaskSynapse):
                     updated_miner_responses.append(result)
                 elif isinstance(result, InvalidMinerResponse):
                     logger.error(f"Invalid miner response: {result}")
@@ -1507,9 +1507,9 @@ class Validator(aobject):
 
     async def _update_miner_response(
         self,
-        miner_response: TaskSynapseObject,
+        miner_response: SyntheticTaskSynapse,
         obfuscated_to_real_model_id: Dict[str, str],
-    ) -> TaskSynapseObject | None:
+    ) -> SyntheticTaskSynapse | None:
         """
         Gets task results from a miner. Calculates the average across all task results.
 
@@ -1655,7 +1655,7 @@ class Validator(aobject):
     async def _update_miner_raw_scores_batch(
         self,
         task_id: str,
-        miner_responses: List[TaskSynapseObject],
+        miner_responses: List[SyntheticTaskSynapse],
         max_retries: int = 20,
     ) -> None:
         """
@@ -1792,7 +1792,7 @@ class Validator(aobject):
             await asyncio.sleep(12)
 
     async def _extract_miners_hotkey_uid(
-        self, batch: list[TaskSynapseObject], metagraph: SubnetMetagraph
+        self, batch: list[SyntheticTaskSynapse], metagraph: SubnetMetagraph
     ) -> list[tuple[str, int | None]]:
         """
         Extract UIDs for miners based on their hotkeys.
@@ -1859,8 +1859,8 @@ class Validator(aobject):
 
     def _classify_miner_results(
         self,
-        batch: list[TaskSynapseObject],
-        updated_miner_responses: list[TaskSynapseObject],
+        batch: list[SyntheticTaskSynapse],
+        updated_miner_responses: list[SyntheticTaskSynapse],
         miner_uids: list[tuple[str, int]],
     ) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
         """

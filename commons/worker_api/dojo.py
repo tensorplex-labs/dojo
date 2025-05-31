@@ -10,7 +10,12 @@ from loguru import logger
 from commons.exceptions import CreateTaskFailed
 from commons.utils import loaddotenv
 from dojo import get_dojo_api_base_url
-from dojo.protocol import CodeAnswer, MultimediaAnswer, TaskSynapseObject, TaskTypeEnum
+from dojo.protocol import (
+    CodeAnswer,
+    MultimediaAnswer,
+    SyntheticTaskSynapse,
+    TaskTypeEnum,
+)
 from dojo.utils.retry_utils import async_retry
 
 DOJO_API_BASE_URL = get_dojo_api_base_url()
@@ -57,7 +62,7 @@ class DojoAPI:
         return None
 
     @staticmethod
-    def serialize_task_request(data: TaskSynapseObject):
+    def serialize_task_request(data: SyntheticTaskSynapse):
         # Use a mapping for task_modality to avoid if-else logic
         # TODO: KIV
         if data.task_type in (
@@ -102,7 +107,7 @@ class DojoAPI:
     @classmethod
     async def create_task(
         cls,
-        task_request: TaskSynapseObject,
+        task_request: SyntheticTaskSynapse,
     ) -> List[str]:
         response_data = {"text": "", "json": {}}
         # Simplified title assignment

@@ -362,8 +362,8 @@ class Client:
 #     is_healthy = await client.health_check(url)
 #     logger.info(f"Server health check: {is_healthy}")
 #
-#     # # NOTE: testing TaskSynapseObject
-#     # task_payload = TaskSynapseObject(
+#     # # NOTE: testing SyntheticTaskSynapse
+#     # task_payload = SyntheticTaskSynapse(
 #     #     prompt="Hello",
 #     #     task_type=TaskTypeEnum.CODE_GENERATION,
 #     #     # completion_responses=[],

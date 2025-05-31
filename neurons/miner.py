@@ -22,9 +22,9 @@ from dojo.protocol import (
     Heartbeat,
     ScoreCriteria,
     ScoringResult,
+    SyntheticTaskSynapse,
     TaskResult,
     TaskResultSynapse,
-    TaskSynapseObject,
     TextCriteria,
 )
 from dojo.utils import BoundedDict
@@ -99,7 +99,7 @@ class Miner(aobject):
 
         self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
         # log all incoming requests
-        self.hotkey_to_request: Dict[str, TaskSynapseObject] = {}
+        self.hotkey_to_request: Dict[str, SyntheticTaskSynapse] = {}
 
     async def start_server(self):
         """Wrapper around starting the server so that a different process may
@@ -273,8 +273,8 @@ class Miner(aobject):
         return synapse
 
     async def forward_task_request(
-        self, synapse: TaskSynapseObject
-    ) -> TaskSynapseObject:
+        self, synapse: SyntheticTaskSynapse
+    ) -> SyntheticTaskSynapse:
         # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
         if not synapse or not synapse.completion_responses:
             logger.error("Invalid synapse: missing synapse or completion_responses")
@@ -351,7 +351,7 @@ class Miner(aobject):
         return synapse
 
     async def blacklist_task_request(
-        self, synapse: TaskSynapseObject
+        self, synapse: SyntheticTaskSynapse
     ) -> Tuple[bool, str]:
         return await self._blacklist_function(
             synapse, "validator", "Valid task request received from validator"
@@ -419,7 +419,7 @@ class Miner(aobject):
 
         return None
 
-    async def priority_ranking(self, synapse: TaskSynapseObject) -> float:
+    async def priority_ranking(self, synapse: SyntheticTaskSynapse) -> float:
         """
         The priority function determines the order in which requests are handled. Higher-priority
         requests are processed before others. Miners may receive messages from multiple entities at
