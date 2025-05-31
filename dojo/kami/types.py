@@ -1,6 +1,6 @@
 from typing import Any, List, Tuple
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class SubnetHyperparameters(BaseModel):
@@ -105,6 +105,8 @@ class AxonInfo(BaseModel):
     protocol: int
     placeholder1: int
     placeholder2: int
+    hotkey: str = Field(default="")
+    coldkey: str = Field(default="")
 
 
 class SubnetMetagraph(BaseModel):

@@ -151,13 +151,17 @@ class Kami:
         Returns:
             list[AxonInfo]: The list of axons for the given netuid.
         """
-        get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
-        metagraph = get_metagraph.get("data", {})
-        axons = metagraph.get("axons", [])
-        if len(axons) == 0:
+        metagraph = await self.get_metagraph(netuid=netuid)
+        if len(metagraph.axons) == 0:
             logger.warning("No axons found in metagraph response.")
 
-        return [AxonInfo.model_validate(axon) for axon in axons]
+        for hotkey, coldkey, axon in zip(
+            metagraph.hotkeys, metagraph.coldkeys, metagraph.axons
+        ):
+            axon.coldkey = coldkey
+            axon.hotkey = hotkey
+
+        return [AxonInfo.model_validate(axon) for axon in metagraph.axons]
 
     async def get_current_block(self) -> int:
         """
