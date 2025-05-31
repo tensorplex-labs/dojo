@@ -173,8 +173,6 @@ class Miner(aobject):
             version=1,
         )
 
-        # serve_success = await serve_axon(self.subtensor, self.axon, self.config)
-
         if not await self.check_if_axon_served(axon_payload):
             serve_success = await self.kami.serve_axon(axon_payload)
             if serve_success.get("statusCode", None) == 200:
@@ -418,7 +416,7 @@ class Miner(aobject):
                 "YOU SHOULD NOT SEE THIS when you are running a miner on mainnet"
             )
             logger.warning(message)
-            return f"Ignored minimum validator stake requirement of {ValidatorConstant.VALIDATOR_MIN_STAKE}"
+            return None
 
         effective_stake = aget_effective_stake(caller_hotkey, self.subnet_metagraph)
         if effective_stake < float(ValidatorConstant.VALIDATOR_MIN_STAKE):
