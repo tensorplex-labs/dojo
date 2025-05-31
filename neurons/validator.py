@@ -1209,9 +1209,9 @@ class Validator(aobject):
             f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{active_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
-        miner_responses: List[
-            SyntheticTaskSynapse
-        ] = await self._send_requests_to_miners(self.dendrite, axons, synapse)
+        miner_responses: List[SyntheticTaskSynapse] = await self.send_synthetic_tasks(
+            self.dendrite, axons, synapse
+        )
         valid_count = 0
         fails = []
         for response in miner_responses:
@@ -1315,7 +1315,7 @@ class Validator(aobject):
                 self.dendrite.synapse_history.clear()
             await asyncio.sleep(300)
 
-    async def _send_requests_to_miners(
+    async def send_synthetic_tasks(
         self,
         dendrite: bt.dendrite,
         axons: List[bt.AxonInfo],

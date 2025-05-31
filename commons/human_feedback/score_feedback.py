@@ -321,7 +321,7 @@ async def send_hfl_request(
 
     # Send request to miners
     _validator = await ObjectManager.get_validator()
-    miner_responses = await _validator._send_requests_to_miners(
+    miner_responses = await _validator.send_synthetic_tasks(
         validator.dendrite,
         axons,
         synapse,
