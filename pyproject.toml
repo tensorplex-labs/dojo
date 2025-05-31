@@ -88,7 +88,7 @@ local-import-prefixes = ["commons", "database", "dojo", "neurons"]
 
 [tool.pylint.main]
 # NOTE: this should be the .py file
-load-plugins = ["tools.import_rules_checker"]
+load-plugins = ["tools.import_rules_checker", 'tools.parameter_return_checker']
 jobs = 0 # Use all available CPUs
 init-hook = 'import sys; sys.path.append("."); sys.path.append("tools")' # Python path (if needed)
 
@@ -97,7 +97,10 @@ disable = ["all"]
 # Disable all messages by default, then enable specific ones
 enable = [
   "prefer-shorter-import",
-  "import-not-in-all"
+  "import-not-in-all",
+  'return-parameter-unchanged',
+  "useless-return",
+  "unused-argument"
 ]
 
 [tool.pyright]
