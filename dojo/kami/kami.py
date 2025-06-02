@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict
 
 import aiohttp
+import pydantic
 from bittensor_drand import get_encrypted_commit  # type: ignore
 from loguru import logger
 
@@ -124,6 +125,7 @@ class Kami:
             aiohttp.ClientConnectionError,
             aiohttp.ServerDisconnectedError,
             aiohttp.ClientConnectionResetError,
+            pydantic.ValidationError,
         ),
     )
     async def get_metagraph(self, netuid: int) -> SubnetMetagraph:
@@ -226,7 +228,17 @@ class Kami:
         return result.get("data", {}).get("isHotkeyValid", False)
 
     # NOTE: factor of 1 just means linear backoff instead of exponential
-    @async_retry(max_retries=3, base_delay=12, max_delay=36, backoff_factor=1)
+    @async_retry(
+        max_retries=3,
+        base_delay=12,
+        max_delay=36,
+        backoff_factor=1,
+        exceptions=(
+            aiohttp.ClientConnectionError,
+            aiohttp.ServerDisconnectedError,
+            aiohttp.ClientConnectionResetError,
+        ),
+    )
     async def serve_axon(self, payload: ServeAxonPayload) -> Dict[str, Any]:
         """
         Register an axon server with the network.
@@ -298,7 +310,16 @@ class Kami:
             )
         return await self.post("chain/set-weights", data=payload.model_dump())  # type: ignore TODO: Fix type ignore
 
-    @async_retry(max_retries=3, base_delay=1, max_delay=10)
+    @async_retry(
+        max_retries=3,
+        base_delay=1,
+        max_delay=10,
+        exceptions=(
+            aiohttp.ClientConnectionError,
+            aiohttp.ServerDisconnectedError,
+            aiohttp.ClientConnectionResetError,
+        ),
+    )
     async def sign_message(self, message: str) -> str:
         response = await self.post(
             "substrate/sign-message/sign", data={"message": message}
@@ -311,7 +332,16 @@ class Kami:
             )
         return signature
 
-    @async_retry(max_retries=3, base_delay=1, max_delay=10)
+    @async_retry(
+        max_retries=3,
+        base_delay=1,
+        max_delay=10,
+        exceptions=(
+            aiohttp.ClientConnectionError,
+            aiohttp.ServerDisconnectedError,
+            aiohttp.ClientConnectionResetError,
+        ),
+    )
     async def verify(self, hotkey: str, message: str, signature: str) -> bool:
         if not signature.startswith("0x"):
             message = f"Expected signature to be a hex string!, got: {signature=}"
