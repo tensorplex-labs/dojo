@@ -95,6 +95,12 @@ class Client:
         logger.trace(f"Sending request with headers: {headers}")
         return headers
 
+    async def shutdown(self):
+        try:
+            await self._session.close()
+        except Exception as e:
+            logger.warning(f"Error while trying to close aiohttp.ClientSession, {e}")
+
     async def batch_send(
         self,
         urls: list[str],

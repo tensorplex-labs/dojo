@@ -32,8 +32,12 @@ class Server:
         # write miner's code
         self._add_http_exception_handler()
         self._add_invalid_signature_exception_handler()
-        self.server_task = None
         self.config = None
+
+    async def shutdown(self):
+        if self.server:
+            self.server.should_exit = True
+            await self.server.shutdown()
 
     def add_global_exception_handler(self) -> None:
         """Register exception handlers to standardize error responses"""
@@ -105,8 +109,9 @@ class Server:
             logger.info(
                 f"Using server config host:{server_config.host}, port: {server_config.port}, log_level: {server_config.log_level}"
             )
-            server = uvicorn.Server(server_config)
-            await server.serve()
+            self.server = uvicorn.Server(server_config)
+            await self.server.serve()
+
             return True
         except Exception as e:
             logger.error(f"Error starting server: {str(e)}")

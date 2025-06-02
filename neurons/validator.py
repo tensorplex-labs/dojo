@@ -147,9 +147,6 @@ class Validator(aobject):
 
         self.step = 0
         self.last_anal_upload_time: datetime | None = None
-        # Dendrite lets us send messages to other nodes (axons) in the network.
-        self.dendrite = bt.dendrite(wallet=self.wallet)
-        logger.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
         self.synthetic_score: torch.Tensor = torch.zeros(
             len(self.metagraph.hotkeys), dtype=torch.float32
