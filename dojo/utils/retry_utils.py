@@ -1,4 +1,5 @@
-from typing import Awaitable, Callable, Tuple, Type, TypeVar
+import functools
+from typing import Awaitable, Callable, ParamSpec, Tuple, Type, TypeVar
 
 from tenacity import (
     retry,
@@ -12,6 +13,7 @@ from tenacity import (
 from dojo.logging import tenacity_retry_log
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 def async_retry(
@@ -34,7 +36,7 @@ def async_retry(
         exceptions: Exception type(s) to retry on
     """
 
-    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
         wait_strategy = wait_exponential(
             multiplier=base_delay, max=max_delay, exp_base=backoff_factor
         )
@@ -53,6 +55,10 @@ def async_retry(
             before_sleep=tenacity_retry_log,
         )
 
-        return tenacity_retry(func)
+        @functools.wraps(func)
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            return await tenacity_retry(func)(*args, **kwargs)
+
+        return wrapper
 
     return decorator
