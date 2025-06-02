@@ -298,6 +298,7 @@ class Kami:
             )
         return await self.post("chain/set-weights", data=payload.model_dump())  # type: ignore TODO: Fix type ignore
 
+    @async_retry(max_retries=3, base_delay=1, max_delay=10)
     async def sign_message(self, message: str) -> str:
         response = await self.post(
             "substrate/sign-message/sign", data={"message": message}
@@ -310,6 +311,7 @@ class Kami:
             )
         return signature
 
+    @async_retry(max_retries=3, base_delay=1, max_delay=10)
     async def verify(self, hotkey: str, message: str, signature: str) -> bool:
         if not signature.startswith("0x"):
             raise ValueError("Expected signature to be a hex string!")
