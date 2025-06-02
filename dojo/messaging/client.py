@@ -146,6 +146,7 @@ class Client:
         timeout_sec: int = 10,
         max_retries: int = 2,
         max_wait_sec: int = 4,
+        wait_exponential_factor: int = 2,
         **kwargs: Any,
     ) -> StdResponse[PydanticModel]:
         """Sends the following payload to the given URL.
@@ -170,15 +171,25 @@ class Client:
         try:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(max_retries),
-                wait=wait_exponential(multiplier=2, max=max_wait_sec),
+                wait=wait_exponential(
+                    multiplier=wait_exponential_factor, max=max_wait_sec
+                ),
                 before_sleep=tenacity_retry_log,
             ):
                 with attempt:
+                    target_url = _build_url(url, model)
+                    async with self._session.head(
+                        target_url,
+                        timeout=aiohttp.ClientTimeout(total=timeout_sec),
+                    ) as head_resp:
+                        head_resp.raise_for_status()
+                        logger.success(f"HEAD request successful for {target_url}")
+
                     _headers = await self._build_headers()
                     payload = encode_body(model, _headers)
                     # response: aiohttp.ClientResponse | None = None
                     async with self._session.post(
-                        _build_url(url, model),
+                        target_url,
                         data=payload,
                         headers=_headers,
                         timeout=aiohttp.ClientTimeout(total=timeout_sec),

@@ -125,6 +125,9 @@ def _register_route_handler(
     async def handler_wrapper(request: Request) -> ORJSONResponse:
         """Wrapper around the request that handles zstd decompression and payload validation"""
         try:
+            if request.method == "HEAD":
+                return ORJSONResponse(content={}, status_code=HTTPStatus.OK)
+
             data: dict[str, Any] = {}
             try:
                 # NOTE: we should be able to just read the data directly since

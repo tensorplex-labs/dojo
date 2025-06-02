@@ -29,7 +29,7 @@ class SignatureMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> ORJSONResponse | Response:
-        if request.url.path in self.whitelisted_routes:
+        if request.url.path in self.whitelisted_routes or request.method == "HEAD":
             return await call_next(request)
 
         signature = request.headers.get(SIGNATURE_HEADER, "")
@@ -64,11 +64,18 @@ class ZstdMiddleware(BaseHTTPMiddleware):
     NOTE: The /health endpoint is excluded from compression/decompression.
     """
 
+    def __init__(self, app, whitelisted_routes: list[str] | None = None):
+        super().__init__(app)
+        self.whitelisted_routes = whitelisted_routes or ["/health"]
+        # always whitelisted
+        if "/docs" not in self.whitelisted_routes:
+            self.whitelisted_routes.append("/docs")
+
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> ORJSONResponse | Response:
         logger.debug(f"Request headers: {request.headers}")
-        if request.url.path == "/health":
+        if request.url.path in self.whitelisted_routes or request.method == "HEAD":
             return await call_next(request)
 
         encoding = request.headers.get("content-encoding", "").lower()
