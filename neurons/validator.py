@@ -59,7 +59,8 @@ from dojo.protocol import (
     DendriteQueryResponse,
     Heartbeat,
     ScoreCriteria,
-    ScoringResult,
+    ScoreResultSynapse,
+    Scores,
     SyntheticQA,
     SyntheticTaskSynapse,
     TaskResult,
@@ -67,7 +68,6 @@ from dojo.protocol import (
     TextFeedbackEvent,
 )
 from dojo.utils.config import get_config
-from dojo.utils.uids import is_miner
 from dojo.utils.weight_utils import (
     aprocess_weights_for_netuid,
     convert_weights_and_uids_for_emit,
@@ -113,6 +113,7 @@ class Validator(aobject):
         # NOTE: the parameter essentially determines the batch size of batch sending requests
         self._semaphore_heartbeats = asyncio.BoundedSemaphore(32)
         self._semaphore_synthetic_task = asyncio.BoundedSemaphore(10)
+        self._semaphore_scores = asyncio.BoundedSemaphore(32)
 
         self.kami = Kami()
 
@@ -160,22 +161,36 @@ class Validator(aobject):
         await self.check_registered()
         await self.load_state()
 
-    async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
-        """Send consensus score back to miners who participated in the request."""
-        for _, responses in synapse.hotkey_to_completion_responses.items():
-            for response in responses:
-                # Set completion to None to reduce the size of the synapse
-                response.completion = None
-
+    async def send_scores(
+        self, validator_task_id: str, hotkeys: List[str], scores: List[Scores]
+    ):
+        """Send scores that taostats, CLI, etc. cannot see for miners who participated."""
         miners_uids = await self.get_active_miner_uids()
         metagraph_axons = self._retrieve_axons(miners_uids)
         axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]
         if not axons:
-            logger.warning("No axons to send consensus to... skipping")
-        else:
-            logger.info(f"Sending back scores to miners for task id: {synapse.task_id}")
+            logger.warning("No axons to send scores back to... skipping")
+            return
+        logger.info(f"Sending back scores to miners for task id: {validator_task_id}")
 
-        await self._semaphore_limited_forward(self.dendrite, axons, synapse, timeout=30)
+        urls = [f"http://{axon.ip}:{axon.port}" for axon in axons]
+        models = [
+            ScoreResultSynapse(validator_task_id=validator_task_id, scores=miner_scores)
+            for miner_scores in scores
+        ]
+
+        responses = await self.client.batch_send(
+            urls=urls, models=models, semaphore=self._semaphore_scores, timeout_sec=30
+        )
+
+        for response, axon in zip(responses, axons):
+            if (
+                response.client_response
+                and response.client_response.status == HTTPStatus.OK
+                and not response.error
+                and not response.exception
+            ):
+                logger.success(f"Sent scores back to {axon.hotkey} successfully")
 
     def obfuscate_model_names(
         self, completion_responses: list[CompletionResponse]
@@ -850,11 +865,10 @@ class Validator(aobject):
 
                             if validator_task.task_type == TaskTypeEnum.CODE_GENERATION:
                                 # Regular task flow
-                                processed_id, hotkey_to_score = await self._score_task(
-                                    task
-                                )
-                                if processed_id:
-                                    processed_request_ids.append(processed_id)
+                                hotkey_to_score = await self._score_task(task)
+                                task_id = task.validator_task.task_id
+                                if task_id:
+                                    processed_request_ids.append(task_id)
                                 for hotkey, score in hotkey_to_score.items():
                                     hotkey_to_synthetic_scores[hotkey].append(score)
 
@@ -1342,34 +1356,6 @@ class Validator(aobject):
 
         return responses
 
-    @staticmethod
-    async def _semaphore_limited_forward(dendrite, axons, synapse, timeout=12):
-        """
-        Wrapper around dendrite.forward that limits concurrent calls using a semaphore.
-        """
-        async with Validator._forward_semaphore:
-            return await dendrite.forward(
-                axons=axons,
-                synapse=synapse,
-                deserialize=False,
-                timeout=timeout,
-            )
-
-    # Validator update_score_and_send_feedback helper functions
-    def _get_validator_hotkeys(self) -> List[str]:
-        """Get the hotkeys of the validators in the metagraph.
-
-        Returns a list of validator hotkeys.
-        """
-        validator_hotkeys: List[str] = [
-            hotkey
-            for uid, hotkey in enumerate(self.metagraph.hotkeys)
-            if not is_miner(self.metagraph, uid)
-        ]
-        if get_config().ignore_min_stake:
-            validator_hotkeys.append(self.vali_hotkey)
-        return validator_hotkeys
-
     async def _get_task_batches(
         self,
         batch_size: int,
@@ -1653,13 +1639,11 @@ class Validator(aobject):
                     logger.warning(f"Error during attempt {attempt + 1}, retrying: {e}")
                     await asyncio.sleep(2**attempt)
 
-    async def _score_task(
-        self, task: DendriteQueryResponse
-    ) -> tuple[str, Dict[str, float]]:
+    async def _score_task(self, task: DendriteQueryResponse) -> Dict[str, float]:
         """Process a task and calculate the scores for the miner responses"""
         if not task.miner_responses:
             logger.warning("📝 No miner responses, skipping task")
-            return task.validator_task.task_id, {}
+            return {}
 
         hotkey_to_scores = {}
         # NOTE: @scoring, see here for unpacking
@@ -1697,7 +1681,7 @@ class Validator(aobject):
 
             if not hotkey_to_completion_responses:
                 logger.info("📝 Did not manage to generate a dict of hotkey to score")
-                return task.validator_task.task_id, {}
+                return {}
 
             success, failed_hotkeys = await ORM.update_miner_scores(
                 task_id=task.validator_task.task_id,
@@ -1712,22 +1696,26 @@ class Validator(aobject):
                 f"📝 Error occurred while calculating scores: {e}. Request ID: {task.validator_task.task_id}"
             )
             logger.debug(f"Traceback: {traceback.format_exc()}")
-            return task.validator_task.task_id, {}
+            return {}
 
         logger.info(
             f"📝 Received {len(task.miner_responses)} responses from miners. "
             f"Processed {len(hotkey_to_completion_responses.keys())} responses for scoring."
         )
 
+        # NOTE: this will break once we have multiple criterion
         await self.send_scores(
-            synapse=ScoringResult(
-                task_id=task.validator_task.task_id,
-                hotkey_to_completion_responses=hotkey_to_completion_responses,
-            ),
+            validator_task_id=task.validator_task.task_id,
             hotkeys=list(hotkey_to_completion_responses.keys()),
+            scores=[
+                completion.criteria_types[0].scores
+                for completion_responses in hotkey_to_completion_responses.values()
+                for completion in completion_responses
+                if completion.criteria_types and completion.criteria_types[0].scores
+            ],
         )
 
-        return task.validator_task.task_id, hotkey_to_scores
+        return hotkey_to_scores
 
     async def block_updater(self):
         while True:
@@ -1961,7 +1949,7 @@ class Validator(aobject):
 
     async def _prepare_scoring_result(
         self, task_id: str
-    ) -> tuple[ScoringResult | None, list[str]]:
+    ) -> tuple[ScoreResultSynapse | None, list[str]]:
         """
         Prepare a ScoringResult for a specific task to send back to miners.
 
@@ -2007,7 +1995,7 @@ class Validator(aobject):
                 hotkey_to_completion_responses[hotkey] = completion_responses
 
         # Create scoring result
-        scoring_result = ScoringResult(
+        scoring_result = ScoreResultSynapse(
             task_id=task_id,
             hotkey_to_completion_responses=hotkey_to_completion_responses,
         )
