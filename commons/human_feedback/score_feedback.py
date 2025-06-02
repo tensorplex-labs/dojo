@@ -4,7 +4,6 @@ import traceback
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from bittensor.core.chain_data.axon_info import AxonInfo
 from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
@@ -15,6 +14,7 @@ from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_t
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskUpdateInput
+from dojo.kami import AxonInfo
 from dojo.protocol import ScoreFeedbackEvent, SyntheticTaskSynapse, TextFeedbackEvent
 
 from .utils import (
@@ -101,7 +101,6 @@ async def create_score_feedback_task(
 
         # Send to miners
         miner_responses: list[SyntheticTaskSynapse] | None = await send_hfl_request(
-            validator=validator,
             synapse=task_synapse,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
             axons=validator._retrieve_axons(active_miners),
@@ -292,9 +291,7 @@ async def get_active_miners_for_hfl(
     return selected_miners
 
 
-# TODO: cleanup params here as staticmethod was removed
 async def send_hfl_request(
-    validator: "Validator",
     synapse: SyntheticTaskSynapse,
     task_type: TaskTypeEnum,
     axons: list[AxonInfo],
@@ -321,36 +318,16 @@ async def send_hfl_request(
 
     # Send request to miners
     _validator = await ObjectManager.get_validator()
-    miner_responses = await _validator.send_synthetic_task(
-        validator.dendrite,
-        axons,
-        synapse,
-        shuffled=True,
-    )
+    miner_responses = await _validator.send_synthetic_task(synapse=synapse, axons=axons)
 
     # Process responses
-    valid_miner_responses = []
-    for response in miner_responses:
+    valid_miner_responses: list[SyntheticTaskSynapse] = []
+    for response, axon in zip(miner_responses, axons):
+        task = response.body
         try:
-            if not response.dojo_task_id:
-                continue
-
-            # Add minimal required identification for HFL
-            response.miner_hotkey = response.axon.hotkey if response.axon else None
-
-            # Get coldkey
-            if response.axon and response.axon.hotkey:
-                try:
-                    hotkey_index = validator.metagraph.hotkeys.index(
-                        response.axon.hotkey
-                    )
-                    response.miner_coldkey = validator.metagraph.coldkeys[hotkey_index]
-                except (ValueError, IndexError):
-                    response.miner_coldkey = None
-            else:
-                response.miner_coldkey = None
-
-            valid_miner_responses.append(response)
+            task.miner_hotkey = axon.hotkey
+            task.miner_coldkey = axon.coldkey
+            valid_miner_responses.append(task)
         except Exception as e:
             logger.error(f"Error processing HFL response: {e}")
             continue

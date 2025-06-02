@@ -96,7 +96,6 @@ class FeedbackLoop:
             )
 
             miner_responses = await send_hfl_request(
-                validator=validator,
                 synapse=text_criteria_task,
                 task_type=TaskTypeEnum.TEXT_FEEDBACK,
                 axons=validator._retrieve_axons(active_miners),
@@ -396,7 +395,6 @@ class FeedbackLoop:
                         ]
 
                         miner_responses = await send_hfl_request(
-                            validator=validator,
                             synapse=task_synapse,
                             task_type=TaskTypeEnum.TEXT_FEEDBACK,
                             axons=axons,
@@ -735,7 +733,6 @@ class FeedbackLoop:
 
                     # Send the task to miners
                     miner_responses = await send_hfl_request(
-                        validator=validator,
                         synapse=text_criteria_task,
                         task_type=TaskTypeEnum.TEXT_FEEDBACK,
                         axons=validator._retrieve_axons(active_miners),
