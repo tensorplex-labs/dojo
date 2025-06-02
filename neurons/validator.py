@@ -737,8 +737,6 @@ class Validator(aobject):
         while True:
             try:
                 # Always clear the synapse history to avoid memory leak not just on success
-                self.dendrite.synapse_history.clear()
-
                 # Check if there are any active miners. If no active miners, skip the request generation.
                 if not self._active_miner_uids:
                     logger.info(
@@ -746,23 +744,20 @@ class Validator(aobject):
                     )
                     await asyncio.sleep(ValidatorInterval.VALIDATOR_RUN)
                     continue
-                # Group related operations in a single async context
-                async with self._request_alock:
-                    (
-                        synthetic_task,
-                        ground_truth,
-                        obfuscated_model_to_model,
-                        synthetic_metadata,
-                    ) = await self._generate_synthetic_request()
+                (
+                    synthetic_task,
+                    ground_truth,
+                    obfuscated_model_to_model,
+                    synthetic_metadata,
+                ) = await self._generate_synthetic_request()
 
-                    if synthetic_task:
-                        await self.send_request(
-                            synapse=synthetic_task,
-                            ground_truth=ground_truth,
-                            obfuscated_model_to_model=obfuscated_model_to_model,
-                            synthetic_metadata=synthetic_metadata,
-                        )
-
+                if synthetic_task and ground_truth:
+                    await self.send_request(
+                        synapse=synthetic_task,
+                        ground_truth=ground_truth,
+                        obfuscated_model_to_model=obfuscated_model_to_model,
+                        synthetic_metadata=synthetic_metadata,
+                    )
                 self.step += 1
 
                 # Sync metagraph and potentially set weights.
@@ -1517,9 +1512,6 @@ class Validator(aobject):
         Returns:
             list[TaskResult]: List of task results or empty list if request fails
         """
-        if not self.dendrite:
-            logger.error("Dendrite not initialized")
-            return []
 
         try:
             miner_axon: AxonInfo | None = next(
