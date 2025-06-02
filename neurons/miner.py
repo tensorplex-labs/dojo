@@ -13,18 +13,16 @@ from loguru import logger
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject
 from commons.worker_api.dojo import DojoAPI
-from dojo.chain import parse_block_headers
 from dojo.constants import MinerConstant, ValidatorConstant
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
 from dojo.messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 from dojo.protocol import (
     Heartbeat,
-    ScoreCriteria,
+    ScoreResultSynapse,
     ScoringResult,
     SyntheticTaskSynapse,
     TaskResult,
     TaskResultSynapse,
-    TextCriteria,
 )
 from dojo.utils import BoundedDict
 from dojo.utils.config import get_config
@@ -67,10 +65,15 @@ class Miner(aobject):
         logger.info("Attaching forward function to miner axon.")
         # TODO: remove completely...
         self.axon.attach(
-            forward_fn=self.forward_score_result,
+            forward_fn=self.score_result_handler,
             blacklist_fn=self.blacklist_score_result_request,
         )
 
+        self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
+        # log all incoming requests
+        self.hotkey_to_request: Dict[str, SyntheticTaskSynapse] = {}
+
+    async def register_synapse_handlers(self):
         async def heartbeat_adapter(request: Request, synapse: Heartbeat):
             blacklist_reason = self.blacklist_function(request, synapse)
             if blacklist_reason:
@@ -95,7 +98,6 @@ class Miner(aobject):
             synapse=SyntheticTaskSynapse, handler=synthetic_task_adapter
         )
 
-        # TODO: score result request
         async def task_result_adapter(request: Request, synapse: TaskResultSynapse):
             blacklist_reason = self.blacklist_function(request, synapse)
             if blacklist_reason:
@@ -108,9 +110,13 @@ class Miner(aobject):
             synapse=TaskResultSynapse, handler=task_result_adapter
         )
 
-        self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
-        # log all incoming requests
-        self.hotkey_to_request: Dict[str, SyntheticTaskSynapse] = {}
+        # TODO: score result request
+        async def score_result_adapter(request: Request, synapse: ScoreResultSynapse):
+            blacklist_reason = self.blacklist_function(request, synapse)
+            if blacklist_reason:
+                # we've received the req, but you're blacklisted and don't retry
+                raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
+            return await self.score_result_handler(request, synapse)
 
     async def start_server(self):
         """Wrapper around starting the server so that a different process may
@@ -223,63 +229,23 @@ class Miner(aobject):
         logger.info(f"⬆️ Respondng to heartbeat synapse: {synapse}")
         return synapse
 
-    async def forward_score_result(self, synapse: ScoringResult) -> ScoringResult:
-        logger.info("Received scoring result from validators")
-        try:
-            # Validate that synapse is not None and has the required fields
-            if not synapse or not synapse.hotkey_to_completion_responses:
-                logger.error(
-                    "Invalid synapse object or missing hotkey_to_completion_responses attribute."
-                )
-                return synapse
+    async def score_result_handler(self, request: Request, synapse: ScoreResultSynapse):
+        caller_hotkey = request.headers.get(HOTKEY_HEADER)
+        synapse_name = synapse.__class__.__name__
+        logger.info(
+            f"⬇️ Received {synapse_name} from {caller_hotkey} with {synapse.validator_task_id=}"
+        )
+        if all(val is None for val in synapse.model_dump().values()):
+            logger.warning(f"All scores in {synapse_name} are None")
 
-            miner_completion_responses = synapse.hotkey_to_completion_responses.get(
-                self.wallet.hotkey.ss58_address, None
-            )
-            if miner_completion_responses is None:
-                logger.error(
-                    f"Miner hotkey {self.wallet.hotkey.ss58_address} not found in scoring result but yet was sent the result"
-                )
-                return synapse
-
-            # Log shared scores once (from first completion that has them)
-            shared_scores_logged = False
-
-            # Log scores for each completion response
-            for idx, completion in enumerate(miner_completion_responses):
-                for criteria in completion.criteria_types:
-                    if isinstance(criteria, ScoreCriteria) and criteria.scores:
-                        scores = criteria.scores
-                        # Log shared scores only once
-                        if not shared_scores_logged:
-                            logger.info(
-                                f"Task {synapse.task_id} shared scores:"
-                                f"\n\tGround Truth Score: {scores.ground_truth_score}"
-                                f"\n\tCosine Similarity: {scores.cosine_similarity_score}"
-                                f"\n\tNormalised Cosine Similarity: {scores.normalised_cosine_similarity_score}"
-                                f"\n\tCubic Reward Score: {scores.cubic_reward_score}"
-                                f"\n\tHFL Score: {scores.icc_score}"
-                            )
-                            shared_scores_logged = True
-
-                        # Log individual scores for each completion
-                        logger.info(
-                            f"Completion {idx + 1} scores:"
-                            f"\n\tRaw Score: {scores.raw_score}"
-                            f"\n\tNormalised Score: {scores.normalised_score}"
-                        )
-                    elif isinstance(criteria, TextCriteria) and criteria.score:
-                        logger.info(
-                            f"Completion {idx + 1} text feedback:"
-                            f"\n\tText Feedback Score: {criteria.score.tf_score}"
-                        )
-
-        except KeyError as e:
-            logger.error(f"KeyError in forward_result: {e}")
-        except Exception as e:
-            logger.error(f"Error in forward_result: {e}")
-
-        return synapse
+        logger.info(
+            f"Task {synapse.validator_task_id}"
+            f"\n\tGround Truth Score: {synapse.scores.ground_truth_score}"
+            f"\n\tCosine Similarity: {synapse.scores.cosine_similarity_score}"
+            f"\n\tNormalised Cosine Similarity: {synapse.scores.normalised_cosine_similarity_score}"
+            f"\n\tCubic Reward Score: {synapse.scores.cubic_reward_score}"
+            f"\n\tHFL Score: {synapse.scores.icc_score}"
+        )
 
     async def synthetic_task_handler(
         self, request: Request, synapse: SyntheticTaskSynapse
@@ -509,12 +475,6 @@ class Miner(aobject):
     @block.setter
     def block(self, value: int):
         self._block = value
-
-    async def block_headers_callback(self, block: dict):
-        logger.trace(f"Received block headers{block}")
-        block_header = parse_block_headers(block)
-        block_number = block_header.number.to_int()
-        self.block = block_number
 
     async def block_updater(self):
         while True:
