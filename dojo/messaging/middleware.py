@@ -96,9 +96,8 @@ class ZstdMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         logger.debug(f"raw response: {response=}")
 
-        # FIXME: fix pyright typings bruh
-        response_body = [section async for section in response.body_iterator]
-        response.body_iterator = iterate_in_threadpool(iter(response_body))
+        response_body = [section async for section in response.body_iterator]  # type: ignore
+        response.body_iterator = iterate_in_threadpool(iter(response_body))  # type: ignore
         bytes_response = response_body[0]
         logger.debug(f"response_body={bytes_response.decode()}")
 

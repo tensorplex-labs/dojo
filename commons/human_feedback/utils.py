@@ -106,6 +106,7 @@ def extract_text_feedback_from_results(
                             updated_at=result.get("updated_at", datetime.now()),
                             status=result.get("status", ""),
                             result_data=result.get("result_data", []),
+                            # TODO: confirm if this should be task_id
                             task_id=result.get("dojo_task_id", ""),
                             worker_id=result.get("worker_id", ""),
                         )

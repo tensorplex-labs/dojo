@@ -1278,15 +1278,12 @@ class Validator(aobject):
             logger.info("No valid miner responses to process... skipping")
             return
 
-        # include the ground_truth to keep in data manager
-        synapse.ground_truth = ground_truth
-
         logger.debug("Attempting to saving dendrite response")
         validator_task = await ORM.save_task(
             validator_task=synapse,
             miner_responses=valid_miner_responses,
-            ground_truth=ground_truth or {},
-            metadata=synthetic_metadata or {},
+            ground_truth=ground_truth,
+            metadata=synthetic_metadata,
         )
         if not validator_task:
             logger.error("Failed to save dendrite response")
