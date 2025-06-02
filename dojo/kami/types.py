@@ -105,6 +105,8 @@ class AxonInfo(BaseModel):
     protocol: int
     placeholder1: int
     placeholder2: int
+    # WARN: here we only set to default so pydantic validation passes for SubnetMetagraph
+    # you must remember to fill these in
     hotkey: str = Field(default="")
     coldkey: str = Field(default="")
 

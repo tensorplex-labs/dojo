@@ -7,7 +7,9 @@ from bittensor_drand import get_encrypted_commit  # type: ignore
 from loguru import logger
 
 from commons.objects import ObjectManager
-from dojo.kami.types import (
+from dojo.utils import async_retry
+
+from .types import (
     AxonInfo,
     CommitRevealPayload,
     ServeAxonPayload,
@@ -15,7 +17,6 @@ from dojo.kami.types import (
     SubnetHyperparameters,
     SubnetMetagraph,
 )
-from dojo.utils import async_retry
 
 
 class Kami:
@@ -140,7 +141,13 @@ class Kami:
         """
         get_metagraph = await self.get(f"chain/subnet-metagraph/{netuid}")
         metagraph = get_metagraph.get("data", {})
-        return SubnetMetagraph.model_validate(metagraph)
+        metagraph = SubnetMetagraph.model_validate(metagraph)
+        for hotkey, coldkey, axon in zip(
+            metagraph.hotkeys, metagraph.coldkeys, metagraph.axons
+        ):
+            axon.coldkey = coldkey
+            axon.hotkey = hotkey
+        return metagraph
 
     async def get_hotkeys(self, netuid: int) -> list[str]:
         """
