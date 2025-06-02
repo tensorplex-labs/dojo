@@ -166,8 +166,7 @@ async def fetch_miner_feedback_for_task(
     fetch_tasks = [
         asyncio.create_task(
             validator._get_task_results_from_miner(
-                miner_hotkey=resp.hotkey,
-                dojo_task_id=resp.dojo_task_id,
+                miner_hotkey=resp.hotkey, validator_task_id=task.id
             )
         )
         for resp in responses_needing_fetch

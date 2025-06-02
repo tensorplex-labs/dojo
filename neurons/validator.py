@@ -1407,7 +1407,11 @@ class Validator(aobject):
             )
 
             tasks = [
-                self._update_miner_response(miner_response, obfuscated_to_real_model_id)
+                self._update_miner_response(
+                    miner_response=miner_response,
+                    validator_task_id=task_id,
+                    obfuscated_to_real_model_id=obfuscated_to_real_model_id,
+                )
                 for miner_response in batch
             ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -1442,6 +1446,7 @@ class Validator(aobject):
     async def _update_miner_response(
         self,
         miner_response: SyntheticTaskSynapse,
+        validator_task_id: str,
         obfuscated_to_real_model_id: Dict[str, str],
     ) -> SyntheticTaskSynapse | None:
         """
@@ -1465,7 +1470,7 @@ class Validator(aobject):
 
         # Fetch task results
         task_results: List[TaskResult] = await self._get_task_results_from_miner(
-            miner_response.axon.hotkey, miner_response.dojo_task_id
+            miner_hotkey=miner_response.axon.hotkey, validator_task_id=validator_task_id
         )
 
         if not task_results:
@@ -1501,7 +1506,7 @@ class Validator(aobject):
         return miner_response
 
     async def _get_task_results_from_miner(
-        self, miner_hotkey: str, dojo_task_id: str, max_retries: int = 3
+        self, miner_hotkey: str, validator_task_id: str, max_retries: int = 3
     ) -> list[TaskResult]:
         """Fetch task results from the miner's Axon using Dendrite.
 
@@ -1527,11 +1532,15 @@ class Validator(aobject):
                 logger.warning(f"Axon not found for {miner_hotkey}")
                 return []
 
-            url = f"http://{miner_axon.ip}/{miner_axon.port}"
+            url = f"http://{miner_axon.ip}:{miner_axon.port}"
             # TODO: change to validator task id, it's not validator's job to know dojo task id
-            model = TaskResultSynapse(validator_task_id=dojo_task_id)
+            model = TaskResultSynapse(validator_task_id=validator_task_id)
             response = await self.client.send(
-                url, model=model, timeout_sec=12, max_retries=max_retries, max_wait=60
+                url,
+                model=model,
+                timeout_sec=12,
+                max_retries=max_retries,
+                max_wait_sec=60,
             )
             if response.error or response.exception:
                 logger.error(
@@ -1540,12 +1549,12 @@ class Validator(aobject):
 
             if response.body.task_results:
                 logger.success(
-                    f"Received task results from miner {miner_hotkey} for task {dojo_task_id}"
+                    f"Received task results from miner {miner_hotkey} for task {validator_task_id}"
                 )
                 return response.body.task_results
 
             logger.error(
-                f"No results from miner {miner_hotkey} for task {dojo_task_id} after {max_retries} attempts"
+                f"No results from miner {miner_hotkey} for task {validator_task_id} after {max_retries} attempts"
             )
             return []
 

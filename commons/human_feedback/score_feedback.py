@@ -176,7 +176,7 @@ async def process_score_feedback_task(
             # Get task results from miner
             task_results = await validator._get_task_results_from_miner(
                 miner_hotkey=miner_response.hotkey,
-                dojo_task_id=miner_response.dojo_task_id,
+                validator_task_id=sf_task.id,
             )
 
             if not task_results:
