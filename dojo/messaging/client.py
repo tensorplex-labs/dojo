@@ -97,11 +97,10 @@ class Client:
         logger.trace(f"Sending request with headers: {headers}")
         return headers
 
-    async def shutdown(self):
-        try:
-            await self._session.close()
-        except Exception as e:
-            logger.warning(f"Error while trying to close aiohttp.ClientSession, {e}")
+    async def _ensure_session(self):
+        """Recreate session if it's closed"""
+        if not self._session or self._session.closed:
+            self._session = get_client()
 
     async def batch_send(
         self,
@@ -178,6 +177,7 @@ class Client:
         client_resp: aiohttp.ClientResponse | None = None
         context_msg = f"{url=}, {model_name=}, {max_retries=}, {max_wait_sec=}"
         try:
+            await self._ensure_session()
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(max_retries),
                 wait=wait_exponential(
@@ -328,7 +328,7 @@ class Client:
                 body=model.model_construct(), exception=e, client_response=client_resp
             )
 
-    async def cleanup(self):
+    async def close(self):
         try:
             await self._session.close()
         except Exception:

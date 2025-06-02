@@ -1093,6 +1093,7 @@ class Validator(aobject):
         """Handle cleanup operations when shutting down"""
         logger.success("Validator axon stopped")
         await self.kami.close()
+        await self.client.close()
 
     async def _generate_synthetic_request(
         self,
