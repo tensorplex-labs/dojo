@@ -49,6 +49,7 @@ class Miner(aobject):
         )
         logger.info(f"Wallet: {self.wallet}")
         self.server = Server()
+        await self.register_synapse_handlers()
         await self.init_metagraphs()
         # NOTE: keep track validator task id to dojo task id mapping
         self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
