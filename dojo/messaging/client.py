@@ -62,7 +62,7 @@ async def _log_context(response: StdResponse[PydanticModel]) -> None:
         client_response = response.client_response
         if client_response and client_response.status != http.HTTPStatus.OK:
             logger.error(
-                f"NOT OK, HTTP status: {client_response.status}, text: {client_response.text()} error: {response.error if response else ''}, metadata: {response.metadata if response else ''}"
+                f"NOT OK, HTTP status: {client_response.status}, text: {await client_response.text()} error: {response.error if response else ''}, metadata: {response.metadata if response else ''}"
             )
 
 

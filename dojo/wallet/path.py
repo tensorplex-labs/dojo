@@ -29,7 +29,7 @@ def get_wallet_info(
             data = json.loads(f.read())
             ss58_hotkey = data.get("ss58Address")
     except json.JSONDecodeError:
-        logger.error(f"Failed to parse hotkey pub file at: {coldkey_path} as JSON")
+        logger.error(f"Failed to parse hotkey pub file at: {hotkey_path} as JSON")
 
     return WalletInfo(
         coldkey=ss58_coldkey,

@@ -78,14 +78,14 @@ class ParameterReturnChecker(BaseChecker):
                 nodes.If,
             )
         ):
-            if isinstance(child, nodes.Assign | nodes.AnnAssign | nodes.AugAssign):
+            if isinstance(child, (nodes.Assign, nodes.AnnAssign, nodes.AugAssign)):  # noqa: UP038
                 # Any assignment might modify parameters
                 return True
             elif isinstance(child, nodes.Call):
                 # Method calls might modify parameters
                 if isinstance(child.func, nodes.Attribute):
                     return True
-            elif isinstance(child, nodes.For | nodes.While | nodes.If):
+            elif isinstance(child, (nodes.For, nodes.While, nodes.If)):  # noqa: UP038
                 # Control flow suggests non-trivial logic
                 return True
 
@@ -101,7 +101,7 @@ class ParameterReturnChecker(BaseChecker):
                     node=return_node,
                     args=(return_value.name,),
                 )
-        elif isinstance(return_value, nodes.Tuple | nodes.List):
+        elif isinstance(return_value, (nodes.Tuple, nodes.List)):  # noqa: UP038
             # Tuple/list return: return (x, param, y)
             for element in return_value.elts:
                 if isinstance(element, nodes.Name) and element.name in param_names:

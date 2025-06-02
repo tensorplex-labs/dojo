@@ -36,6 +36,7 @@ class Server:
         # write miner's code
         self._add_http_exception_handler()
         self._add_invalid_signature_exception_handler()
+        self.add_global_exception_handler()
         self.config = None
 
     def _configure_loguru_logging(self) -> None:

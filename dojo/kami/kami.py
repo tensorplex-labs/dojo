@@ -344,8 +344,9 @@ class Kami:
     )
     async def verify(self, hotkey: str, message: str, signature: str) -> bool:
         if not signature.startswith("0x"):
-            message = f"Expected signature to be a hex string!, got: {signature=}"
-            raise ValueError(signature)
+            raise ValueError(
+                f"Expected signature to be a hex string!, got: {signature=}"
+            )
 
         response = await self.post(
             "substrate/sign-message/verify",

@@ -1,10 +1,11 @@
 import logging
+import traceback
 from typing import Any, Awaitable, Callable, Generic, TypeAlias, TypeVar
 
 import aiohttp
 from fastapi import Request
 from loguru import logger
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 PydanticModel = TypeVar("PydanticModel", bound=BaseModel)
 # define a pydantic model here so that we can apply these to child of BaseModel
@@ -22,6 +23,31 @@ class StdResponse(BaseModel, Generic[PydanticModel]):
     metadata: dict[str, Any] = {}
     client_response: aiohttp.ClientResponse | None
     exception: BaseException | None = None
+
+    @field_serializer("client_response")
+    def serialize_client_response(
+        self, value: aiohttp.ClientResponse | None
+    ) -> dict[str, Any] | None:
+        if value is None:
+            return None
+        return {
+            "status": value.status,
+            "headers": dict(value.headers),
+            "url": str(value.url),
+            "host": value.host,
+        }
+
+    @field_serializer("exception")
+    def serialize_exception(self, value: BaseException | None) -> dict[str, Any] | None:
+        if value is None:
+            return None
+        return {
+            "type": type(value).__name__,
+            "message": str(value),
+            "traceback": traceback.format_exception(
+                type(value), value, value.__traceback__
+            ),
+        }
 
 
 SIGNATURE_HEADER = "x-signature"

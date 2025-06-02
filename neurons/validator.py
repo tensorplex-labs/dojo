@@ -1238,7 +1238,7 @@ class Validator(aobject):
                 if (
                     not response.body.ack
                     or not response.client_response
-                    or not response.client_response == HTTPStatus.OK
+                    or response.client_response != HTTPStatus.OK
                 ):
                     continue
 

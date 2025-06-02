@@ -4,6 +4,7 @@ import zstandard as zstd
 from fastapi import HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import ORJSONResponse
+from loguru import logger
 from pydantic import BaseModel
 
 from .types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
@@ -78,5 +79,6 @@ def extract_headers(request: Request) -> tuple[str, str, str]:
         message = headers.get(MESSAGE_HEADER, "")
         return hotkey, message, signature
 
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to extract_headers: {e}")
         return "", "", ""

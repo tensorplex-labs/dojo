@@ -103,7 +103,7 @@ class ZstdMiddleware(BaseHTTPMiddleware):
         logger.debug(f"response_body={bytes_response.decode()}")
 
         accept_encoding = request.headers.get("accept-encoding", "").lower()
-        if "zstd" in accept_encoding and response_body:
+        if response_body and "zstd" in accept_encoding:
             compressed_body = compressor.compress(bytes_response)
 
             new_response = Response(

@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import os
 import time
 import traceback
@@ -26,11 +27,13 @@ from dojo.utils import BoundedDict, get_config
 from dojo.wallet import WalletInfo, get_wallet_info
 
 
-def optimize_payload_for_transport(synapse: SyntheticTaskSynapse):
-    if synapse.completion_responses:
-        for response in synapse.completion_responses:
-            response.completion = None
-    return synapse
+def optimize_payload_for_transport(
+    synapse: SyntheticTaskSynapse,
+) -> SyntheticTaskSynapse:
+    synapse_copy = copy.deepcopy(synapse)
+    for response in synapse_copy.completion_responses or []:
+        response.completion = None
+    return synapse_copy
 
 
 class Miner(aobject):

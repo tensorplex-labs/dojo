@@ -1,4 +1,6 @@
-from dojo.utils.config import get_config
+from loguru import logger
+
+from dojo.utils import get_config
 
 
 class ObjectManager:
@@ -12,7 +14,11 @@ class ObjectManager:
         from neurons.miner import Miner
 
         if cls._miner is None:
-            cls._miner = await Miner()
+            try:
+                cls._miner = await Miner()
+            except Exception as e:
+                logger.error(f"Failed to initialize Miner: {e}")
+                raise
         return cls._miner
 
     @classmethod
@@ -20,7 +26,11 @@ class ObjectManager:
         from neurons.validator import Validator
 
         if cls._validator is None:
-            cls._validator = await Validator()
+            try:
+                cls._validator = await Validator()
+            except Exception as e:
+                logger.error(f"Failed to initialize Validator: {e}")
+                raise
         return cls._validator
 
     @classmethod
