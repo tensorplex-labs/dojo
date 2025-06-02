@@ -79,6 +79,10 @@ class ZstdMiddleware(BaseHTTPMiddleware):
         if request.url.path in self.whitelisted_routes:
             return await call_next(request)
 
+        # Skip compression/decompression for HEAD requests (no body to process)
+        if request.method == "HEAD":
+            return await call_next(request)
+
         encoding = request.headers.get("content-encoding", "").lower()
         if encoding == "zstd":
             decompressed_body = await decode_body(request)

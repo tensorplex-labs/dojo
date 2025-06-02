@@ -80,7 +80,7 @@ class Client:
             "accept-encoding": "zstd",
         }
 
-    async def _build_headers(self) -> dict[str, str]:
+    async def _build_headers(self, include_compression: bool = True) -> dict[str, str]:
         hotkey: str = self._wallet_info.hotkey
         # TODO: replace meme message
         message: str = f"I solemnly swear that I am up to some good. Hotkey: {hotkey}"
@@ -91,8 +91,9 @@ class Client:
             SIGNATURE_HEADER: signature,
             HOTKEY_HEADER: hotkey,
             MESSAGE_HEADER: message,
-            **self._compression_headers,
         }
+        if include_compression:
+            headers.update(self._compression_headers)
         logger.trace(f"Sending request with headers: {headers}")
         return headers
 
@@ -186,17 +187,20 @@ class Client:
             ):
                 with attempt:
                     target_url = _build_url(url, model)
-                    _headers = await self._build_headers()
 
                     if enable_preflight:
+                        _head_headers = await self._build_headers(
+                            include_compression=False
+                        )
                         async with self._session.head(
                             target_url,
-                            headers=_headers,
+                            headers=_head_headers,
                             timeout=aiohttp.ClientTimeout(total=timeout_sec),
                         ) as head_resp:
                             head_resp.raise_for_status()
                             logger.debug(f"HEAD preflight successful for {target_url}")
 
+                    _headers = await self._build_headers()
                     payload = encode_body(model, _headers)
                     async with self._session.post(
                         target_url,
