@@ -27,7 +27,7 @@ class Server:
         self.app = app or FastAPI()
         self.app.include_router(router)
         self.app.add_middleware(ZstdMiddleware)
-        self.app.add_middleware(SignatureMiddleware)
+        self.app.add_middleware(SignatureMiddleware, whitelisted_routes=["/health"])
         # NOTE: here we register some exception handlers that make it easier to
         # write miner's code
         self._add_http_exception_handler()
