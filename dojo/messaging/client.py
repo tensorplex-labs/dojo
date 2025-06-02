@@ -147,6 +147,7 @@ class Client:
         max_retries: int = 2,
         max_wait_sec: int = 4,
         wait_exponential_factor: int = 2,
+        enable_preflight: bool = True,
         **kwargs: Any,
     ) -> StdResponse[PydanticModel]:
         """Sends the following payload to the given URL.
@@ -178,12 +179,15 @@ class Client:
             ):
                 with attempt:
                     target_url = _build_url(url, model)
-                    async with self._session.head(
-                        target_url,
-                        timeout=aiohttp.ClientTimeout(total=timeout_sec),
-                    ) as head_resp:
-                        head_resp.raise_for_status()
-                        logger.success(f"HEAD request successful for {target_url}")
+
+                    # Perform optional HEAD preflight request
+                    if enable_preflight:
+                        async with self._session.head(
+                            target_url,
+                            timeout=aiohttp.ClientTimeout(total=timeout_sec),
+                        ) as head_resp:
+                            head_resp.raise_for_status()
+                            logger.debug(f"HEAD preflight successful for {target_url}")
 
                     _headers = await self._build_headers()
                     payload = encode_body(model, _headers)
