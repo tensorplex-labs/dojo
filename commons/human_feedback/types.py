@@ -27,6 +27,8 @@ class HFLConstants(Enum):
     CONSENSUS_THRESHOLD = 101  # turn back to 90 on mainnet
     TF_WEIGHT = 0.7
     SF_WEIGHT = 0.3
+    TF_MAX_RETRY = 5
+    TF_MIN_RESPONSES = 3
 
 
 class BaseHFLInterval(IntEnum):
@@ -37,7 +39,7 @@ class BaseHFLInterval(IntEnum):
     SF_CREATE_INTERVAL = 800  # 13 minutes for Score Feedback task creation
     SF_UPDATE_INTERVAL = 700  # 11 minutes for Score Feedback updates
     NEXT_TF_INTERVAL = 1200  # 20 minutes for creating next Text Feedback tasks
-    TASK_DEADLINE = 5 * 60 * 60  # 5 hours
+    TASK_DEADLINE = 3 * 60 * 60  # 5 hours
 
 
 class MediumHFLInterval(IntEnum):
