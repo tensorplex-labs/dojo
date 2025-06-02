@@ -3,9 +3,8 @@ import os
 import time
 import traceback
 from http import HTTPStatus
-from typing import Dict, Tuple
+from typing import Dict
 
-import bittensor
 from bittensor.utils.networking import ip_to_int, ip_version
 from fastapi import HTTPException
 from loguru import logger
@@ -19,13 +18,12 @@ from dojo.messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 from dojo.protocol import (
     Heartbeat,
     ScoreResultSynapse,
-    ScoringResult,
     SyntheticTaskSynapse,
     TaskResult,
     TaskResultSynapse,
 )
-from dojo.utils import BoundedDict
-from dojo.utils.config import get_config
+from dojo.utils import BoundedDict, get_config
+from dojo.wallet import WalletInfo, get_wallet_info
 
 
 def optimize_payload_for_transport(synapse: SyntheticTaskSynapse):
@@ -44,36 +42,23 @@ class Miner(aobject):
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
-        self.wallet = bittensor.wallet(config=self.config)
+        self.wallet: WalletInfo = get_wallet_info(
+            bittensor_dir=os.getenv("BITTENSOR_DIR", "~/.bittensor"),
+            wallet_coldkey=self.config.wallet.name,  # type: ignore
+            wallet_hotkey=self.config.wallet.hotkey,  # type: ignore
+        )
         logger.info(f"Wallet: {self.wallet}")
-        # TODO: replace axon this once all functions done
         self.server = Server()
-        self.axon = bittensor.axon(wallet=self.wallet, port=self.config.axon.port)
-        logger.info(f"Axon: {self.axon}")
-
         await self.init_metagraphs()
-
-        # Each miner gets a unique identity (UID) in the network for differentiation.
-        self.uid: int = self.subnet_metagraph.hotkeys.index(
-            self.wallet.hotkey.ss58_address
-        )
-
-        logger.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
-        )
-
-        logger.info("Attaching forward function to miner axon.")
-        # TODO: remove completely...
-        self.axon.attach(
-            forward_fn=self.score_result_handler,
-            blacklist_fn=self.blacklist_score_result_request,
-        )
-
+        # NOTE: keep track validator task id to dojo task id mapping
         self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
         # log all incoming requests
         self.hotkey_to_request: Dict[str, SyntheticTaskSynapse] = {}
 
     async def register_synapse_handlers(self):
+        """Register handler functions for server as first parameter for handler
+        is currently `self`"""
+
         async def heartbeat_adapter(request: Request, synapse: Heartbeat):
             blacklist_reason = self.blacklist_function(request, synapse)
             if blacklist_reason:
@@ -110,7 +95,6 @@ class Miner(aobject):
             synapse=TaskResultSynapse, handler=task_result_adapter
         )
 
-        # TODO: score result request
         async def score_result_adapter(request: Request, synapse: ScoreResultSynapse):
             blacklist_reason = self.blacklist_function(request, synapse)
             if blacklist_reason:
@@ -118,9 +102,13 @@ class Miner(aobject):
                 raise HTTPException(status_code=HTTPStatus.OK, detail=blacklist_reason)
             return await self.score_result_handler(request, synapse)
 
+        self.server.serve_synapse(
+            synapse=ScoreResultSynapse, handler=score_result_adapter
+        )
+
     async def start_server(self):
-        """Wrapper around starting the server so that a different process may
-        acquire the task handle"""
+        """Wrapper around starting the blocking call to server that calls
+        uvicorn.Serve so that a different process may acquire the task handle"""
         await self.server.initialise(port=self.config.axon.port)  # type: ignore
 
     async def init_metagraphs(self):
@@ -167,16 +155,19 @@ class Miner(aobject):
 
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
-        logger.info(f"Serving miner axon {self.axon} with netuid: {self.config.netuid}")
+        external_ip = await self.server.get_external_ip()
+        logger.info(
+            f"Broadcasting miner server at: ip: {external_ip}, port: {self.config.axon.port} with netuid: {self.config.netuid}"
+        )
 
         axon_payload = ServeAxonPayload(
             netuid=self.config.netuid,
-            port=self.axon.external_port,
-            ip=ip_to_int(self.axon.external_ip),
-            ipType=ip_version(self.axon.external_ip),
-            protocol=ip_version(self.axon.external_ip),
-            version=1,
+            port=self.config.axon.port,
+            ip=ip_to_int(external_ip),
+            ipType=ip_version(external_ip),
+            protocol=ip_version(external_ip),
         )
+        logger.error(f"{axon_payload.model_dump()}")
 
         if not await self.check_if_axon_served(axon_payload):
             serve_success = await self.kami.serve_axon(axon_payload)
@@ -189,10 +180,6 @@ class Miner(aobject):
                 exit()
         else:
             logger.info("Axon already served, no need to serve again.")
-
-        # Start  starts the miner's axon, making it active on the network.
-        # TODO: disable this so we can bind axon.port
-        # self.axon.start()
 
         logger.info(f"Miner starting at block: {str(self.block)}")
 
@@ -216,7 +203,6 @@ class Miner(aobject):
             await self._cleanup()
 
     async def _cleanup(self):
-        self.axon.stop()
         await self.server.shutdown()
         await self.kami.close()
 
@@ -323,32 +309,6 @@ class Miner(aobject):
 
         return synapse
 
-    async def blacklist_task_request(
-        self, synapse: SyntheticTaskSynapse
-    ) -> Tuple[bool, str]:
-        return await self.blacklist_function(
-            synapse, "validator", "Valid task request received from validator"
-        )
-
-    async def blacklist_task_result_request(
-        self, synapse: TaskResultSynapse
-    ) -> Tuple[bool, str]:
-        return await self.blacklist_function(
-            synapse, "task result", "Valid task result request from validator"
-        )
-
-    async def blacklist_heartbeat_request(self, synapse: Heartbeat) -> Tuple[bool, str]:
-        return await self.blacklist_function(
-            synapse, "heartbeat", "Valid heartbeat request from validator"
-        )
-
-    async def blacklist_score_result_request(
-        self, synapse: ScoringResult
-    ) -> Tuple[bool, str]:
-        return await self.blacklist_function(
-            synapse, "scoring result", "Valid scoring result request from validator"
-        )
-
     def blacklist_function(
         self, request: Request, synapse: PydanticModel
     ) -> str | None:
@@ -425,7 +385,7 @@ class Miner(aobject):
     async def check_registered(self):
         is_member = await self.kami.is_hotkey_registered(
             netuid=int(self.config.netuid),  # type: ignore
-            hotkey=str(self.wallet.hotkey.ss58_address),
+            hotkey=str(self.wallet.hotkey),
             # block=int(self.block),
         )
         if not is_member:
@@ -447,7 +407,7 @@ class Miner(aobject):
         """
         Check if the axon is served successfully.
         """
-        hotkey = self.wallet.hotkey.ss58_address
+        hotkey = self.wallet.hotkey
         uid = self.subnet_metagraph.hotkeys.index(hotkey)
         current_axon: AxonInfo = self.subnet_metagraph.axons[uid]
         current_axon_ip: str = current_axon.ip

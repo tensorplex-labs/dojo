@@ -53,8 +53,8 @@ class ServeAxonPayload(BaseModel):
     version: int = 1
     ip: int
     port: int
-    ipType: int
-    protocol: int
+    ipType: int = Field(default=4, description="4 for IPv4 or 6 for IPv6")
+    protocol: int = Field(default=4, description="Should be the same for ipType")
     placeholder1: int = 0
     placeholder2: int = 0
 

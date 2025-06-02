@@ -2,6 +2,7 @@ import traceback
 from http import HTTPStatus
 from typing import Any, List, Type
 
+import httpx
 import orjson
 import uvicorn
 from fastapi import APIRouter, FastAPI, HTTPException, Request
@@ -9,10 +10,16 @@ from fastapi.responses import ORJSONResponse
 from loguru import logger
 from pydantic import BaseModel
 
-from dojo.messaging.exceptions import InvalidSignatureException
-from dojo.messaging.middleware import SignatureMiddleware, ZstdMiddleware
-from dojo.messaging.types import PydanticModel, ServerHandlerFunc
+from commons.objects import ObjectManager
+from dojo.messaging import (
+    InvalidSignatureException,
+    PydanticModel,
+    ServerHandlerFunc,
+    SignatureMiddleware,
+    ZstdMiddleware,
+)
 from dojo.messaging.utils import create_response
+from dojo.utils import resolve_log_level
 
 router = APIRouter()
 
@@ -96,13 +103,16 @@ class Server:
 
     async def initialise(self, port: int) -> bool:
         try:
+            logger.info("Starting FastAPI server with uvicorn...")
             logger.info(f"Server will support the following routes: {self.app.routes=}")
+            config = ObjectManager.get_config()
+            level = resolve_log_level(config)
             server_config = uvicorn.Config(
                 app=self.app,
                 host="0.0.0.0",
                 port=port,
                 workers=1,
-                log_level="info",
+                log_level=level,
                 reload=False,
             )
             self.config = server_config
@@ -116,6 +126,24 @@ class Server:
         except Exception as e:
             logger.error(f"Error starting server: {str(e)}")
             return False
+
+    async def get_external_ip(self):
+        services = [
+            ("https://checkip.amazonaws.com", lambda r: r.text.strip()),
+            ("https://api.ipify.org", lambda r: r.text.strip()),
+            ("https://icanhazip.com", lambda r: r.text.strip()),
+            ("https://ifconfig.me", lambda r: r.text.strip()),
+            ("https://httpbin.org/ip", lambda r: r.json()["origin"]),
+        ]
+
+        async with httpx.AsyncClient() as client:
+            for url, parser in services:
+                try:
+                    response = await client.get(url, timeout=5)
+                    return parser(response)
+                except Exception:
+                    continue
+            raise Exception("All IP detection services failed")
 
 
 def _register_route_handler(
