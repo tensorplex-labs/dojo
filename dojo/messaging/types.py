@@ -1,7 +1,9 @@
+import logging
 from typing import Any, Awaitable, Callable, Generic, TypeAlias, TypeVar
 
 import aiohttp
 from fastapi import Request
+from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
 PydanticModel = TypeVar("PydanticModel", bound=BaseModel)
@@ -25,3 +27,25 @@ class StdResponse(BaseModel, Generic[PydanticModel]):
 SIGNATURE_HEADER = "x-signature"
 HOTKEY_HEADER = "x-hotkey"
 MESSAGE_HEADER = "x-message"
+
+
+class InterceptHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        # Use the logging record's information instead of trying to calculate depth
+        try:
+            logger.patch(
+                lambda r: r.update(
+                    name=record.name,
+                    function=record.funcName,
+                    file=record.pathname,
+                    line=record.lineno,
+                    module=record.module,
+                )
+            ).log(level, record.getMessage())
+        except:  # noqa: E722
+            pass

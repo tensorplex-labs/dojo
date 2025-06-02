@@ -1,3 +1,4 @@
+import logging
 import traceback
 from http import HTTPStatus
 from typing import Any, List, Type
@@ -16,7 +17,7 @@ from dojo.utils import resolve_log_level
 
 from .exceptions import InvalidSignatureException
 from .middleware import SignatureMiddleware, ZstdMiddleware
-from .types import PydanticModel, ServerHandlerFunc
+from .types import InterceptHandler, PydanticModel, ServerHandlerFunc
 from .utils import create_response
 
 router = APIRouter()
@@ -24,6 +25,8 @@ router = APIRouter()
 
 class Server:
     def __init__(self, app: FastAPI | None = None, kami: Kami | None = None) -> None:
+        self._configure_loguru_logging()
+
         self.app = app or FastAPI()
         self.kami = kami or Kami()
         self.app.include_router(router)
@@ -34,6 +37,34 @@ class Server:
         self._add_http_exception_handler()
         self._add_invalid_signature_exception_handler()
         self.config = None
+
+    def _configure_loguru_logging(self) -> None:
+        """Configure FastAPI/uvicorn to use loguru logging"""
+        # Remove existing handlers from root logger
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+
+        intercept_handler = InterceptHandler()
+
+        # Intercept standard logging at root level
+        log_level = resolve_log_level(ObjectManager.get_config())
+        level = logging.getLevelName(log_level)
+        # NOTE: using this at debug and below gets extremely spammy
+        logging.basicConfig(handlers=[intercept_handler], level=level)
+
+        # Ensure specific loggers propagate to root logger
+        loggers = (
+            "uvicorn",
+            "uvicorn.access",
+            "uvicorn.error",
+            "fastapi",
+            "asyncio",
+            "starlette",
+        )
+        for logger_name in loggers:
+            logging_logger = logging.getLogger(logger_name)
+            logging_logger.handlers = []
+            logging_logger.propagate = True
 
     async def close(self):
         if hasattr(self, "server") and self.server:
@@ -100,14 +131,14 @@ class Server:
         try:
             logger.info("Starting FastAPI server with uvicorn...")
             logger.info(f"Server will support the following routes: {self.app.routes=}")
-            config = ObjectManager.get_config()
-            level = resolve_log_level(config)
+            # NOTE: prevent uvicorn from overriding logging settings
             server_config = uvicorn.Config(
                 app=self.app,
                 host="0.0.0.0",
                 port=port,
                 workers=1,
-                log_level=level.lower(),
+                log_config=None,
+                log_level=None,
                 reload=False,
             )
             self.config = server_config
