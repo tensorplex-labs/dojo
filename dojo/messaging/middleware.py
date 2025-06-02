@@ -30,7 +30,7 @@ class SignatureMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> ORJSONResponse | Response:
-        if request.url.path in self.whitelisted_routes or request.method == "HEAD":
+        if request.url.path in self.whitelisted_routes:
             return await call_next(request)
 
         signature = request.headers.get(SIGNATURE_HEADER, "")
@@ -76,7 +76,7 @@ class ZstdMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> ORJSONResponse | Response:
         logger.debug(f"Request headers: {request.headers}")
-        if request.url.path in self.whitelisted_routes or request.method == "HEAD":
+        if request.url.path in self.whitelisted_routes:
             return await call_next(request)
 
         encoding = request.headers.get("content-encoding", "").lower()

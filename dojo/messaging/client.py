@@ -186,19 +186,18 @@ class Client:
             ):
                 with attempt:
                     target_url = _build_url(url, model)
+                    _headers = await self._build_headers()
 
-                    # Perform optional HEAD preflight request
                     if enable_preflight:
                         async with self._session.head(
                             target_url,
+                            headers=_headers,
                             timeout=aiohttp.ClientTimeout(total=timeout_sec),
                         ) as head_resp:
                             head_resp.raise_for_status()
                             logger.debug(f"HEAD preflight successful for {target_url}")
 
-                    _headers = await self._build_headers()
                     payload = encode_body(model, _headers)
-                    # response: aiohttp.ClientResponse | None = None
                     async with self._session.post(
                         target_url,
                         data=payload,
