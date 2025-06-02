@@ -1,7 +1,9 @@
 import functools
 from typing import Awaitable, Callable, ParamSpec, Tuple, Type, TypeVar
 
+from loguru import logger
 from tenacity import (
+    RetryCallState,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -9,8 +11,6 @@ from tenacity import (
     wait_exponential,
     wait_random,
 )
-
-from dojo.logging import tenacity_retry_log
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -52,7 +52,7 @@ def async_retry(
             stop=stop_after_attempt(max_retries),
             wait=wait_strategy,
             retry=retry_if_exception_type(exceptions),
-            before_sleep=tenacity_retry_log,
+            before_sleep=retry_log,
         )
 
         @functools.wraps(func)
@@ -62,3 +62,12 @@ def async_retry(
         return wrapper
 
     return decorator
+
+
+def retry_log(retry_state: RetryCallState):
+    """Custom retry logger that works well with loguru"""
+    func_name = getattr(retry_state.fn, "__name__", "<unknown_function>")
+    logger.debug(
+        f"Retrying {func_name} attempt {retry_state.attempt_number} "
+        f"after {retry_state.seconds_since_start:.1f}s due to: {retry_state.outcome.exception() if retry_state.outcome else ''}"
+    )

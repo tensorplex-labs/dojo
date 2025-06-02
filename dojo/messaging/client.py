@@ -17,7 +17,7 @@ from tenacity import (
 )
 
 from dojo.kami import Kami
-from dojo.logging.utils import tenacity_retry_log
+from dojo.utils import retry_log
 from dojo.wallet import WalletInfo
 
 from .types import (
@@ -183,7 +183,7 @@ class Client:
                 wait=wait_exponential(
                     multiplier=wait_exponential_factor, max=max_wait_sec
                 ),
-                before_sleep=tenacity_retry_log,
+                before_sleep=retry_log,
             ):
                 with attempt:
                     target_url = _build_url(url, model)
