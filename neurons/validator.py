@@ -109,7 +109,7 @@ class Validator(aobject):
         await connect_db()
         self.QUALITY_WEIGHT = 0.8
         self._connection_lock = asyncio.Lock()
-        # NOTE: considering the payload of heartbeats we can afford higher concurrency
+        # considering the payload of heartbeats we can afford higher concurrency
         # NOTE: the parameter essentially determines the batch size of batch sending requests
         self._semaphore_heartbeats = asyncio.BoundedSemaphore(32)
         self._semaphore_synthetic_task = asyncio.BoundedSemaphore(10)
@@ -161,7 +161,7 @@ class Validator(aobject):
         await self.check_registered()
         await self.load_state()
 
-    async def send_scores(
+    async def _send_scores(
         self, validator_task_id: str, hotkeys: List[str], scores: List[Scores]
     ):
         """Send scores that taostats, CLI, etc. cannot see for miners who participated."""
@@ -190,7 +190,7 @@ class Validator(aobject):
                 and not response.error
                 and not response.exception
             ):
-                logger.success(f"Sent scores back to {axon.hotkey} successfully")
+                logger.success(f"Sent scores to {axon.hotkey} successfully")
 
     def obfuscate_model_names(
         self, completion_responses: list[CompletionResponse]
@@ -825,10 +825,9 @@ class Validator(aobject):
         Uses a buffer period to ensure tasks have had sufficient update cycles.
         """
         while True:
-            await asyncio.sleep(ValidatorInterval.VALIDATOR_UPDATE_SCORE)  # 60 minutes
+            await asyncio.sleep(ValidatorInterval.VALIDATOR_UPDATE_SCORE)
             # for each hotkey, a list of scores from all tasks being scored
             hotkey_to_synthetic_scores = defaultdict(list)
-
             hotkey_to_hfl_scores = defaultdict(list)
             try:
                 # Get tasks that expired between 2 hours ago and 30 minutes ago
@@ -871,6 +870,14 @@ class Validator(aobject):
                                     processed_request_ids.append(task_id)
                                 for hotkey, score in hotkey_to_score.items():
                                     hotkey_to_synthetic_scores[hotkey].append(score)
+
+                                success = await self.send_scoring_result_to_miners(
+                                    task_id
+                                )
+                                if not success:
+                                    logger.error(
+                                        f"Failed to send scoring result to miners for task {task_id}"
+                                    )
 
                             elif (
                                 validator_task.task_type == TaskTypeEnum.SCORE_FEEDBACK
@@ -1653,6 +1660,7 @@ class Validator(aobject):
                 miner_responses=task.miner_responses,
             )
 
+            # FIXME: to align logic here and in `_prepare_scoring_result`
             # Create hotkey_to_completion_responses mapping and hotkey_to_scores mapping
             hotkey_to_completion_responses = {}
             for miner_response in updated_miner_responses:
@@ -1701,18 +1709,6 @@ class Validator(aobject):
         logger.info(
             f"📝 Received {len(task.miner_responses)} responses from miners. "
             f"Processed {len(hotkey_to_completion_responses.keys())} responses for scoring."
-        )
-
-        # NOTE: this will break once we have multiple criterion
-        await self.send_scores(
-            validator_task_id=task.validator_task.task_id,
-            hotkeys=list(hotkey_to_completion_responses.keys()),
-            scores=[
-                completion.criteria_types[0].scores
-                for completion_responses in hotkey_to_completion_responses.values()
-                for completion in completion_responses
-                if completion.criteria_types and completion.criteria_types[0].scores
-            ],
         )
 
         return hotkey_to_scores
@@ -1926,19 +1922,18 @@ class Validator(aobject):
             True if successful, False otherwise
         """
         try:
-            scoring_result, participating_hotkeys = await self._prepare_scoring_result(
+            participating_hotkeys, scores_list = await self._prepare_scoring_result(
                 task_id
             )
 
-            if not scoring_result or not participating_hotkeys:
-                logger.warning(
-                    f"No scoring result or participating hotkeys for task {task_id}"
-                )
+            if not participating_hotkeys or not scores_list:
+                logger.warning(f"No participating hotkeys or scores for task {task_id}")
                 return False
 
-            await self.send_scores(
-                synapse=scoring_result,
+            await self._send_scores(
+                validator_task_id=task_id,
                 hotkeys=participating_hotkeys,
+                scores=scores_list,
             )
 
             logger.info(f"Sent score results back to miners for task {task_id}")
@@ -1949,15 +1944,15 @@ class Validator(aobject):
 
     async def _prepare_scoring_result(
         self, task_id: str
-    ) -> tuple[ScoreResultSynapse | None, list[str]]:
+    ) -> tuple[list[str], list[Scores]]:
         """
-        Prepare a ScoringResult for a specific task to send back to miners.
+        Prepare scoring results for a specific task to send back to miners.
 
         Args:
             task_id: The ID of the task (TF or SF) to prepare results for
 
         Returns:
-            Tuple containing (scoring_result, participating_hotkeys)
+            Tuple containing (participating_hotkeys, scores_list)
         """
         # Get the task with its completions and miner responses with their scores
         task = await ORM.get_validator_task_by_id(
@@ -1974,11 +1969,10 @@ class Validator(aobject):
             logger.warning(
                 f"Cannot prepare scoring result for task {task_id}: task or responses, or completions not found"
             )
-            return None, []
+            return [], []
 
-        # Create hotkey_to_completion_responses mapping
-        hotkey_to_completion_responses = {}
         participating_hotkeys = []
+        scores_list = []
 
         for miner_response in task.miner_responses:
             hotkey = miner_response.hotkey
@@ -1990,17 +1984,16 @@ class Validator(aobject):
                 completions=task.completions,
             )
 
-            # Add to mapping
+            # Extract scores from completion responses for this miner
             if completion_responses:
-                hotkey_to_completion_responses[hotkey] = completion_responses
+                for completion in completion_responses:
+                    if (
+                        completion.criteria_types
+                        and completion.criteria_types[0].scores
+                    ):
+                        scores_list.append(completion.criteria_types[0].scores)
 
-        # Create scoring result
-        scoring_result = ScoreResultSynapse(
-            task_id=task_id,
-            hotkey_to_completion_responses=hotkey_to_completion_responses,
-        )
-
-        return scoring_result, participating_hotkeys
+        return participating_hotkeys, scores_list
 
     def _resize_score_tensor(
         self,
