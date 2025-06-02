@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import List
 
 import bittensor as bt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -181,14 +181,11 @@ class SyntheticTaskSynapse(bt.Synapse):
     )
 
 
-class ScoringResult(bt.Synapse):
-    task_id: str = Field(
+class ScoreResultSynapse(BaseModel):
+    validator_task_id: str = Field(
         description="Unique identifier for the request",
     )
-    hotkey_to_completion_responses: Dict[str, List[CompletionResponse]] = Field(
-        description="Hotkey to completion responses mapping",
-        default_factory=dict,
-    )
+    scores: Scores = Field(description="Scores object for a miner for that task id")
 
 
 class Heartbeat(BaseModel):
