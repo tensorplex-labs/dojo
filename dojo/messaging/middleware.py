@@ -43,7 +43,7 @@ class SignatureMiddleware(BaseHTTPMiddleware):
             return create_response(body={}, status_code=400, error=message)
 
         kami = Kami()
-        if not await kami.verify(hotey=hotkey, message=message, signature=signature):
+        if not await kami.verify(hotkey=hotkey, message=message, signature=signature):
             return create_response(
                 body={},
                 status_code=403,
