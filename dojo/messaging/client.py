@@ -330,33 +330,6 @@ class Client:
         except Exception:
             pass
 
-    async def health_check(self, url: str, timeout_sec: int = 10) -> bool:
-        """
-        Simple health check to verify if a server is up and running.
-
-        Args:
-            url (str): Base URL of the server (without /health)
-            timeout_sec (int): Timeout in seconds
-
-        Returns:
-            bool: True if server is healthy, False otherwise
-        """
-        if not url.startswith("http") and not url.startswith("https"):
-            url = f"http://{url}"
-
-        health_url = f"{url}/health"
-
-        try:
-            async with self._session.get(
-                health_url,
-                timeout=aiohttp.ClientTimeout(total=timeout_sec),
-            ) as response:
-                logger.info(f"Health check to {health_url}: status={response.status}")
-                return response.status == http.HTTPStatus.OK
-        except Exception as e:
-            logger.error(f"Health check failed for {health_url}: {str(e)}")
-            return False
-
 
 # # NOTE: example usage below
 # async def main():

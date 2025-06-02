@@ -21,17 +21,12 @@ from .utils import create_response
 router = APIRouter()
 
 
-@router.api_route("/health", methods=["GET", "HEAD"])
-async def health_check():
-    return ORJSONResponse(content={}, status_code=HTTPStatus.OK)
-
-
 class Server:
     def __init__(self, app: FastAPI | None = None) -> None:
         self.app = app or FastAPI()
         self.app.include_router(router)
         self.app.add_middleware(ZstdMiddleware)
-        self.app.add_middleware(SignatureMiddleware, whitelisted_routes=["/health"])
+        self.app.add_middleware(SignatureMiddleware)
         # NOTE: here we register some exception handlers that make it easier to
         # write miner's code
         self._add_http_exception_handler()

@@ -22,7 +22,7 @@ compressor = zstd.ZstdCompressor(level=3)
 class SignatureMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, whitelisted_routes: list[str] | None = None):
         super().__init__(app)
-        self.whitelisted_routes = whitelisted_routes or ["/health"]
+        self.whitelisted_routes = whitelisted_routes or []
         # always whitelisted
         if "/docs" not in self.whitelisted_routes:
             self.whitelisted_routes.append("/docs")
@@ -62,12 +62,12 @@ class ZstdMiddleware(BaseHTTPMiddleware):
     1. Decompresses incoming request bodies with content-encoding: zstd
     2. Compresses outgoing response bodies when Accept-Encoding includes zstd
 
-    NOTE: The /health endpoint is excluded from compression/decompression.
+    NOTE: The /docs endpoint is excluded from compression/decompression.
     """
 
     def __init__(self, app, whitelisted_routes: list[str] | None = None):
         super().__init__(app)
-        self.whitelisted_routes = whitelisted_routes or ["/health"]
+        self.whitelisted_routes = whitelisted_routes or []
         # always whitelisted
         if "/docs" not in self.whitelisted_routes:
             self.whitelisted_routes.append("/docs")
