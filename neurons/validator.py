@@ -1306,12 +1306,6 @@ class Validator(aobject):
 
         return validator_task
 
-    async def cleanup_resources(self):
-        while True:
-            if self.dendrite.synapse_history:
-                self.dendrite.synapse_history.clear()
-            await asyncio.sleep(300)
-
     async def send_synthetic_task(
         self, synapse: SyntheticTaskSynapse, axons: list[AxonInfo] = []
     ) -> list[StdResponse[SyntheticTaskSynapse]]:
