@@ -48,7 +48,7 @@ class Miner(aobject):
             wallet_hotkey=self.config.wallet.hotkey,  # type: ignore
         )
         logger.info(f"Wallet: {self.wallet}")
-        self.server = Server()
+        self.server = Server(kami=self.kami)
         await self.register_synapse_handlers()
         await self.init_metagraphs()
         # NOTE: keep track validator task id to dojo task id mapping
@@ -203,7 +203,7 @@ class Miner(aobject):
             await self._cleanup()
 
     async def _cleanup(self):
-        await self.server.shutdown()
+        await self.server.close()
         await self.kami.close()
 
     async def heartbeat_handler(

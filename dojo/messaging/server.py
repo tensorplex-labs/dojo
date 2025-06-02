@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from commons.objects import ObjectManager
+from dojo.kami import Kami
 from dojo.utils import resolve_log_level
 
 from .exceptions import InvalidSignatureException
@@ -22,21 +23,23 @@ router = APIRouter()
 
 
 class Server:
-    def __init__(self, app: FastAPI | None = None) -> None:
+    def __init__(self, app: FastAPI | None = None, kami: Kami | None = None) -> None:
         self.app = app or FastAPI()
+        self.kami = kami or Kami()
         self.app.include_router(router)
         self.app.add_middleware(ZstdMiddleware)
-        self.app.add_middleware(SignatureMiddleware)
+        self.app.add_middleware(SignatureMiddleware, kami=self.kami)
         # NOTE: here we register some exception handlers that make it easier to
         # write miner's code
         self._add_http_exception_handler()
         self._add_invalid_signature_exception_handler()
         self.config = None
 
-    async def shutdown(self):
+    async def close(self):
         if hasattr(self, "server") and self.server:
             self.server.should_exit = True
             await self.server.shutdown()
+        await self.kami.close()
 
     def add_global_exception_handler(self) -> None:
         """Register exception handlers to standardize error responses"""

@@ -20,8 +20,9 @@ compressor = zstd.ZstdCompressor(level=3)
 
 
 class SignatureMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, whitelisted_routes: list[str] | None = None):
+    def __init__(self, app, kami: Kami, whitelisted_routes: list[str] | None = None):
         super().__init__(app)
+        self.kami = kami
         self.whitelisted_routes = whitelisted_routes or []
         # always whitelisted
         if "/docs" not in self.whitelisted_routes:
@@ -42,8 +43,9 @@ class SignatureMiddleware(BaseHTTPMiddleware):
                     got: {hotkey=}, {signature=}, {message=}"
             return create_response(body={}, status_code=400, error=message)
 
-        kami = Kami()
-        if not await kami.verify(hotkey=hotkey, message=message, signature=signature):
+        if not await self.kami.verify(
+            hotkey=hotkey, message=message, signature=signature
+        ):
             return create_response(
                 body={},
                 status_code=403,
