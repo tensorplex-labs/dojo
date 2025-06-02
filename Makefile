@@ -80,9 +80,6 @@ dojo-cli:
 extract-dataset:
 	docker compose -f docker-compose.validator.yaml run --remove-orphans extract-dataset
 
-fill-score-column:
-	docker compose -f docker-compose.validator.yaml run --remove-orphans fill-score-column
-
 migration:
 	docker compose -f docker-compose.validator.yaml run --rm migration
 
@@ -143,6 +140,9 @@ watchtower:
 
 watchtower-down:
 	docker compose -f docker-compose.shared.yaml down watchtower
+
+back-up-scores:
+	docker cp validator:/app/scores/miner_scores.pt scores/miner_scores.pt.bak
 
 
 install-hfl-miner:

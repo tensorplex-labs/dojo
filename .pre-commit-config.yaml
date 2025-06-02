@@ -80,11 +80,6 @@ repos:
       - id: remove-tabs
         args: [--whitespaces-count, "4"]
 
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.3.0
-    hooks:
-      - id: codespell
-        exclude: "CHANGELOG.md|tests/.*|README.md"
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.4

@@ -15,8 +15,8 @@ from commons.utils import aget_effective_stake, aobject, get_epoch_time
 
 #                            serve_axon)
 from commons.worker_api.dojo import DojoAPI
-from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.chain import parse_block_headers
+from dojo.constants import MinerConstant, ValidatorConstant
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
 from dojo.protocol import (
     Heartbeat,
@@ -402,18 +402,18 @@ class Miner(aobject):
 
         if get_config().ignore_min_stake:
             message = (
-                f"Ignoring min stake required: {VALIDATOR_MIN_STAKE} for {caller_hotkey}, "
+                f"Ignoring min stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE} for {caller_hotkey}, "
                 "YOU SHOULD NOT SEE THIS when you are running a miner on mainnet"
             )
             logger.warning(message)
             return (
                 False,
-                f"Ignored minimum validator stake requirement of {VALIDATOR_MIN_STAKE}",
+                f"Ignored minimum validator stake requirement of {ValidatorConstant.VALIDATOR_MIN_STAKE}",
             )
 
         effective_stake = aget_effective_stake(caller_hotkey, self.subnet_metagraph)
-        if effective_stake < float(VALIDATOR_MIN_STAKE):
-            message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"
+        if effective_stake < float(ValidatorConstant.VALIDATOR_MIN_STAKE):
+            message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"
             logger.warning(message)
             return True, message
 
@@ -450,7 +450,7 @@ class Miner(aobject):
     async def log_miner_status(self):
         while not self._should_exit:
             logger.info(f"Miner running... block:{str(self.block)} time: {time.time()}")
-            await asyncio.sleep(MINER_STATUS)
+            await asyncio.sleep(MinerConstant.MINER_STATUS)
 
     async def sync(self):
         """
