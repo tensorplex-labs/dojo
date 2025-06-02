@@ -124,8 +124,8 @@ class Miner(aobject):
         # Check if the miner is registered on the Bittensor network before proceeding further.
         await self.check_registered()
         logger.info(f"Kami initialized, {self.kami.url}")
-        logger.info(f"Root metagraph initialized, {self.root_metagraph}")
-        logger.info(f"Subnet metagraph initialized, {self.subnet_metagraph}")
+        logger.info("Root metagraph initialized")
+        logger.info("Subnet metagraph initialized")
 
     async def run(self):
         """
@@ -167,7 +167,6 @@ class Miner(aobject):
             ipType=ip_version(external_ip),
             protocol=ip_version(external_ip),
         )
-        logger.error(f"{axon_payload.model_dump()}")
 
         if not await self.check_if_axon_served(axon_payload):
             serve_success = await self.kami.serve_axon(axon_payload)

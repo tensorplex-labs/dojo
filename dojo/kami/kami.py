@@ -14,6 +14,7 @@ from dojo.kami.types import (
     SubnetHyperparameters,
     SubnetMetagraph,
 )
+from dojo.utils import async_retry
 
 
 class Kami:
@@ -114,6 +115,17 @@ class Kami:
             logger.error(f"Unexpected error: {e}")
             raise e
 
+    @async_retry(
+        max_retries=5,
+        base_delay=0.5,
+        backoff_factor=2,
+        max_delay=10,
+        exceptions=(
+            aiohttp.ClientConnectionError,
+            aiohttp.ServerDisconnectedError,
+            aiohttp.ClientConnectionResetError,
+        ),
+    )
     async def get_metagraph(self, netuid: int) -> SubnetMetagraph:
         """
         Get the metagraph for a given netuid.
@@ -213,6 +225,8 @@ class Kami:
             )
         return result.get("data", {}).get("isHotkeyValid", False)
 
+    # NOTE: factor of 1 just means linear backoff instead of exponential
+    @async_retry(max_retries=3, base_delay=12, max_delay=36, backoff_factor=1)
     async def serve_axon(self, payload: ServeAxonPayload) -> Dict[str, Any]:
         """
         Register an axon server with the network.

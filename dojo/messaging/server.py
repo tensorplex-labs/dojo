@@ -11,15 +11,12 @@ from loguru import logger
 from pydantic import BaseModel
 
 from commons.objects import ObjectManager
-from dojo.messaging import (
-    InvalidSignatureException,
-    PydanticModel,
-    ServerHandlerFunc,
-    SignatureMiddleware,
-    ZstdMiddleware,
-)
-from dojo.messaging.utils import create_response
 from dojo.utils import resolve_log_level
+
+from .exceptions import InvalidSignatureException
+from .middleware import SignatureMiddleware, ZstdMiddleware
+from .types import PydanticModel, ServerHandlerFunc
+from .utils import create_response
 
 router = APIRouter()
 
@@ -42,7 +39,7 @@ class Server:
         self.config = None
 
     async def shutdown(self):
-        if self.server:
+        if hasattr(self, "server") and self.server:
             self.server.should_exit = True
             await self.server.shutdown()
 
@@ -112,7 +109,7 @@ class Server:
                 host="0.0.0.0",
                 port=port,
                 workers=1,
-                log_level=level,
+                log_level=level.lower(),
                 reload=False,
             )
             self.config = server_config

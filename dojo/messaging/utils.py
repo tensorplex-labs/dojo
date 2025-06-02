@@ -6,7 +6,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
 
-from dojo.messaging.types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
+from .types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
 
 
 def create_response(

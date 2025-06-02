@@ -9,8 +9,9 @@ from starlette.concurrency import iterate_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from dojo.kami import Kami
-from dojo.messaging.types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
-from dojo.messaging.utils import (
+
+from .types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
+from .utils import (
     create_response,
     decode_body,
 )

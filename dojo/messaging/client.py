@@ -18,15 +18,16 @@ from tenacity import (
 
 from dojo.kami import Kami
 from dojo.logging.utils import tenacity_retry_log
-from dojo.messaging.types import (
+from dojo.wallet import WalletInfo
+
+from .types import (
     HOTKEY_HEADER,
     MESSAGE_HEADER,
     SIGNATURE_HEADER,
     PydanticModel,
     StdResponse,
 )
-from dojo.messaging.utils import encode_body
-from dojo.wallet import WalletInfo
+from .utils import encode_body
 
 
 def get_client(conn_limit: int = None, limit_per_host: int = None) -> ClientSession:  # type: ignore[assignment]
