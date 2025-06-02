@@ -151,7 +151,7 @@ def _register_route_handler(
         """Wrapper around the request that handles zstd decompression and payload validation"""
         try:
             if request.method == "HEAD":
-                return ORJSONResponse(content={}, status_code=HTTPStatus.OK)
+                return create_response(status_code=HTTPStatus.OK, body={})
 
             data: dict[str, Any] = {}
             try:
