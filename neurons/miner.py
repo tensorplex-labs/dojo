@@ -2,7 +2,6 @@ import asyncio
 import os
 import time
 import traceback
-from datetime import datetime
 from http import HTTPStatus
 from typing import Dict, Tuple
 
@@ -12,7 +11,7 @@ from fastapi import HTTPException
 from loguru import logger
 
 from commons.objects import ObjectManager
-from commons.utils import aget_effective_stake, aobject, get_epoch_time
+from commons.utils import aget_effective_stake, aobject
 from commons.worker_api.dojo import DojoAPI
 from dojo.chain import parse_block_headers
 from dojo.constants import MinerConstant, ValidatorConstant
@@ -285,7 +284,6 @@ class Miner(aobject):
     async def synthetic_task_handler(
         self, request: Request, synapse: SyntheticTaskSynapse
     ) -> SyntheticTaskSynapse:
-        # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
         caller_hotkey = request.headers.get(HOTKEY_HEADER)
         synapse_name = synapse.__class__.__name__
         logger.info(
@@ -427,20 +425,6 @@ class Miner(aobject):
             return message
 
         return None
-
-    async def priority_ranking(self, synapse: SyntheticTaskSynapse) -> float:
-        """
-        The priority function determines the order in which requests are handled. Higher-priority
-        requests are processed before others. Miners may receive messages from multiple entities at
-        once. This function determines which request should be processed first.
-        Higher values indicate that the request should be processed first.
-        Lower values indicate that the request should be processed later.
-        """
-        current_timestamp = datetime.fromtimestamp(get_epoch_time())
-        dt = current_timestamp - datetime.fromtimestamp(synapse.epoch_timestamp)
-        priority = float(dt.total_seconds())
-        logger.debug(f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}")
-        return priority
 
     async def resync_metagraph(self):
         # Copies state of metagraph before syncing.

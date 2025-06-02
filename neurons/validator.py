@@ -128,7 +128,6 @@ class Validator(aobject):
         self.metagraph = await self.kami.get_metagraph(self.config.netuid)
         logger.info(f"Metagraph Loaded for {self.metagraph.netuid}")
 
-        # TODO: this allows us to call miners
         self.wallet_info = get_wallet_info(
             bittensor_dir=os.getenv("BITTENSOR_DIR", "~/.bittensor"),
             wallet_coldkey=self.config.wallet.name,
@@ -178,7 +177,6 @@ class Validator(aobject):
 
         await self._semaphore_limited_forward(self.dendrite, axons, synapse, timeout=30)
 
-    # TODO: move to commonly used function
     def obfuscate_model_names(
         self, completion_responses: list[CompletionResponse]
     ) -> tuple[dict[str, str], list[CompletionResponse]]:
@@ -192,7 +190,6 @@ class Validator(aobject):
             obfuscated_model_to_model[completion.completion_id] = original_model
         return obfuscated_model_to_model, completion_responses
 
-    # TODO: move to commonly used function
     def deobfuscate_model_names(
         self,
         completion_responses: list[CompletionResponse],
@@ -1269,7 +1266,6 @@ class Validator(aobject):
 
         # include the ground_truth to keep in data manager
         synapse.ground_truth = ground_truth
-        synapse.dendrite.hotkey = self.vali_hotkey
 
         logger.debug("Attempting to saving dendrite response")
         validator_task = await ORM.save_task(

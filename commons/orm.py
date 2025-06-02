@@ -523,6 +523,7 @@ class ORM:
                 logger.trace("Starting transaction for saving task.")
 
                 # Map validator task using mapper function
+                # FIXME: can i simply use the ground_truths param
                 validator_task_data = map_task_synapse_object_to_validator_task(
                     validator_task, metadata
                 )
