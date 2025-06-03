@@ -46,7 +46,7 @@ class Miner(aobject):
 
         logger.info("Setting up bittensor objects....")
         self.wallet: WalletInfo = get_wallet_info(
-            bittensor_dir=os.getenv("BITTENSOR_DIR", "~/.bittensor"),
+            bittensor_dir=os.getenv("BITTENSOR_DIR", "$HOME/.bittensor"),
             wallet_coldkey=self.config.wallet.name,  # type: ignore
             wallet_hotkey=self.config.wallet.hotkey,  # type: ignore
         )

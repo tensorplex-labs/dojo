@@ -130,7 +130,7 @@ class Validator(aobject):
         logger.info(f"Metagraph Loaded for {self.metagraph.netuid}")
 
         self.wallet_info = get_wallet_info(
-            bittensor_dir=os.getenv("BITTENSOR_DIR", "~/.bittensor"),
+            bittensor_dir=os.getenv("BITTENSOR_DIR", "$HOME/.bittensor"),
             wallet_coldkey=self.config.wallet.name,
             wallet_hotkey=self.config.wallet.hotkey,
         )
