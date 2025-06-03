@@ -1266,7 +1266,7 @@ class ORM:
                                     "dojo_task_id": response.dojo_task_id,
                                     "hotkey": response.miner_hotkey,
                                     "coldkey": response.miner_coldkey,
-                                    "task_result": Json(json.dumps({})),
+                                    "task_result": Json(json.dumps([])),
                                 }
                             )
                             logger.debug(
