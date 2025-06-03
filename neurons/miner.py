@@ -256,10 +256,6 @@ class Miner(aobject):
         try:
             if task_ids := await DojoAPI.create_task(synapse):
                 dojo_task_id = task_ids[0]
-                # # TODO: actually we don't even need this, since LLM API makes it irrelevant
-                # # touchpoints: validator db as well
-                # synapse.dojo_task_id = dojo_task_id
-
                 self.vali_to_dojo_task_id[synapse.task_id] = dojo_task_id
                 synapse.ack = True
                 synapse = optimize_payload_for_transport(synapse)
@@ -298,7 +294,7 @@ class Miner(aobject):
             task_results = await DojoAPI.get_task_results_by_dojo_task_id(dojo_task_id)
             if not task_results:
                 logger.debug(
-                    f"No task result found for dojo task id: {synapse.validator_task_id}"
+                    f"No task result found for {synapse.validator_task_id=} and {dojo_task_id=}"
                 )
                 synapse.task_results = []
                 return synapse
