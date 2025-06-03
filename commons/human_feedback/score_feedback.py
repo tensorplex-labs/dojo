@@ -323,14 +323,12 @@ async def send_hfl_request(
     # Process responses
     valid_miner_responses: list[SyntheticTaskSynapse] = []
     for response, axon in zip(miner_responses, axons):
-        task = response.body
-        try:
-            task.miner_hotkey = axon.hotkey
-            task.miner_coldkey = axon.coldkey
-            valid_miner_responses.append(task)
-        except Exception as e:
-            logger.error(f"Error processing HFL response: {e}")
+        if not response.body.ack:
             continue
+        task = response.body
+        task.miner_hotkey = axon.hotkey
+        task.miner_coldkey = axon.coldkey
+        valid_miner_responses.append(task)
 
     if not valid_miner_responses:
         logger.info(f"No valid responses received for {task_type} task... skipping")
