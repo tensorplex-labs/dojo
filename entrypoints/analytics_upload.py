@@ -324,7 +324,13 @@ async def _parse_task_to_analytics_data(
         absent_hotkeys=absent_hotkeys,
         created_at=datetime_to_iso8601_str(task.created_at),
         updated_at=datetime_to_iso8601_str(task.updated_at),
-        metadata=json.loads(task.metadata) if task.metadata else None,
+        metadata=(
+            task.metadata
+            if isinstance(task.metadata, dict)
+            else json.loads(task.metadata)
+        )
+        if task.metadata
+        else {},
     )
 
     return task_data
