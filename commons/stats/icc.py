@@ -1,6 +1,7 @@
 # Import libraries
 import pandas as pd
 import pingouin as pg
+from loguru import logger
 
 
 def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
@@ -28,6 +29,10 @@ def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
     subject_key = "Subject"
     rating_key = "Rating"
     for rater in raters:
+        if not is_valid_rater(rater_scores=df[rater], rater_name=rater):
+            hotkey_to_icc2[rater] = 0.0
+            continue
+
         # Calculate mean of all other raters (excluding the current rater)
         # we do this to ensure that the current rater is not compared to itself
         other_raters = [r for r in raters if r != rater]
@@ -44,7 +49,6 @@ def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
         pair_long.columns = [subject_key, rater_key, rating_key]
 
         # Calculate ICC (using ICC2 for two-way random effects, absolute agreement)
-        # TODO: determine nan_policy & handle errors
         icc_result = pg.intraclass_corr(
             data=pair_long,
             targets=subject_key,
@@ -54,10 +58,44 @@ def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
 
         # Extract ICC2 value
         icc_value = icc_result[icc_result["Type"] == "ICC2"]["ICC"].values[0]
+        logger.info(f"ICC2 for {rater}: {icc_value:.3f}")
 
         # Store the score
         hotkey_to_icc2[rater] = icc_value
     return hotkey_to_icc2
+
+
+def has_missing_scores(rater_scores: pd.Series, rater_name: str) -> bool:
+    """Check if rater has any missing scores"""
+    missing_count = rater_scores.isna().sum()
+    if missing_count > 0:
+        logger.warning(
+            f"{rater_name} has {missing_count} missing scores, assigning ICC = 0.0"
+        )
+        return True
+    return False
+
+
+def has_duplicate_scores(rater_scores: pd.Series, rater_name: str) -> bool:
+    """Check if rater has any duplicate scores"""
+    scores_list = rater_scores.tolist()
+    unique_scores = set(scores_list)
+
+    if len(unique_scores) != len(scores_list):
+        logger.warning(
+            f"{rater_name} has duplicate scores {scores_list}, assigning ICC = 0.0"
+        )
+        return True
+    return False
+
+
+def is_valid_rater(rater_scores: pd.Series, rater_name: str) -> bool:
+    """Combined validation for rater scores"""
+    if has_missing_scores(rater_scores, rater_name):
+        return False
+    if has_duplicate_scores(rater_scores, rater_name):
+        return False
+    return True
 
 
 if __name__ == "__main__":
@@ -67,7 +105,13 @@ if __name__ == "__main__":
         "Rater1": [34.0, 23.0, 12.0, 45.0],
         "Rater2": [23.0, 45.0, 34.0, 12.0],
         "Rater3": [34.0, 12.0, 23.0, 45.0],
-        # "Rater4": [7.2, 8.2, 6.2, 9.2, 7.8],
+        "Rater4": [34.0, 23.0, 12.0, None],
+        "Rater5": [34.0, 45.0, 45.0, 45.0],
+        "Rater6": [34.0, 45.0, 45.0, 45.0],
+        "Rater7": [34.0, 45.0, 45.0, 45.0],
+        "Rater8": [34.0, 45.0, 45.0, 45.0],
+        "Rater9": [34.0, 45.0, 45.0, 45.0],
+        "Rater10": [34.0, 45.0, 45.0, 45.0],
     }
 
     # icc_scores = calculate_icc(data)
