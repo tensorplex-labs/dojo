@@ -3,11 +3,13 @@ import json
 import traceback
 from collections import defaultdict
 
+import torch
 from loguru import logger
 from pydantic import ValidationError
 
 from commons.human_feedback import HFLConstants
 from commons.orm import ORM
+from commons.scoring.scoring import minmax_scale
 from commons.stats import calculate_icc
 from database.prisma.enums import HFLStatusEnum
 from database.prisma.models import (
@@ -46,6 +48,7 @@ async def score_hfl_tasks(
 
         # Rest of your scoring logic
         hotkey_to_tf_score = await _calc_tf_score(task)
+
         if not hotkey_to_tf_score:
             logger.warning(f"Failed to calculate TF score for task {task.id}")
             return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
@@ -180,7 +183,17 @@ async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
             f"Miner {hotkey} feedback led to completion {completion_id} with score delta: {score_delta}"
         )
 
-    return dict(hotkey_to_tf_score)
+    logger.info(f"hotkey to tf raw score: {hotkey_to_tf_score}")
+    hotkeys = list(hotkey_to_tf_score.keys())
+    raw_scores = list(hotkey_to_tf_score.values())
+
+    # Convert to tensor and normalize
+    scores_tensor = torch.tensor(raw_scores, dtype=torch.float32)
+    normalized_tensor = minmax_scale(scores_tensor)
+    # Reconstruct dictionary
+    normalized_tf_scores = dict(zip(hotkeys, normalized_tensor.tolist()))
+
+    return normalized_tf_scores
 
 
 async def _calc_score_deltas(sf_task: ValidatorTask) -> dict[str, float]:
@@ -390,7 +403,7 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
                 if completion_id not in stats_by_completion_id:
                     stats_by_completion_id[completion_id] = {"sum": 0, "count": 0}
 
-                if not scores.raw_score:
+                if scores.raw_score is None:
                     logger.warning(
                         f"No raw score found miner response id: {miner_response.id} and score id: {score.id}"
                     )
@@ -411,6 +424,11 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
     # Calculate the average score for each completion
     cid_to_avg_score: dict[str, float] = {}
     for completion_id, scores in stats_by_completion_id.items():
+        if scores["count"] == 0:
+            logger.warning(
+                f"No scores count found for completion {completion_id}, skipping"
+            )
+            continue
         average_score = scores["sum"] / scores["count"]
         cid_to_avg_score[completion_id] = average_score
         logger.info(f"Completion {completion_id}: Average score = {average_score}")
