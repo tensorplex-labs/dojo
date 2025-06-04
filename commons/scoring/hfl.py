@@ -91,7 +91,7 @@ async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
         miner_raw_scores: list[float] = []
         for score in miner_response.scores or []:
             scores = Scores.model_validate_json(score.scores)
-            if scores.raw_score:
+            if scores.raw_score is not None:
                 miner_raw_scores.append(scores.raw_score)
 
         hotkey_to_raw_scores[miner_response.hotkey] = miner_raw_scores

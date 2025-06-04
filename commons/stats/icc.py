@@ -28,6 +28,7 @@ def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
     raters = list(hotkey_to_scores.keys())
     valid_raters = [r for r in raters if is_valid_rater(df[r], rater_name=r)]
 
+    logger.info(f"valid raters: {valid_raters}")
     if len(valid_raters) < 2:
         logger.warning(
             f"Not enough valid raters to calculate ICC, only {len(valid_raters)} raters found"
@@ -130,9 +131,9 @@ if __name__ == "__main__":
         "Rater10": [34.0, 45.0, 45.0, 45.0],
     }
 
-    icc_scores = calculate_icc(data)
-    # Display the results
-    print("Inter-Rater Reliability (ICC) Scores:")
+    # icc_scores = calculate_icc(data)
+    # # Display the results
+    # print("Inter-Rater Reliability (ICC) Scores:")
 
-    for pair, score in icc_scores.items():
-        print(f"{pair}: ICC = {score:.3f}")
+    # for pair, score in icc_scores.items():
+    #     print(f"{pair}: ICC = {score:.3f}")
