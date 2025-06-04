@@ -4,11 +4,10 @@ from typing import Awaitable, Callable
 import zstandard as zstd
 from fastapi import Request, Response
 from fastapi.responses import ORJSONResponse
+from kami import KamiClient
 from loguru import logger
 from starlette.concurrency import iterate_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
-
-from dojo.kami import Kami
 
 from .types import HOTKEY_HEADER, MESSAGE_HEADER, SIGNATURE_HEADER
 from .utils import (
@@ -20,7 +19,9 @@ compressor = zstd.ZstdCompressor(level=3)
 
 
 class SignatureMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, kami: Kami, whitelisted_routes: list[str] | None = None):
+    def __init__(
+        self, app, kami: KamiClient, whitelisted_routes: list[str] | None = None
+    ):
         super().__init__(app)
         self.kami = kami
         self.whitelisted_routes = whitelisted_routes or []

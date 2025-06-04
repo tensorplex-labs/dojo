@@ -8,13 +8,13 @@ from typing import Dict
 
 from bittensor.utils.networking import ip_to_int, ip_version
 from fastapi import HTTPException
+from kami import AxonInfo, KamiClient, ServeAxonPayload, SubnetMetagraph
 from loguru import logger
 
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject
 from commons.worker_api.dojo import DojoAPI
 from dojo.constants import MinerConstant, ValidatorConstant
-from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
 from dojo.messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 from dojo.protocol import (
     Heartbeat,
@@ -41,7 +41,7 @@ class Miner(aobject):
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
-        self.kami: Kami = Kami()
+        self.kami: KamiClient = KamiClient()
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
@@ -127,7 +127,7 @@ class Miner(aobject):
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
         await self.check_registered()
-        logger.info(f"Kami initialized, {self.kami.url}")
+        logger.info(f"KamiClient initialized, {self.kami.url}")
         logger.info("Root metagraph initialized")
         logger.info("Subnet metagraph initialized")
 

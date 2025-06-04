@@ -4,6 +4,7 @@ import traceback
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from kami import AxonInfo
 from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
@@ -14,7 +15,6 @@ from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_t
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskUpdateInput
-from dojo.kami import AxonInfo
 from dojo.protocol import ScoreFeedbackEvent, SyntheticTaskSynapse, TextFeedbackEvent
 
 from .utils import (

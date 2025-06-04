@@ -62,7 +62,8 @@ dependencies = [
   "openai>=1.0.0",
   "langfuse==2.48.0",
   'orjson==3.10.16',
-  'zstandard==0.23.0'
+  'zstandard==0.23.0',
+  "kami-client @ git+https://github.com/tensorplex-labs/kami-client@5bf290701a6eb6e30b2acae1c37ea7d31db7e291"
 ]
 
 [project.optional-dependencies]

@@ -6,6 +6,7 @@ import aiohttp
 import orjson
 import zstandard as zstd
 from aiohttp.client import ClientSession
+from kami import KamiClient
 from loguru import logger
 from orjson import JSONDecodeError
 from pydantic import BaseModel
@@ -16,7 +17,6 @@ from tenacity import (
     wait_exponential,
 )
 
-from dojo.kami import Kami
 from dojo.utils import retry_log
 from dojo.wallet import WalletInfo
 
@@ -72,7 +72,7 @@ class Client:
         wallet_info: WalletInfo,
         session: ClientSession | None = None,
     ) -> None:
-        self._kami = Kami()
+        self._kami = KamiClient()
         self._wallet_info = wallet_info
         self._session: ClientSession = session or get_client()
         self._compression_headers = {

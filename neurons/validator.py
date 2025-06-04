@@ -15,6 +15,7 @@ import aiohttp
 import bittensor as bt
 import numpy as np
 import torch
+from kami import AxonInfo, KamiClient, SetWeightsPayload, SubnetMetagraph
 from loguru import logger
 from torch.nn import functional as F
 
@@ -49,7 +50,6 @@ from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
 from dojo import get_spec_version
 from dojo.constants import ValidatorConstant, ValidatorInterval
-from dojo.kami import AxonInfo, Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.messaging import Client, StdResponse, get_client
 from dojo.protocol import (
     CompletionResponse,
@@ -102,7 +102,7 @@ class Validator(aobject):
     wallet: bt.wallet  # type: ignore
     metagraph: SubnetMetagraph
     spec_version: int = get_spec_version()
-    kami: Kami
+    kami: KamiClient
 
     async def __init__(self):
         await connect_db()
@@ -114,7 +114,7 @@ class Validator(aobject):
         self._semaphore_synthetic_task = asyncio.BoundedSemaphore(10)
         self._semaphore_scores = asyncio.BoundedSemaphore(32)
 
-        self.kami = Kami()
+        self.kami = KamiClient()
 
         self.loop = asyncio.get_event_loop()
         self.config = ObjectManager.get_config()
@@ -1264,7 +1264,7 @@ class Validator(aobject):
                 response.body.miner_coldkey = axon.coldkey
                 if not axon.hotkey or not axon.coldkey:
                     logger.warning(
-                        f"Axon hotkey/coldkey information is missing. {axon.coldkey=}, {axon.hotkey=}, check Kami client implementation"
+                        f"Axon hotkey/coldkey information is missing. {axon.coldkey=}, {axon.hotkey=}, check KamiClient client implementation"
                     )
                 valid_miner_responses.append(response.body)
 

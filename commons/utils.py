@@ -7,13 +7,13 @@ from datetime import datetime, timedelta, timezone
 import bittensor as bt
 import numpy as np
 import plotext
+from kami import SubnetMetagraph
 from loguru import logger
 from openai import AsyncOpenAI
 
 from commons.api_settings import RedisSettings
 from commons.cache import RedisCache
 from commons.objects import ObjectManager
-from dojo.kami import SubnetMetagraph
 
 ROOT_WEIGHT = 0.18
 ROOT_NETUID = 0

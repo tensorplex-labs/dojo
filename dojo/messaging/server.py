@@ -8,11 +8,11 @@ import orjson
 import uvicorn
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import ORJSONResponse
+from kami import KamiClient
 from loguru import logger
 from pydantic import BaseModel
 
 from commons.objects import ObjectManager
-from dojo.kami import Kami
 from dojo.utils import resolve_log_level
 
 from .exceptions import InvalidSignatureException
@@ -24,11 +24,13 @@ router = APIRouter()
 
 
 class Server:
-    def __init__(self, app: FastAPI | None = None, kami: Kami | None = None) -> None:
+    def __init__(
+        self, app: FastAPI | None = None, kami: KamiClient | None = None
+    ) -> None:
         self._configure_loguru_logging()
 
         self.app = app or FastAPI()
-        self.kami = kami or Kami()
+        self.kami = kami or KamiClient()
         self.app.include_router(router)
         self.app.add_middleware(ZstdMiddleware)
         self.app.add_middleware(SignatureMiddleware, kami=self.kami)

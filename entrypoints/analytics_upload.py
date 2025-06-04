@@ -13,6 +13,7 @@ from typing import List
 
 import bittensor as bt
 import httpx
+from kami import KamiClient, SubnetMetagraph
 from loguru import logger
 
 from commons.exceptions import NoProcessedTasksYet
@@ -21,7 +22,6 @@ from commons.orm import ORM
 from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
 from dojo.constants import AnalyticsConstants, ValidatorConstant
-from dojo.kami import Kami, SubnetMetagraph
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 
 VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
@@ -183,7 +183,7 @@ async def run_analytics_upload(
     scores_alock: asyncio.Lock,
     expire_from: datetime | None,
     expire_to: datetime,
-    kami: Kami,
+    kami: KamiClient,
 ) -> datetime | None:
     """
     run_analytics_upload()
