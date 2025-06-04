@@ -48,17 +48,22 @@ async def _get_task_data(
     expire_to: datetime,
 ) -> AnalyticsPayload:
     """
-    _get_task_data() is a helper function that:
-    1. queries postgres for processed ValidatorTasks in a given time window.
-    2. calculates the list of scored hotkeys and absent hotkeys for each task.
-    3. converts query results into AnalyticsData schema
-    4. returns AnalyticsPayload which contains many AnalyticsData.
-
-    @param validator_hotkey: the hotkey of the validator
-    @param all_miner_hotkeys: the hotkeys of all miners registered to metagraph at the time of execution.
-    @param expire_from: the start time of the time window to query for processed tasks.
-    @param expire_to: the end time of the time window to query for processed tasks.
-    @return: a AnalyticsPayload object which contains many AnalyticsData.
+    Retrieves and formats processed validator tasks within a specified time window for analytics upload.
+    
+    Queries the database for processed `ValidatorTask` records of type `SCORE_FEEDBACK` and `CODE_GENERATION` between `expire_from` and `expire_to`. Each task is converted into an `AnalyticsData` object. For `SCORE_FEEDBACK` tasks with a linked previous task, the corresponding `TextFeedback` task is also included. Returns an `AnalyticsPayload` containing all formatted tasks.
+    
+    Args:
+        validator_hotkey: The hotkey of the validator.
+        all_miner_hotkeys: List of miner hotkeys registered to the metagraph at execution time.
+        expire_from: Start of the time window for querying processed tasks.
+        expire_to: End of the time window for querying processed tasks.
+    
+    Returns:
+        An `AnalyticsPayload` object containing analytics data for all relevant tasks.
+    
+    Raises:
+        NoProcessedTasksYet: If no processed tasks are found in the specified window.
+        Exception: For any other errors encountered during processing.
     """
     processed_tasks = []
     await connect_db()
@@ -159,15 +164,17 @@ async def run_analytics_upload(
     kami: Kami,
 ) -> datetime | None:
     """
-    run_analytics_upload()
-    driver function called by validator that triggers:
-    1. collection of analytics data from postgres
-    2. upload of analytics data to analytics API
-
-    @param scores_alock: The async lock used by scoring. Used to ensure upload occurs only after scoring is complete.
-    @param expire_from: start of time window to query for processed tasks. Should be the last successful upload time.
-    @param expire_to: end time of time window to query for processed tasks. Should be current time.
-    @returns: datetime of last successful upload
+    Uploads processed validator analytics data for a specified time window.
+    
+    Acquires a lock to ensure analytics upload occurs after scoring is complete, collects processed validator task analytics from the database, and uploads the data to the analytics API. Returns the end time of the upload window if successful, or the last successful upload time if no new data was uploaded.
+    
+    Args:
+        scores_alock: Async lock to synchronize with scoring completion.
+        expire_from: Start of the time window for querying processed tasks; typically the last successful upload time.
+        expire_to: End of the time window for querying processed tasks.
+    
+    Returns:
+        The datetime of the last successful analytics upload, or None if no upload occurred.
     """
     async with scores_alock:
         last_analytics_upload_time = expire_from
@@ -227,13 +234,17 @@ async def _parse_task_to_analytics_data(
     task: ValidatorTask, all_miner_hotkeys: List[str], validator_hotkey: str
 ) -> AnalyticsData:
     """
-    1. formats a ValidatorTask object into an AnalyticsData object.
-    2. removes any fields not needed by upstream analytics services.
-
-    @param task: the ValidatorTask to be formatted
-    @param all_miner_hotkeys: the hotkeys of all miners registered to metagraph at time of execution.
-    @param validator_hotkey: the hotkey of the validator
-    @returns: an AnalyticsData object
+    Converts a ValidatorTask ORM object into an AnalyticsData schema for analytics upload.
+    
+    Serializes and filters nested task data, including completions, ground truths, and miner responses, to ensure JSON compatibility and exclude unnecessary fields. Computes lists of miner hotkeys that submitted scores and those that did not. Datetime fields are converted to ISO8601 strings, and metadata is parsed from JSON if present.
+    
+    Args:
+        task: The ValidatorTask ORM object to convert.
+        all_miner_hotkeys: List of all miner hotkeys registered at the time of task execution.
+        validator_hotkey: The hotkey of the validator submitting the analytics.
+    
+    Returns:
+        An AnalyticsData object containing the formatted and filtered task data.
     """
 
     # parse miner_responses first so we can calculate scored_hotkey

@@ -25,7 +25,15 @@ ONE_DAY_SECONDS = 60 * 60 * 24  # cached tasks to expire after 1 day
 
 def _save_to_athena_format(data: dict):
     """
-    converts input analytics JSON data to athena format by un-nesting elements
+    Converts analytics data into a newline-delimited JSON format suitable for Athena.
+    
+    Each task in the input data is serialized as a compact JSON string and separated by newlines. Raises an exception if processing fails.
+    
+    Args:
+        data: A dictionary containing a "tasks" key with a list of task objects.
+    
+    Returns:
+        A string with each task serialized as a JSON object on a separate line.
     """
     try:
         formatted_data = ""

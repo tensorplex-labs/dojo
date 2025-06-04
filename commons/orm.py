@@ -736,25 +736,18 @@ class ORM:
         expire_to: datetime | None = None,
     ) -> AsyncGenerator[tuple[List[ValidatorTask], bool], None]:
         """
-        Returns batches of processed ValidatorTask records and a boolean indicating if there are more batches.
-        Used to collect analytics data.
-
+        Yields batches of processed validator tasks filtered by task type and expiration time.
+        
+        Each batch includes related completions, miner responses with scores, and ground truth data. Raises an exception if no processed tasks are found or if the expiration date range is invalid.
+        
         Args:
-            batch_size (int, optional): Number of tasks to return in a batch. Defaults to 10.
-            expire_from: (datetime | None) If provided, only tasks with expire_at after expire_from will be returned.
-            expire_to: (datetime | None) If provided, only tasks with expire_at before expire_to will be returned.
-            You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
-            task_types: (list[TaskTypeEnum]) If provided, only tasks with the specified task types will be returned.
-        Raises:
-            ExpiredFromMoreThanExpireTo: If expire_from is greater than expire_to
-            NoProcessedTasksYet: If no processed tasks are found for uploading.
-
+            task_types: List of task types to filter processed tasks. Defaults to code generation, text feedback, and score feedback tasks.
+            batch_size: Number of tasks to include in each batch.
+            expire_from: If provided, only tasks with expiration after this datetime are included.
+            expire_to: If provided, only tasks with expiration before this datetime are included.
+        
         Yields:
-            tuple[validator_task, bool]: Each yield returns:
-            - List of ValidatorTask records with their related completions, miner_responses, and GroundTruth
-            - Boolean indicating if there are more batches to process
-
-        @to-do: write unit test for this function.
+            A tuple containing a list of ValidatorTask records and a boolean indicating if more batches remain.
         """
         # find all validator requests first
         include_query = ValidatorTaskInclude(
@@ -1418,7 +1411,15 @@ class ORM:
 
     @staticmethod
     async def get_task_by_id(task_id: str) -> ValidatorTask | None:
-        """Find and return a ValidatorTask by its ID."""
+        """
+        Retrieves a ValidatorTask by its ID, including completions with criteria, miner responses with scores, and ground truth.
+        
+        Args:
+            task_id: The unique identifier of the ValidatorTask to retrieve.
+        
+        Returns:
+            The ValidatorTask with related data if found, or None if not found or on error.
+        """
         try:
             include_query = ValidatorTaskInclude(
                 {
@@ -1554,17 +1555,18 @@ class ORM:
         batch_size: int = 10,
         max_retries: int = 3,
     ) -> tuple[bool, list[str]]:
-        """Update both SF and TF scores in the MinerScore table.
-
+        """
+        Updates both score feedback (SF) and text feedback (TF) scores for miners in the MinerScore table for a given score feedback task.
+        
         Args:
-            sf_task_id: Score Feedback task ID
-            hotkey_to_sf_scores: SF scores component (ICC)
-            hotkey_to_tf_scores: TF scores component (feedback improvement)
-            batch_size: Batch size for processing
-            max_retries: Max retry attempts
-
+            sf_task: The score feedback ValidatorTask for which scores are being updated.
+            hotkey_to_sf_scores: Mapping of miner hotkeys to their SF (ICC) scores for the SF task.
+            hotkey_to_tf_scores: Mapping of miner hotkeys to their TF (feedback improvement) scores for the parent/original task.
+            batch_size: Number of miner responses to process per batch.
+            max_retries: Maximum number of retry attempts per batch on failure.
+        
         Returns:
-            Tuple containing success flag and list of failed hotkeys
+            A tuple containing a success flag and a list of miner hotkeys for which score updates failed.
         """
         try:
             if not sf_task.previous_task_id:
