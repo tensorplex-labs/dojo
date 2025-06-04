@@ -744,7 +744,7 @@ class ORM:
             expire_from: (datetime | None) If provided, only tasks with expire_at after expire_from will be returned.
             expire_to: (datetime | None) If provided, only tasks with expire_at before expire_to will be returned.
             You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
-            task_types: (list[TaskTypeEnum] | None) If provided, only tasks with the specified task types will be returned.
+            task_types: (list[TaskTypeEnum]) If provided, only tasks with the specified task types will be returned.
         Raises:
             ExpiredFromMoreThanExpireTo: If expire_from is greater than expire_to
             NoProcessedTasksYet: If no processed tasks are found for uploading.
