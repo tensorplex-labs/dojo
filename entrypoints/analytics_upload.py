@@ -22,7 +22,7 @@ from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
 from database.prisma.enums import TaskTypeEnum
 from database.prisma.models import ValidatorTask
-from dojo import ANALYTICS_UPLOAD, VALIDATOR_MIN_STAKE
+from dojo.constants import AnalyticsConstants, ValidatorConstant
 from dojo.kami import Kami, SubnetMetagraph
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 
@@ -37,7 +37,7 @@ async def _get_all_miner_hotkeys(subnet_metagraph: SubnetMetagraph) -> List[str]
         hotkey
         for hotkey in subnet_metagraph.hotkeys
         if aget_effective_stake(hotkey, subnet_metagraph=subnet_metagraph)
-        < VALIDATOR_MIN_STAKE
+        < ValidatorConstant.VALIDATOR_MIN_STAKE
     ]
 
 
@@ -175,7 +175,7 @@ async def run_analytics_upload(
         # if there is no last analytics upload time, get tasks from 65 minutes ago.
         if expire_from is None:
             expire_from = datetime.now(timezone.utc) - timedelta(
-                seconds=ANALYTICS_UPLOAD
+                seconds=AnalyticsConstants.ANALYTICS_UPLOAD
             )
 
         logger.info(

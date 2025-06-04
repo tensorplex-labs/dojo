@@ -13,7 +13,7 @@ from commons.exceptions import (
     NoNewExpiredTasksYet,
     NoProcessedTasksYet,
 )
-from commons.hfl_heplers import HFLManager
+from commons.hfl_helpers import HFLManager
 from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
 from database.mappers import (
@@ -41,7 +41,7 @@ from database.prisma.types import (
     ValidatorTaskUpdateInput,
     ValidatorTaskWhereInput,
 )
-from dojo import TASK_DEADLINE
+from dojo.constants import ValidatorInterval
 from dojo.protocol import (
     DendriteQueryResponse,
     HFLEvent,
@@ -51,6 +51,8 @@ from dojo.protocol import (
     TaskSynapseObject,
     TextFeedbackEvent,
 )
+
+TASK_DEADLINE = ValidatorInterval.TASK_DEADLINE
 
 
 class ORM:
