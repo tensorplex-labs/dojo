@@ -49,8 +49,7 @@ from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
 from dojo import get_spec_version
 from dojo.constants import ValidatorConstant, ValidatorInterval
-from dojo.kami import Kami, SetWeightsPayload, SubnetMetagraph
-from dojo.kami.types import AxonInfo
+from dojo.kami import AxonInfo, Kami, SetWeightsPayload, SubnetMetagraph
 from dojo.messaging import Client, StdResponse, get_client
 from dojo.protocol import (
     CompletionResponse,
