@@ -22,6 +22,7 @@ from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
 from database.prisma.enums import TaskTypeEnum
 from database.prisma.models import ValidatorTask
+from database.prisma.types import ValidatorTaskInclude
 from dojo.constants import AnalyticsConstants, ValidatorConstant
 from dojo.kami import Kami, SubnetMetagraph
 from dojo.protocol import AnalyticsData, AnalyticsPayload
@@ -84,7 +85,16 @@ async def _get_task_data(
                 # if current task is a ScoreFeedback task, also pull the corresponding TextFeedback task
                 if task.task_type == TaskTypeEnum.SCORE_FEEDBACK:
                     if task.previous_task_id:
-                        tf_task = await ORM.get_task_by_id(task.previous_task_id)
+                        include_query = ValidatorTaskInclude(
+                            {
+                                "completions": {"include": {"criterion": True}},
+                                "miner_responses": {"include": {"scores": True}},
+                                "ground_truth": True,
+                            }
+                        )
+                        tf_task = await ORM.get_validator_task_by_id(
+                            task.previous_task_id, include_query
+                        )
                         if tf_task is None:
                             logger.error(
                                 f"TF task not found for ScoreFeedback task: {task.id}"
