@@ -123,9 +123,12 @@ async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response
     """
     _http_client = httpx.AsyncClient(timeout=300)
     try:
-        logger.debug("POST-ing analytics data to validator API")
+        url = f"{VALIDATOR_API_BASE_URL}/api/v1/analytics/validators/{hotkey}/tasks"
+        logger.debug(
+            f"POST-ing analytics data to validator API {url}"
+        )  # remove URL in prod
         response = await _http_client.post(
-            url=f"{VALIDATOR_API_BASE_URL}/api/v1/analytics/validators/{hotkey}/tasks",
+            url=url,
             json=payload.model_dump(mode="json"),
             headers={
                 "X-Hotkey": hotkey,
@@ -325,52 +328,49 @@ if __name__ == "__main__":
     import asyncio
 
 
-# async def main():
-#     # for testing
-#     from datetime import datetime, timedelta, timezone
+async def main():
+    # for testing
+    from datetime import datetime, timedelta, timezone
 
-#     from commons.utils import datetime_as_utc
+    from commons.utils import datetime_as_utc
 
-#     from_14_days = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(days=14)
-#     # # from_24_hours = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
-#     # #     hours=24
-#     # # )
-#     # # from_1_hours = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(hours=1)
-#     to_now = datetime_as_utc(datetime.now(timezone.utc))
-#     # res = await run_analytics_upload(asyncio.Lock(), from_14_days, to_now)
-#     # print(f"Response: {res}")
+    from_14_days = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(days=14)
+    # # from_24_hours = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
+    # #     hours=24
+    # # )
+    # # from_1_hours = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(hours=1)
+    to_now = datetime_as_utc(datetime.now(timezone.utc))
+    # res = await run_analytics_upload(asyncio.Lock(), from_14_days, to_now)
+    # print(f"Response: {res}")
 
-#     # payload = AnalyticsPayload(tasks=[])
-#     # hotkey = "test_hk"
-#     # signature = "0xtest"
-#     # message = "test_msg"
-#     # res = await _post_task_data(
-#     #     payload=payload, hotkey=hotkey, signature=signature, message=message
-#     # )
-#     # print(f"Response: {res}")
+    # payload = AnalyticsPayload(tasks=[])
+    # hotkey = "test_hk"
+    # signature = "0xtest"
+    # message = "test_msg"
+    # res = await _post_task_data(
+    #     payload=payload, hotkey=hotkey, signature=signature, message=message
+    # )
+    # print(f"Response: {res}")
 
-#     # await run_analytics_upload()
-#     res = await _get_task_data(
-#         "test_hk", [], from_14_days, to_now
-#     )
-#     # print(f"Response: {res}")
-#     import json
+    # await run_analytics_upload()
+    res = await _get_task_data("test_hk", [], from_14_days, to_now)
+    # print(f"Response: {res}")
 
-#     # with open("analytics_data.json", "w") as f:
-#     #     # f.write(formatted, indent=2)
-#     #     json.dump(res.model_dump(mode="json"), f, indent=2)
+    # with open("analytics_data.json", "w") as f:
+    #     # f.write(formatted, indent=2)
+    #     json.dump(res.model_dump(mode="json"), f, indent=2)
 
-#         # 2. upload data to analytics API
-#     message = "Uploading analytics data for validator hotkey: test_hk"
-#     signature = "0x12345678"
+    # 2. upload data to analytics API
+    message = "Uploading analytics data for validator hotkey: test_hk"
+    signature = "0x12345678"
 
-#     res = await _post_task_data(
-#         payload=res,
-#         hotkey="test_hk",
-#         signature=signature,
-#         message=message,
-#     )
-#     print(f"Response: {res}")
+    res = await _post_task_data(
+        payload=res,
+        hotkey="test_hk",
+        signature=signature,
+        message=message,
+    )
+    print(f"Response: {res}")
 
 
-# asyncio.run(main())
+asyncio.run(main())
