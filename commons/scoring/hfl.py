@@ -102,6 +102,7 @@ async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
         )
         return {}
 
+    logger.info(f"hotkey to raw scores: {hotkey_to_raw_scores}")
     hotkey_to_icc = calculate_icc(hotkey_to_scores=hotkey_to_raw_scores)
     return hotkey_to_icc
 

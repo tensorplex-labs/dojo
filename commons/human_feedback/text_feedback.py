@@ -26,10 +26,7 @@ from dojo.protocol import (
 
 from .sanitize import sanitize_miner_feedback
 from .types import HFLInterval
-from .utils import (
-    create_initial_miner_scores,
-    extract_text_feedback_from_results,
-)
+from .utils import create_initial_miner_scores, extract_text_feedback_from_results
 
 if TYPE_CHECKING:
     from neurons.validator import Validator
@@ -407,7 +404,6 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                     sanitized_criteria.append(criterion)
                     continue
 
-                # TODO: KIV for oom
                 # Get text feedback
                 text_feedback = (
                     criterion["text_feedback"].strip()
