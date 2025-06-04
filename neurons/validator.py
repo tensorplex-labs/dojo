@@ -133,7 +133,7 @@ class Validator(aobject):
             wallet_coldkey=self.config.wallet.name,
             wallet_hotkey=self.config.wallet.hotkey,
         )
-        self.client = Client(wallet_info=self.wallet_info, session=get_client())
+        self.client = Client(hotkey=self.wallet_info.hotkey, session=get_client())
 
         # Save validator hotkey
         self.vali_hotkey: str = self.wallet.hotkey.ss58_address
