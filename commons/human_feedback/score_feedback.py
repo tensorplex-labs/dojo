@@ -16,10 +16,7 @@ from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskUpdateInput
 from dojo.protocol import ScoreFeedbackEvent, TaskSynapseObject, TextFeedbackEvent
 
-from .utils import (
-    create_initial_miner_scores,
-    map_human_feedback_to_task_synapse,
-)
+from .utils import create_initial_miner_scores, map_human_feedback_to_task_synapse
 
 if TYPE_CHECKING:
     from neurons.validator import Validator
@@ -105,7 +102,9 @@ async def create_score_feedback_task(
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
             axons=validator._retrieve_axons(active_miners),
         )
-        logger.info(f"Miner responses: {miner_responses}")
+        logger.info(
+            f"Received {len(miner_responses) if miner_responses else 0} miner responses from: {[resp.miner_hotkey for resp in (miner_responses or [])]}"
+        )
 
         if not miner_responses:
             logger.error(f"Failed to send improved task to miners for {tf_task.id}")
