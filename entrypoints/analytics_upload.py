@@ -124,7 +124,7 @@ async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response
     _http_client = httpx.AsyncClient(timeout=300)
     try:
         url = f"{VALIDATOR_API_BASE_URL}/api/v1/analytics/validators/{hotkey}/tasks"
-        logger.debug(
+        logger.info(
             f"POST-ing analytics data to validator API {url}"
         )  # remove URL in prod
         response = await _http_client.post(
