@@ -39,7 +39,7 @@ class BaseHFLInterval(IntEnum):
     SF_CREATE_INTERVAL = 800  # 13 minutes for Score Feedback task creation
     SF_UPDATE_INTERVAL = 700  # 11 minutes for Score Feedback updates
     NEXT_TF_INTERVAL = 1200  # 20 minutes for creating next Text Feedback tasks
-    TASK_DEADLINE = 3 * 60 * 60  # 5 hours
+    TASK_DEADLINE = 3 * 60 * 60  # 3 hours
 
 
 class MediumHFLInterval(IntEnum):

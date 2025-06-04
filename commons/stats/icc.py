@@ -58,7 +58,6 @@ def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
 
         # Extract ICC2 value
         icc_value = icc_result[icc_result["Type"] == "ICC2"]["ICC"].values[0]
-        logger.info(f"ICC2 for {rater}: {icc_value:.3f}")
 
         # Store the score
         hotkey_to_icc2[rater] = icc_value

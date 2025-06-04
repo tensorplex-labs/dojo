@@ -320,8 +320,8 @@ class FeedbackLoop:
                     # Get retry count from HFL state
                     retry_count = task.HFLState.tf_retry_count or 0
 
+                    # NOTE: Process task with sufficient responses
                     if response_count >= HFLConstants.TF_MIN_RESPONSES.value:
-                        # Process task with sufficient responses
                         logger.info(
                             f"Task {task.id} has {response_count} valid responses, processing"
                         )
@@ -354,11 +354,11 @@ class FeedbackLoop:
                         # Store selected responses
                         selected_responses_by_task[task.id] = selected_responses
 
+                    # NOTE: Process task with insufficient responses needing retry
                     elif (
-                        response_count <= 3
+                        response_count < HFLConstants.TF_MIN_RESPONSES.value
                         and retry_count < HFLConstants.TF_MAX_RETRY.value
                     ):
-                        # Handle task with insufficient responses needing retry
                         task_synapse = await get_task_synapse_for_retry(task.id)
 
                         if not task_synapse:
@@ -424,8 +424,9 @@ class FeedbackLoop:
                             f"Saved {count} miner responses for task {task.id}, retry count: {updated_hfl_state.tf_retry_count}"
                         )
 
+                    # NOTE: We still have insufficient responses < 3 but we have reached max retries
                     elif (
-                        response_count <= 3
+                        response_count < HFLConstants.TF_MIN_RESPONSES.value
                         and retry_count >= HFLConstants.TF_MAX_RETRY.value
                     ):
                         # Handle task with insufficient responses at max retries
@@ -433,6 +434,7 @@ class FeedbackLoop:
                             f"Task {task.id} failed to get enough responses after {HFLConstants.TF_MAX_RETRY.value} attempts. "
                             f"Using available {response_count} responses."
                         )
+                        # Cover edge case where we have no responses after max retries
                         if response_count == 0:
                             logger.warning(
                                 f"Task {task.id} has no responses after {HFLConstants.TF_MAX_RETRY.value} attempts, ending HFL"
