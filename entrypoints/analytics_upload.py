@@ -20,6 +20,9 @@ from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
+from database.prisma.enums import TaskTypeEnum
+from database.prisma.models import ValidatorTask
+from database.prisma.types import ValidatorTaskInclude
 from dojo.constants import AnalyticsConstants, ValidatorConstant
 from dojo.kami import Kami, SubnetMetagraph
 from dojo.protocol import AnalyticsData, AnalyticsPayload
@@ -62,65 +65,45 @@ async def _get_task_data(
     await connect_db()
     logger.debug(f"retrieving processed tasks from {expire_from} to {expire_to}")
     try:
-        # get processed tasks in batches from db
+        # get processed score_feedback & code_generation tasks in batches from db
         async for task_batch, has_more_batches in ORM.get_processed_tasks(
-            expire_from=expire_from, expire_to=expire_to
+            expire_from=expire_from,
+            expire_to=expire_to,
+            task_types=[
+                TaskTypeEnum.SCORE_FEEDBACK,
+                TaskTypeEnum.CODE_GENERATION,
+            ],
         ):
             if task_batch is None:
                 continue
             for task in task_batch:
-                # Convert DB data to AnalyticsData
-                _miner_responses = (
-                    [
-                        miner_response.model_dump(mode="json")
-                        for miner_response in task.miner_responses
-                    ]
-                    if task.miner_responses
-                    else []
+                formatted_task = await _parse_task_to_analytics_data(
+                    task, all_miner_hotkeys, validator_hotkey
                 )
+                processed_tasks.append(formatted_task)
 
-                # Get list of miner hotkeys that submitted scores
-                scored_hotkeys = [
-                    miner_response["hotkey"]
-                    for miner_response in _miner_responses
-                    if miner_response["scores"] != []
-                ]
-
-                # Get list of miner hotkeys that did not submit scores.
-                # This is checked against all_miner_hotkeys which is a snapshot of metagraph miners at time of execution.
-                # @dev: could be inaccurate if a miner deregisters after the task was sent out.
-                absent_hotkeys = list(set(all_miner_hotkeys) - set(scored_hotkeys))
-
-                # payload must be convertible to JSON. Hence, serialize any nested objects to JSON and convert datetime to string.
-                task_data = AnalyticsData(
-                    validator_task_id=task.id,
-                    validator_hotkey=validator_hotkey,
-                    prompt=task.prompt,
-                    completions=[
-                        completion.model_dump(mode="json")
-                        for completion in task.completions
-                    ]
-                    if task.completions
-                    else [],
-                    ground_truths=[
-                        ground_truth.model_dump(mode="json")
-                        for ground_truth in task.ground_truth
-                    ]
-                    if task.ground_truth
-                    else [],
-                    miner_responses=[
-                        miner_response.model_dump(mode="json")
-                        for miner_response in task.miner_responses
-                    ]
-                    if task.miner_responses
-                    else [],
-                    scored_hotkeys=scored_hotkeys,
-                    absent_hotkeys=absent_hotkeys,
-                    created_at=datetime_to_iso8601_str(task.created_at),
-                    updated_at=datetime_to_iso8601_str(task.updated_at),
-                    metadata=json.loads(task.metadata) if task.metadata else None,
-                )
-                processed_tasks.append(task_data)
+                # if current task is a ScoreFeedback task, also pull the corresponding TextFeedback task
+                if task.task_type == TaskTypeEnum.SCORE_FEEDBACK:
+                    if task.previous_task_id:
+                        include_query = ValidatorTaskInclude(
+                            {
+                                "completions": {"include": {"criterion": True}},
+                                "miner_responses": {"include": {"scores": True}},
+                                "ground_truth": True,
+                            }
+                        )
+                        tf_task = await ORM.get_validator_task_by_id(
+                            task.previous_task_id, include_query
+                        )
+                        if tf_task is None:
+                            logger.error(
+                                f"TF task not found for ScoreFeedback task: {task.id}"
+                            )
+                            continue
+                        formatted_tf_task = await _parse_task_to_analytics_data(
+                            tf_task, all_miner_hotkeys, validator_hotkey
+                        )
+                        processed_tasks.append(formatted_tf_task)
             # clean up memory after processing all tasks
             if not has_more_batches:
                 gc.collect()
@@ -250,32 +233,156 @@ async def run_analytics_upload(
             raise
 
 
-# # Main function for testing. Remove / Comment in prod.
+async def _parse_task_to_analytics_data(
+    task: ValidatorTask, all_miner_hotkeys: List[str], validator_hotkey: str
+) -> AnalyticsData:
+    """
+    1. formats a ValidatorTask object into an AnalyticsData object.
+    2. removes any fields not needed by upstream analytics services.
+
+    @param task: the ValidatorTask to be formatted
+    @param all_miner_hotkeys: the hotkeys of all miners registered to metagraph at time of execution.
+    @param validator_hotkey: the hotkey of the validator
+    @returns: an AnalyticsData object
+    """
+
+    # parse miner_responses first so we can calculate scored_hotkey
+    _miner_responses = (
+        [
+            miner_response.model_dump(
+                mode="json",
+                exclude={
+                    "task_result": True,
+                    "created_at": True,
+                    "updated_at": True,
+                    "validator_task_relation": True,
+                    "scores": {
+                        "__all__": {
+                            "created_at",
+                            "updated_at",
+                            "criterion_relation",
+                            "miner_response_relation",
+                        }
+                    },
+                },
+            )
+            for miner_response in task.miner_responses
+        ]
+        if task.miner_responses
+        else []
+    )
+
+    # Get list of miner hotkeys that did not submit scores.
+    scored_hotkeys = [
+        miner_response["hotkey"]
+        for miner_response in _miner_responses
+        if miner_response["scores"] != []
+    ]
+    absent_hotkeys = list(set(all_miner_hotkeys) - set(scored_hotkeys))
+
+    # payload must be convertible to JSON. Hence, serialize any nested objects to JSON and convert datetime to string.
+    task_data = AnalyticsData(
+        validator_task_id=task.id,
+        task_type=task.task_type,
+        previous_task_id=task.previous_task_id,
+        next_task_id=task.next_task_id,
+        validator_hotkey=validator_hotkey,
+        prompt=task.prompt,
+        completions=[
+            completion.model_dump(
+                mode="json",
+                exclude={
+                    "created_at": True,
+                    "updated_at": True,
+                    "validator_task_relation": True,
+                    "validator_task_id": True,
+                    "criterion": {
+                        "__all__": {
+                            "created_at",
+                            "updated_at",
+                            "scores",
+                            "completion_relation",
+                        }
+                    },
+                },
+            )
+            for completion in task.completions
+        ]
+        if task.completions
+        else [],
+        ground_truths=[
+            ground_truth.model_dump(
+                mode="json",
+                exclude={"created_at", "updated_at", "validator_task_relation"},
+            )
+            for ground_truth in task.ground_truth
+        ]
+        if task.ground_truth
+        else [],
+        miner_responses=_miner_responses,
+        scored_hotkeys=scored_hotkeys,
+        absent_hotkeys=absent_hotkeys,
+        created_at=datetime_to_iso8601_str(task.created_at),
+        updated_at=datetime_to_iso8601_str(task.updated_at),
+        metadata=(
+            task.metadata
+            if isinstance(task.metadata, dict)
+            else json.loads(task.metadata)
+        )
+        if task.metadata
+        else {},
+    )
+
+    return task_data
+
+
+# # # Main function for testing. Remove / Comment in prod.
 # if __name__ == "__main__":
 #     import asyncio
 
+#     asyncio.run(main())
+
+
 # async def main():
-# # for testing
-# from datetime import datetime, timedelta, timezone
+#     # for testing
+#     from datetime import datetime, timedelta, timezone
 
-# from commons.utils import datetime_as_utc
+#     from commons.utils import datetime_as_utc
 
-# from_14_days = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(days=14)
-# # from_24_hours = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
-# #     hours=24
-# # )
-# # from_1_hours = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(hours=1)
-# to_now = datetime_as_utc(datetime.now(timezone.utc))
-# res = await run_analytics_upload(asyncio.Lock(), from_14_days, to_now)
-# print(f"Response: {res}")
+#     from_14_days = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(days=14)
+#     # # from_24_hours = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
+#     # #     hours=24
+#     # # )
+#     # # from_1_hours = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(hours=1)
+#     to_now = datetime_as_utc(datetime.now(timezone.utc))
+#     # res = await run_analytics_upload(asyncio.Lock(), from_14_days, to_now)
+#     # print(f"Response: {res}")
 
-# payload = AnalyticsPayload(tasks=[])
-# hotkey = "test_hk"
-# signature = "0xtest"
-# message = "test_msg"
-# res = await _post_task_data(
-#     payload=payload, hotkey=hotkey, signature=signature, message=message
-# )
-# print(f"Response: {res}")
+#     # payload = AnalyticsPayload(tasks=[])
+#     # hotkey = "test_hk"
+#     # signature = "0xtest"
+#     # message = "test_msg"
+#     # res = await _post_task_data(
+#     #     payload=payload, hotkey=hotkey, signature=signature, message=message
+#     # )
+#     # print(f"Response: {res}")
 
-# asyncio.run(main())
+#     # await run_analytics_upload()
+#     res = await _get_task_data("test_hk", [], from_14_days, to_now)
+#     # print(f"Response: {res}")
+
+#     # with open("analytics_data.json", "w") as f:
+#     #     # f.write(formatted, indent=2)
+#     #     json.dump(res.model_dump(mode="json"), f, indent=2)
+
+#     # 2. upload data to analytics API
+#     message = "Uploading analytics data for validator hotkey: test_hk"
+#     signature = "0x12345678"
+
+#     res = await _post_task_data(
+#         payload=res,
+#         hotkey="test_hk",
+#         signature=signature,
+#         message=message,
+#     )
+#     print(f"Response: {res}")

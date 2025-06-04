@@ -266,6 +266,11 @@ class AnalyticsData(BaseModel):
     """
 
     validator_task_id: str
+    task_type: str
+    previous_task_id: str | None = Field(
+        description="ID of the previous task", default=None
+    )
+    next_task_id: str | None = Field(description="ID of the next task", default=None)
     validator_hotkey: str
     prompt: str
     completions: List[dict]
