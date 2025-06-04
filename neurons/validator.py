@@ -17,6 +17,7 @@ import numpy as np
 import torch
 from kami import AxonInfo, KamiClient, SetWeightsPayload, SubnetMetagraph
 from loguru import logger
+from messaging import Client, StdResponse, get_client
 from torch.nn import functional as F
 
 from commons.dataset.synthetic import SyntheticAPI
@@ -50,7 +51,6 @@ from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
 from dojo import get_spec_version
 from dojo.constants import ValidatorConstant, ValidatorInterval
-from dojo.messaging import Client, StdResponse, get_client
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,

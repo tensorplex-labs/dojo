@@ -10,12 +10,12 @@ from bittensor.utils.networking import ip_to_int, ip_version
 from fastapi import HTTPException
 from kami import AxonInfo, KamiClient, ServeAxonPayload, SubnetMetagraph
 from loguru import logger
+from messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject
 from commons.worker_api.dojo import DojoAPI
 from dojo.constants import MinerConstant, ValidatorConstant
-from dojo.messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 from dojo.protocol import (
     Heartbeat,
     ScoreResultSynapse,
