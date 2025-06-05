@@ -11,7 +11,7 @@ class ObjectManager:
 
     @classmethod
     async def get_miner(cls):
-        from neurons.miner import Miner
+        from neurons.miner.miner import Miner
 
         if cls._miner is None:
             try:
