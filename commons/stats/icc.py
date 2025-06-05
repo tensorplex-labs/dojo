@@ -1,4 +1,5 @@
 # Import libraries
+import numpy as np
 import pandas as pd
 import pingouin as pg
 from loguru import logger
@@ -24,7 +25,13 @@ def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
     # Convert to DataFrame
     df = pd.DataFrame(hotkey_to_scores)
 
+    # Add tiny noise to prevent division by zero
+    np.random.seed(42)
+    noise = np.random.normal(0, 1e-3, size=df.shape)  # Tiny Gaussian noise
+    df = df + noise
+
     # List of all raters, this would be hotkeys of miners
+
     raters = list(hotkey_to_scores.keys())
     valid_raters = [r for r in raters if is_valid_rater(df[r], rater_name=r)]
 
