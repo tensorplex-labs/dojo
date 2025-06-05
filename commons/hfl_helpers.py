@@ -6,7 +6,7 @@ from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum
 from database.prisma.models import HFLState
 from database.prisma.types import HFLStateCreateInput, HFLStateUpdateInput
-from dojo.protocol import HFLEvent, ScoreFeedbackEvent, TextFeedbackEvent
+from dojo.protocol import HFLEvent, TextFeedbackEvent
 
 
 class HFLManager:
@@ -248,27 +248,6 @@ class HFLManager:
             raise ValueError(f"Failed to update HFL state with ID {state.id}")
 
         return update_state
-
-    @staticmethod
-    async def get_state(hfl_state_id: str) -> HFLState:
-        """Get HFL state by ID."""
-        state = await prisma.hflstate.find_unique(where={"id": hfl_state_id})
-        if not state:
-            raise ValueError(f"No HFL state found with ID {hfl_state_id}")
-        return state
-
-    @staticmethod
-    async def get_update_state_operation(
-        state_id: str, status_updates: HFLStateUpdateInput, event: ScoreFeedbackEvent
-    ):
-        return {
-            "where": {"id": state_id},
-            "data": HFLStateUpdateInput(
-                status_updates,
-                events={"push": [Json(event.model_dump())]},
-                updated_at=datetime_as_utc(datetime.now(timezone.utc)),
-            ),
-        }
 
     @staticmethod
     async def get_state_by_current_task_id(current_task_id: str) -> HFLState | None:
