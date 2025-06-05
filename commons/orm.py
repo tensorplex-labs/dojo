@@ -728,6 +728,11 @@ class ORM:
 
     @staticmethod
     async def get_processed_tasks(
+        task_types: list[TaskTypeEnum] = [
+            TaskTypeEnum.CODE_GENERATION,
+            TaskTypeEnum.TEXT_FEEDBACK,
+            TaskTypeEnum.SCORE_FEEDBACK,
+        ],
         batch_size: int = 10,
         expire_from: datetime | None = None,
         expire_to: datetime | None = None,
@@ -741,7 +746,7 @@ class ORM:
             expire_from: (datetime | None) If provided, only tasks with expire_at after expire_from will be returned.
             expire_to: (datetime | None) If provided, only tasks with expire_at before expire_to will be returned.
             You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
-
+            task_types: (list[TaskTypeEnum]) If provided, only tasks with the specified task types will be returned.
         Raises:
             ExpiredFromMoreThanExpireTo: If expire_from is greater than expire_to
             NoProcessedTasksYet: If no processed tasks are found for uploading.
@@ -788,6 +793,9 @@ class ORM:
                     "lt": expire_to,
                 },
                 "is_processed": True,
+                "task_type": {
+                    "in": task_types,
+                },
             }
         )
 
@@ -1409,128 +1417,6 @@ class ORM:
         except Exception as e:
             logger.error(f"Error getting original or parent SF task: {e}")
             return None
-
-    @staticmethod
-    async def get_task_by_id(task_id: str) -> ValidatorTask | None:
-        """Given a current task id, fetch the previous task"""
-        try:
-            task = await prisma.validatortask.find_unique(where={"id": task_id})
-            if task is None:
-                raise
-        except Exception as e:
-            logger.error(f"Failed to get validator task with ID {task_id}: {e}")
-        return None
-
-    # TODO: KIV
-    @staticmethod
-    async def update_hfl_scores(
-        sf_task_id: str,
-        hotkey_to_scores: dict[str, float],
-        batch_size: int = 10,
-        max_retries: int = 3,
-    ) -> tuple[bool, list[str]]:
-        """Update HFL scores for miners in the MinerScore table.
-
-        Args:
-            sf_task_id: The validator task ID for the SF task
-            hotkey_to_scores: Dictionary mapping miner hotkeys to their calculated HFL scores
-            batch_size: Number of scores to process in each batch
-            max_retries: Maximum number of retry attempts for failed updates
-
-        Returns:
-            Tuple containing:
-            - Boolean indicating if all updates were successful
-            - List of hotkeys that failed to update
-        """
-        failed_hotkeys = []
-
-        try:
-            # Get all miner responses for this task
-            db_miner_responses = await prisma.minerresponse.find_many(
-                where={
-                    "validator_task_id": sf_task_id,
-                    "hotkey": {"in": list(hotkey_to_scores.keys())},
-                },
-                include=MinerResponseInclude(
-                    {
-                        "scores": {
-                            "include": {
-                                "criterion_relation": {
-                                    "include": {"completion_relation": True}
-                                }
-                            }
-                        }
-                    }
-                ),
-            )
-
-            # Process miner responses in batches
-            for i in range(0, len(db_miner_responses), batch_size):
-                batch = db_miner_responses[i : i + batch_size]
-
-                for attempt in range(max_retries):
-                    try:
-                        async with prisma.tx() as tx:
-                            for db_miner_response in batch:
-                                hotkey = db_miner_response.hotkey
-                                if hotkey not in hotkey_to_scores:
-                                    continue
-
-                                hfl_score = hotkey_to_scores[hotkey]
-
-                                # Update each MinerScore record for this miner response
-                                for score_record in db_miner_response.scores or []:
-                                    # Only update one record per miner with the HFL score
-                                    # Consider using a specific criterion or just the first one
-                                    if (
-                                        score_record.criterion_relation
-                                        and score_record.criterion_relation.completion_relation
-                                    ):
-                                        # Parse the existing scores
-                                        existing_scores = json.loads(
-                                            score_record.scores
-                                        )
-
-                                        # Add the HFL scores (tf_score field)
-                                        existing_scores["tf_score"] = hfl_score
-
-                                        await tx.minerscore.update(
-                                            where={
-                                                "criterion_id_miner_response_id": {
-                                                    "criterion_id": score_record.criterion_id,
-                                                    "miner_response_id": db_miner_response.id,
-                                                }
-                                            },
-                                            data={
-                                                "scores": Json(
-                                                    json.dumps(existing_scores)
-                                                )
-                                            },
-                                        )
-
-                                        # Only update one score record per miner
-                                        break
-
-                        # Break out of retry loop if successful
-                        break
-
-                    except Exception as e:
-                        if attempt == max_retries - 1:
-                            logger.error(
-                                f"Failed to update HFL scores after {max_retries} attempts: {e}"
-                            )
-                            failed_hotkeys.extend([mr.hotkey for mr in batch])
-                        else:
-                            await asyncio.sleep(2**attempt)
-
-            return (
-                len(failed_hotkeys) == 0,
-                failed_hotkeys,
-            )
-
-        except Exception as e:
-            logger.error(f"Error updating HFL scores: {e}")
-            return False, list(hotkey_to_scores.keys())
 
     @staticmethod
     async def update_hfl_final_scores(

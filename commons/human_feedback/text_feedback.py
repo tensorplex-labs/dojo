@@ -26,10 +26,7 @@ from dojo.protocol import (
 
 from .sanitize import sanitize_miner_feedback
 from .types import HFLInterval
-from .utils import (
-    create_initial_miner_scores,
-    extract_text_feedback_from_results,
-)
+from .utils import create_initial_miner_scores, extract_text_feedback_from_results
 
 if TYPE_CHECKING:
     from neurons.validator import Validator
