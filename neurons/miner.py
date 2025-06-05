@@ -24,7 +24,6 @@ from dojo.protocol import (
     TaskResultSynapse,
 )
 from dojo.utils import BoundedDict, get_config
-from dojo.wallet import WalletInfo, get_wallet_info
 
 
 def optimize_payload_for_transport(
@@ -45,13 +44,8 @@ class Miner(aobject):
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
-        self.wallet: WalletInfo = get_wallet_info(
-            bittensor_dir=os.getenv("BITTENSOR_DIR", "$HOME/.bittensor"),
-            wallet_coldkey=self.config.wallet.name,  # type: ignore
-            wallet_hotkey=self.config.wallet.hotkey,  # type: ignore
-        )
-        logger.info(f"Wallet: {self.wallet}")
         self.server = Server(kami=self.kami)
+        self.keyringpair = await self.kami.get_keyringpair()
         await self.register_synapse_handlers()
         await self.init_metagraphs()
         # NOTE: keep track validator task id to dojo task id mapping
@@ -384,12 +378,12 @@ class Miner(aobject):
     async def check_registered(self):
         is_member = await self.kami.is_hotkey_registered(
             netuid=int(self.config.netuid),  # type: ignore
-            hotkey=str(self.wallet.hotkey),
+            hotkey=str(self.keyringpair.hotkey),
             # block=int(self.block),
         )
         if not is_member:
             logger.error(
-                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
+                f"Hotkey: {self.keyringpair.hotkey} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli s register` before trying again"
             )
             await self._cleanup()
@@ -406,7 +400,7 @@ class Miner(aobject):
         """
         Check if the axon is served successfully.
         """
-        hotkey = self.wallet.hotkey
+        hotkey = self.keyringpair.hotkey
         uid = self.subnet_metagraph.hotkeys.index(hotkey)
         current_axon: AxonInfo = self.subnet_metagraph.axons[uid]
         current_axon_ip: str = current_axon.ip

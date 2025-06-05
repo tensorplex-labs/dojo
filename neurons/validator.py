@@ -71,7 +71,6 @@ from dojo.utils.weight_utils import (
     aprocess_weights_for_netuid,
     convert_weights_and_uids_for_emit,
 )
-from dojo.wallet.path import get_wallet_info
 from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
@@ -122,24 +121,12 @@ class Validator(aobject):
         logger.info(self.config)
 
         logger.info("Setting up bittensor objects....")
-        # The wallet holds the cryptographic key pairs for the miner.
-        self.wallet = bt.wallet(config=self.config)
-        logger.info(f"Wallet: {self.wallet}")
         self.metagraph = await self.kami.get_metagraph(self.config.netuid)
         logger.info(f"Metagraph Loaded for {self.metagraph.netuid}")
 
-        self.wallet_info = get_wallet_info(
-            bittensor_dir=os.getenv("BITTENSOR_DIR", "$HOME/.bittensor"),
-            wallet_coldkey=self.config.wallet.name,
-            wallet_hotkey=self.config.wallet.hotkey,
-        )
-        self.client = Client(hotkey=self.wallet_info.hotkey, session=get_client())
-
-        # Save validator hotkey
-        self.vali_hotkey: str = self.wallet.hotkey.ss58_address
-
-        # Each miner gets a unique identity (UID) in the network for differentiation.
-        self.uid = self.metagraph.hotkeys.index(self.vali_hotkey)
+        self.keyringpair = await self.kami.get_keyringpair()
+        self.client = Client(hotkey=self.keyringpair.hotkey, session=get_client())
+        self.uid = self.metagraph.hotkeys.index(self.keyringpair.hotkey)
         logger.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
         )
@@ -1077,11 +1064,11 @@ class Validator(aobject):
     async def check_registered(self):
         is_registered = await self.kami.is_hotkey_registered(
             netuid=int(self.config.netuid),  # type: ignore
-            hotkey=str(self.wallet.hotkey.ss58_address),
+            hotkey=str(self.keyringpair.hotkey),
         )
         if not is_registered:
             logger.error(
-                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
+                f"Hotkey {self.keyringpair.hotkey} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli s register` before trying again"
             )
             await self.cleanup()
