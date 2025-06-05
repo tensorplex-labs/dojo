@@ -12,7 +12,6 @@ from commons.utils import loaddotenv
 from dojo import get_dojo_api_base_url
 from dojo.protocol import (
     CodeAnswer,
-    MultimediaAnswer,
     SyntheticTaskSynapse,
     TaskTypeEnum,
 )
@@ -92,7 +91,7 @@ class DojoAPI:
             completion_dict["model"] = completion.model
             completion_dict["completion"] = (
                 completion.completion.model_dump()
-                if isinstance(completion.completion, CodeAnswer | MultimediaAnswer)
+                if isinstance(completion.completion, CodeAnswer)
                 else completion.completion
             )
             completion_dict["criteria"] = (

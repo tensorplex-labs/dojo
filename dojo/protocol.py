@@ -84,23 +84,9 @@ class CodeAnswer(BaseModel):
     files: List[CodeFileObject] = Field(description="List of FileObjects")
 
 
-class MultimediaFileObject(BaseModel):
-    filename: str = Field(description="Name of the file")
-    content: bytes = Field(description="Binary content of the file")
-    mime_type: str = Field(
-        description="MIME type of the file (e.g., 'image/png', 'model/ply')"
-    )
-
-
-class MultimediaAnswer(BaseModel):
-    files: List[MultimediaFileObject] = Field(description="List of multimedia files")
-
-
 class CompletionResponse(BaseModel):
     model: str = Field(description="Model that generated the completion")
-    completion: CodeAnswer | MultimediaAnswer | str | None = Field(
-        description="Completion from the model"
-    )
+    completion: CodeAnswer | None = Field(description="Completion from the model")
     completion_id: str = Field(description="Unique identifier for the completion")
     # TODO: Check if rank_id is needed
     rank_id: int | None = Field(
