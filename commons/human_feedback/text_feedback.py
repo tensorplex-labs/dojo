@@ -18,8 +18,8 @@ from dojo.protocol import (
     CriteriaType,
     CriteriaTypeEnum,
     SanitizedResultEnum,
+    SyntheticTaskSynapse,
     TaskResult,
-    TaskSynapseObject,
     TextCriteria,
     TextFeedbackEvent,
 )
@@ -33,8 +33,8 @@ if TYPE_CHECKING:
 
 
 async def create_text_feedback_task(
-    validator_task: TaskSynapseObject, completion_id: str
-) -> TaskSynapseObject | None:
+    validator_task: SyntheticTaskSynapse, completion_id: str
+) -> SyntheticTaskSynapse | None:
     """
     Generates a text criteria task based on a selected validator task and completion.
     This task will be used to evaluate the quality of miners' scoring.
@@ -75,7 +75,7 @@ async def create_text_feedback_task(
         Prompt: {validator_task.prompt}
         """
         # Create a new task with the same prompt but different criteria type
-        new_tf_task = TaskSynapseObject(
+        new_tf_task = SyntheticTaskSynapse(
             task_id=get_new_uuid(),
             previous_task_id=validator_task.task_id,
             prompt=prompt,
@@ -163,8 +163,7 @@ async def fetch_miner_feedback_for_task(
     fetch_tasks = [
         asyncio.create_task(
             validator._get_task_results_from_miner(
-                miner_hotkey=resp.hotkey,
-                dojo_task_id=resp.dojo_task_id,
+                miner_hotkey=resp.hotkey, validator_task_id=task.id
             )
         )
         for resp in responses_needing_fetch
@@ -327,15 +326,15 @@ async def send_text_feedback_to_synthetic_api(
         return None
 
 
-async def get_task_synapse_for_retry(task_id: str) -> TaskSynapseObject | None:
+async def get_task_synapse_for_retry(task_id: str) -> SyntheticTaskSynapse | None:
     """
-    Retrieve and convert a validator task to a TaskSynapseObject for retry purposes.
+    Retrieve and convert a validator task to a SyntheticTaskSynapse for retry purposes.
 
     Args:
         task_id: The task ID to retrieve
 
     Returns:
-        TaskSynapseObject ready for retry or None if conversion fails
+        SyntheticTaskSynapse ready for retry or None if conversion fails
     """
     try:
         # Fetch the task from the database
@@ -345,7 +344,7 @@ async def get_task_synapse_for_retry(task_id: str) -> TaskSynapseObject | None:
             logger.warning(f"Task with ID {task_id} not found")
             return None
 
-        # Convert to TaskSynapseObject using the existing mapper function
+        # Convert to SyntheticTaskSynapse using the existing mapper function
         from database.mappers import map_validator_task_to_task_synapse_object
 
         task_synapse = map_validator_task_to_task_synapse_object(task)
@@ -422,7 +421,7 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                     )
                 else:
                     logger.warning(
-                        f"Sanitization failed for dojo_task_id: {task_result.dojo_task_id} with text feedback: {text_feedback}"
+                        f"Sanitization failed for dojo_task_id: {task_result.task_id} with text feedback: {text_feedback}"
                     )
                     # Replace with "invalid" if not valid
                     sanitized_criterion = criterion.copy()

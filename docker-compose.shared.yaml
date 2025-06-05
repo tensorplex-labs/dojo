@@ -25,6 +25,8 @@ services:
     image: redis/redis-stack-server:7.4.0-v0
     env_file:
       - .env
+    ports:
+      - "6379:6379"
     expose:
       - 6379
     command: >
@@ -62,6 +64,8 @@ services:
         export POSTGRES_DB=$${DB_NAME}
         docker-entrypoint.sh postgres
       "
+    ports:
+      - "5432:5432"
     expose:
       - 5432
     healthcheck:

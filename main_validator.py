@@ -99,7 +99,6 @@ async def main():
         #     )
         # ),
         asyncio.create_task(validator.block_updater()),
-        asyncio.create_task(validator.cleanup_resources()),
         asyncio.create_task(feedback_loop.start_feedback_loop(validator)),
         asyncio.create_task(feedback_loop.update_tf_task_results(validator)),
         asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
@@ -121,7 +120,7 @@ async def main():
             logger.error(f"Task {task.get_name()} raised an exception: {e}")
             pass
 
-    logger.info("Exiting main function.")
+    logger.info("Done, exiting main function.")
 
 
 if __name__ == "__main__":

@@ -29,6 +29,8 @@ class HFLConstants(Enum):
     SF_WEIGHT = 0.3
     TF_MAX_RETRY = 5
     TF_MIN_RESPONSES = 3
+    TARGET_NUM_MINERS = 7  # target number of miners to send HFL tasks to
+    MIN_NUM_MINERS = 3
 
 
 class BaseHFLInterval(IntEnum):

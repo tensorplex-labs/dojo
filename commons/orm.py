@@ -47,8 +47,8 @@ from dojo.protocol import (
     HFLEvent,
     ScoreFeedbackEvent,
     Scores,
+    SyntheticTaskSynapse,
     TaskResult,
-    TaskSynapseObject,
     TextFeedbackEvent,
 )
 
@@ -364,7 +364,7 @@ class ORM:
     # TODO: How to store miner scores
     @staticmethod
     async def update_miner_raw_scores(
-        miner_responses: List[TaskSynapseObject],
+        miner_responses: List[SyntheticTaskSynapse],
         batch_size: int = 10,
         max_retries: int = 20,
     ) -> tuple[bool, list[int]]:
@@ -372,7 +372,7 @@ class ORM:
         NOTE: this is to be used when the task is first saved to validator's database.
 
         Args:
-            miner_responses: List of TaskSynapseObject containing miner responses
+            miner_responses: List of SyntheticTaskSynapse containing miner responses
             batch_size: Number of responses to process in each batch
             max_retries: Maximum number of retry attempts for failed batches
 
@@ -500,10 +500,11 @@ class ORM:
 
         return False, failed_batch_indices
 
+    # FIXME: caller is using both ground_truth field from Synapse and ground truth, make up your mind...
     @staticmethod
     async def save_task(
-        validator_task: TaskSynapseObject,
-        miner_responses: List[TaskSynapseObject],
+        validator_task: SyntheticTaskSynapse,
+        miner_responses: List[SyntheticTaskSynapse],
         ground_truth: dict[str, int],
         metadata: dict | None = None,
     ) -> ValidatorTask | None:
@@ -522,6 +523,7 @@ class ORM:
                 logger.trace("Starting transaction for saving task.")
 
                 # Map validator task using mapper function
+                # FIXME: can i simply use the ground_truths param
                 validator_task_data = map_task_synapse_object_to_validator_task(
                     validator_task, metadata
                 )
@@ -572,7 +574,7 @@ class ORM:
     @staticmethod
     async def update_miner_scores(
         task_id: str,
-        miner_responses: List[TaskSynapseObject],
+        miner_responses: List[SyntheticTaskSynapse],
         batch_size: int = 10,
         max_retries: int = 3,
     ) -> tuple[bool, list[str]]:
@@ -990,8 +992,8 @@ class ORM:
 
     @staticmethod
     async def save_tf_task(
-        validator_task: TaskSynapseObject,
-        miner_responses: list[TaskSynapseObject],
+        validator_task: SyntheticTaskSynapse,
+        miner_responses: list[SyntheticTaskSynapse],
         previous_task_id: str,
         selected_completion_id: str,
         is_next_task: bool = False,
@@ -1085,8 +1087,8 @@ class ORM:
 
     @staticmethod
     async def save_sf_task(
-        validator_task: TaskSynapseObject,
-        miner_responses: list[TaskSynapseObject],
+        validator_task: SyntheticTaskSynapse,
+        miner_responses: list[SyntheticTaskSynapse],
         hfl_state: HFLState,
         previous_task_id: str,
         human_feedback_response: HumanFeedbackResponse,
@@ -1210,7 +1212,7 @@ class ORM:
     async def save_tf_retry_responses(
         validator_task_id: str,
         hfl_state: HFLState,
-        miner_responses: list[TaskSynapseObject],
+        miner_responses: list[SyntheticTaskSynapse],
     ) -> tuple[int, HFLState]:
         """
         Save additional miner responses for an existing validator task and update
@@ -1272,7 +1274,7 @@ class ORM:
                                     "dojo_task_id": response.dojo_task_id,
                                     "hotkey": response.miner_hotkey,
                                     "coldkey": response.miner_coldkey,
-                                    "task_result": Json(json.dumps({})),
+                                    "task_result": Json(json.dumps([])),
                                 }
                             )
                             logger.debug(

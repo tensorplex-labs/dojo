@@ -13,6 +13,7 @@ from typing import List
 
 import bittensor as bt
 import httpx
+from kami import KamiClient, SubnetMetagraph
 from loguru import logger
 
 from commons.exceptions import NoProcessedTasksYet
@@ -24,7 +25,6 @@ from database.prisma.enums import TaskTypeEnum
 from database.prisma.models import ValidatorTask
 from database.prisma.types import ValidatorTaskInclude
 from dojo.constants import AnalyticsConstants, ValidatorConstant
-from dojo.kami import Kami, SubnetMetagraph
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 
 VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
@@ -166,7 +166,7 @@ async def run_analytics_upload(
     scores_alock: asyncio.Lock,
     expire_from: datetime | None,
     expire_to: datetime,
-    kami: Kami,
+    kami: KamiClient,
 ) -> datetime | None:
     """
     run_analytics_upload()

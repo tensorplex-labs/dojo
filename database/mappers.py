@@ -19,7 +19,7 @@ from dojo.protocol import (
     CriteriaType,
     ScoreCriteria,
     Scores,
-    TaskSynapseObject,
+    SyntheticTaskSynapse,
     TextCriteria,
     TextFeedbackScore,
 )
@@ -31,13 +31,13 @@ from .types import Metadata
 #                 MAP PROTOCOL OBJECTS TO DATABASE MODEL INPUTS                #
 # ---------------------------------------------------------------------------- #
 def map_task_synapse_object_to_validator_task(
-    synapse: TaskSynapseObject,
+    synapse: SyntheticTaskSynapse,
     qa_metadata: dict | None = None,
 ) -> ValidatorTaskCreateInput:
-    """Maps a TaskSynapseObject to ValidatorTask database model input.
+    """Maps a SyntheticTaskSynapse to ValidatorTask database model input.
 
     Args:
-        synapse (TaskSynapseObject): The task synapse object to map
+        synapse (SyntheticTaskSynapse): The task synapse object to map
         qa_metadata (dict | None): metadata from synthetic-API QA generation.
     Returns:
         ValidatorTaskCreateInput: The database model input
@@ -77,7 +77,7 @@ def map_task_synapse_object_to_validator_task(
 
 
 def map_task_synapse_object_to_completions(
-    synapse: TaskSynapseObject, validator_task_id: str
+    synapse: SyntheticTaskSynapse, validator_task_id: str
 ) -> list[CompletionCreateInput]:
     """Maps completion responses to database model inputs"""
 
@@ -132,13 +132,13 @@ def _get_criteria_config(criteria: CriteriaType) -> dict:
 
 
 def map_task_synapse_object_to_miner_response(
-    synapse: TaskSynapseObject,
+    synapse: SyntheticTaskSynapse,
     validator_task_id: str,
 ) -> MinerResponseCreateInput:
-    """Maps a TaskSynapseObject to MinerResponse database model input.
+    """Maps a SyntheticTaskSynapse to MinerResponse database model input.
 
     Args:
-        synapse (TaskSynapseObject): The task synapse object to map
+        synapse (SyntheticTaskSynapse): The task synapse object to map
         validator_task_id (str): The ID of the parent validator task
 
     Returns:
@@ -164,14 +164,14 @@ def map_task_synapse_object_to_miner_response(
 # ---------------------------------------------------------------------------- #
 def map_validator_task_to_task_synapse_object(
     model: ValidatorTask,
-) -> TaskSynapseObject:
-    """Maps a ValidatorTask database model to TaskSynapseObject.
+) -> SyntheticTaskSynapse:
+    """Maps a ValidatorTask database model to SyntheticTaskSynapse.
 
     Args:
         model (ValidatorTask): The database model to map
 
     Returns:
-        TaskSynapseObject: The protocol object
+        SyntheticTaskSynapse: The protocol object
     """
     # Map completion responses
     completion_responses = []
@@ -213,7 +213,7 @@ def map_validator_task_to_task_synapse_object(
     #     miner_coldkey = miner.coldkey
     #     dojo_task_id = miner.dojo_task_id
 
-    return TaskSynapseObject(
+    return SyntheticTaskSynapse(
         task_id=model.id,
         previous_task_id=model.previous_task_id,
         prompt=model.prompt,
@@ -230,15 +230,15 @@ def map_validator_task_to_task_synapse_object(
 def map_miner_response_to_task_synapse_object(
     miner_response: MinerResponse,
     validator_task: ValidatorTask,
-) -> TaskSynapseObject:
-    """Maps a MinerResponse database model to TaskSynapseObject.
+) -> SyntheticTaskSynapse:
+    """Maps a MinerResponse database model to SyntheticTaskSynapse.
 
     Args:
         miner_response (MinerResponse): The miner response database model to map
         validator_task (ValidatorTask): The validator task containing completions and criteria
 
     Returns:
-        TaskSynapseObject: The protocol object
+        SyntheticTaskSynapse: The protocol object
     """
     completion_responses = []
     for completion in validator_task.completions or []:
@@ -273,7 +273,7 @@ def map_miner_response_to_task_synapse_object(
             )
         )
 
-    return TaskSynapseObject(
+    return SyntheticTaskSynapse(
         task_id=miner_response.validator_task_id,
         previous_task_id=validator_task.previous_task_id,
         prompt=validator_task.prompt,
