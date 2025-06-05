@@ -4,8 +4,8 @@ import json
 from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
-from commons.human_feedback.dojo import DojoAPI
 from commons.utils import set_expire_time
+from commons.worker_api.dojo import DojoAPI
 from dojo.protocol import (
     ScoreCriteria,
     TaskSynapseObject,

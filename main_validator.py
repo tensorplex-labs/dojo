@@ -10,7 +10,9 @@ from loguru import logger
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.dataset.synthetic import SyntheticAPI
 from commons.exceptions import FatalSyntheticGenerationError
+from commons.human_feedback import FeedbackLoop
 from commons.objects import ObjectManager
+from commons.utils import validate_services
 from database.client import connect_db, disconnect_db
 from dojo.chain import get_async_subtensor
 from dojo.utils.config import source_dotenv
@@ -67,7 +69,15 @@ app.add_middleware(LimitContentLengthMiddleware)
 
 
 async def main():
+    if not await validate_services():
+        raise RuntimeError("Services are not valid")
+
     validator = await ObjectManager.get_validator()
+    if not validator:
+        raise RuntimeError("Validator not found")
+
+    feedback_loop = FeedbackLoop()
+
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
@@ -90,6 +100,11 @@ async def main():
         # ),
         asyncio.create_task(validator.block_updater()),
         asyncio.create_task(validator.cleanup_resources()),
+        asyncio.create_task(feedback_loop.start_feedback_loop(validator)),
+        asyncio.create_task(feedback_loop.update_tf_task_results(validator)),
+        asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
+        asyncio.create_task(feedback_loop.update_sf_task_results(validator)),
+        asyncio.create_task(feedback_loop.create_next_tf_tasks(validator)),
     ]
     # set a callback on validator.run() to check for fatal errors.
     running_tasks[1].add_done_callback(_check_fatal_errors)

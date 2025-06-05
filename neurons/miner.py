@@ -9,18 +9,23 @@ import bittensor
 from bittensor.utils.networking import ip_to_int, ip_version
 from loguru import logger
 
-from commons.human_feedback.dojo import DojoAPI
+# from commons.exceptions import FatalSubtensorConnectionError
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject, get_epoch_time
-from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
+
+#                            serve_axon)
+from commons.worker_api.dojo import DojoAPI
 from dojo.chain import parse_block_headers
+from dojo.constants import MinerConstant, ValidatorConstant
 from dojo.kami import AxonInfo, Kami, ServeAxonPayload, SubnetMetagraph
 from dojo.protocol import (
     Heartbeat,
+    ScoreCriteria,
     ScoringResult,
     TaskResult,
     TaskResultRequest,
     TaskSynapseObject,
+    TextCriteria,
 )
 from dojo.utils.config import get_config
 
@@ -225,7 +230,7 @@ class Miner(aobject):
             # Log scores for each completion response
             for idx, completion in enumerate(miner_completion_responses):
                 for criteria in completion.criteria_types:
-                    if hasattr(criteria, "scores") and criteria.scores:
+                    if isinstance(criteria, ScoreCriteria) and criteria.scores:
                         scores = criteria.scores
                         # Log shared scores only once
                         if not shared_scores_logged:
@@ -235,6 +240,7 @@ class Miner(aobject):
                                 f"\n\tCosine Similarity: {scores.cosine_similarity_score}"
                                 f"\n\tNormalised Cosine Similarity: {scores.normalised_cosine_similarity_score}"
                                 f"\n\tCubic Reward Score: {scores.cubic_reward_score}"
+                                f"\n\tHFL Score: {scores.icc_score}"
                             )
                             shared_scores_logged = True
 
@@ -243,6 +249,11 @@ class Miner(aobject):
                             f"Completion {idx + 1} scores:"
                             f"\n\tRaw Score: {scores.raw_score}"
                             f"\n\tNormalised Score: {scores.normalised_score}"
+                        )
+                    elif isinstance(criteria, TextCriteria) and criteria.score:
+                        logger.info(
+                            f"Completion {idx + 1} text feedback:"
+                            f"\n\tText Feedback Score: {criteria.score.tf_score}"
                         )
 
         except KeyError as e:
@@ -378,6 +389,7 @@ class Miner(aobject):
         ip_addr = getattr(dendrite, "ip", "Unknown IP")
         caller_hotkey = getattr(dendrite, "hotkey", None)
 
+        # Log the IP address of the incoming request and the hotkey
         logger.info(
             f"Incoming {request_tag} request from IP: {ip_addr} with hotkey: {caller_hotkey}"
         )
@@ -390,18 +402,18 @@ class Miner(aobject):
 
         if get_config().ignore_min_stake:
             message = (
-                f"Ignoring min stake required: {VALIDATOR_MIN_STAKE} for {caller_hotkey}, "
+                f"Ignoring min stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE} for {caller_hotkey}, "
                 "YOU SHOULD NOT SEE THIS when you are running a miner on mainnet"
             )
             logger.warning(message)
             return (
                 False,
-                f"Ignored minimum validator stake requirement of {VALIDATOR_MIN_STAKE}",
+                f"Ignored minimum validator stake requirement of {ValidatorConstant.VALIDATOR_MIN_STAKE}",
             )
 
         effective_stake = aget_effective_stake(caller_hotkey, self.subnet_metagraph)
-        if effective_stake < float(VALIDATOR_MIN_STAKE):
-            message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"
+        if effective_stake < float(ValidatorConstant.VALIDATOR_MIN_STAKE):
+            message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"
             logger.warning(message)
             return True, message
 
@@ -438,7 +450,7 @@ class Miner(aobject):
     async def log_miner_status(self):
         while not self._should_exit:
             logger.info(f"Miner running... block:{str(self.block)} time: {time.time()}")
-            await asyncio.sleep(MINER_STATUS)
+            await asyncio.sleep(MinerConstant.MINER_STATUS)
 
     async def sync(self):
         """
