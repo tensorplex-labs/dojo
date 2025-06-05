@@ -4,8 +4,8 @@ import os
 import time
 import traceback
 from http import HTTPStatus
-from typing import Dict
 
+import pydantic
 from bittensor.utils.networking import ip_to_int, ip_version
 from fastapi import HTTPException
 from kami import AxonInfo, KamiClient, ServeAxonPayload, SubnetMetagraph
@@ -23,7 +23,9 @@ from dojo.protocol import (
     TaskResult,
     TaskResultSynapse,
 )
-from dojo.utils import BoundedDict, get_config
+from dojo.utils import get_config
+
+from .types import ServedRequest
 
 
 def optimize_payload_for_transport(
@@ -48,11 +50,7 @@ class Miner(aobject):
         self.keyringpair = await self.kami.get_keyringpair()
         await self.register_synapse_handlers()
         await self.init_metagraphs()
-        # NOTE: keep track validator task id to dojo task id mapping
-        # FIXME: data persistence in redis-om
-        self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
         # log all incoming requests
-        self.hotkey_to_request: Dict[str, SyntheticTaskSynapse] = {}
 
     async def register_synapse_handlers(self):
         """Register handler functions for server as first parameter for handler
@@ -239,8 +237,6 @@ class Miner(aobject):
         logger.info(
             f"⬇️ Received {synapse_name} from {caller_hotkey} with expire_at: {synapse.expire_at}"
         )
-        if caller_hotkey:
-            self.hotkey_to_request[caller_hotkey] = synapse
 
         if not synapse.completion_responses:
             raise HTTPException(
@@ -251,7 +247,16 @@ class Miner(aobject):
         try:
             if task_ids := await DojoAPI.create_task(synapse):
                 dojo_task_id = task_ids[0]
-                self.vali_to_dojo_task_id[synapse.task_id] = dojo_task_id
+                served_request = ServedRequest(
+                    validator_task_id=synapse.task_id, dojo_task_id=dojo_task_id
+                )
+                try:
+                    served_request.save()
+                    served_request.expire(num_seconds=MinerConstant.REDIS_OM_TTL)
+                except pydantic.ValidationError as e:
+                    logger.error(e)
+                except Exception as e:
+                    logger.error(f"Error while trying to set TTL on redis data: {e}")
                 synapse.ack = True
                 synapse = optimize_payload_for_transport(synapse)
             else:
@@ -280,12 +285,14 @@ class Miner(aobject):
             raise HTTPException(status_code=HTTPStatus.OK, detail=message)
 
         try:
-            dojo_task_id = self.vali_to_dojo_task_id.get(synapse.validator_task_id)
-            if not dojo_task_id:
+            served_request = ServedRequest.find(
+                ServedRequest.validator_task_id == synapse.validator_task_id
+            ).first()
+            if not served_request:
                 message = f"Did not serve request from validator with {synapse.validator_task_id}"
                 logger.error(message)
                 raise HTTPException(status_code=HTTPStatus.OK, detail=message)
-
+            dojo_task_id = served_request.dojo_task_id  # type: ignore
             task_results = await DojoAPI.get_task_results_by_dojo_task_id(dojo_task_id)
             if not task_results:
                 logger.debug(

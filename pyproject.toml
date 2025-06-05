@@ -64,7 +64,8 @@ dependencies = [
   'orjson==3.10.16',
   'zstandard==0.23.0',
   "kami-client>=1.1.1",
-  "dojo-messaging>=1.0.9"
+  "dojo-messaging>=1.0.9",
+  "redis-om>=0.3.5"
 ]
 
 [project.optional-dependencies]
