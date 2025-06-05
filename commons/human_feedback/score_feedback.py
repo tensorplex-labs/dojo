@@ -9,6 +9,7 @@ from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.hfl_helpers import HFLManager
+from commons.human_feedback.types import HFLConstants
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_time
@@ -91,8 +92,8 @@ async def create_score_feedback_task(
         task_synapse.completion_responses = completion_responses
 
         # Get active miners for SF task
-        active_miners = await get_active_miners_for_hfl(validator)
-        if not active_miners:
+        active_miners = await validator.get_active_miner_uids()
+        if len(active_miners) <= HFLConstants.MIN_NUM_MINERS.value:
             logger.error(f"No active miners found for SF task for {tf_task.id}")
             return None
 
@@ -234,60 +235,6 @@ async def process_score_feedback_task(
         logger.error(f"Error processing SF task {sf_task.id}: {e}")
         logger.debug(f"Traceback: {traceback.format_exc()}")
         return False
-
-
-async def get_active_miners_for_hfl(
-    validator,
-    subset_size: int | None = None,
-    min_miners: int = 3,
-) -> list[int] | None:
-    """
-    Get a subset of active miners suitable for HFL tasks.
-
-    Args:
-        validator: The Validator instance containing miner information
-        subset_size: The desired number of miners to return
-        min_miners: Minimum number of miners required (raises error if not met)
-
-    Returns:
-        List of UID integers for selected miners
-    """
-    # Get the current active miner UIDs from the validator
-    async with validator._uids_alock:
-        active_miners = sorted(list(validator._active_miner_uids))
-
-    if not active_miners:
-        logger.warning(
-            f"No active miners available for HFL tasks: {validator._active_miner_uids}"
-        )
-        return None
-
-    # Make sure we have enough miners
-    if len(active_miners) < min_miners:
-        logger.warning(
-            f"Not enough active miners for HFL tasks. Need at least {min_miners}, "
-            f"but only found {len(active_miners)}"
-        )
-        return None
-
-    if not subset_size:
-        logger.info(
-            f"No subset size provided, returning all {len(active_miners)} active miners"
-        )
-        return active_miners
-
-    # Safeguard against subset size being greater than the number of active miners
-    subset_size = min(subset_size, len(active_miners))
-
-    # Randomly select the requested number of miners
-    import random
-
-    selected_miners = random.sample(active_miners, subset_size)
-
-    logger.info(
-        f"Selected {len(selected_miners)} miners for HFL task from {len(active_miners)} active miners"
-    )
-    return selected_miners
 
 
 async def send_hfl_request(

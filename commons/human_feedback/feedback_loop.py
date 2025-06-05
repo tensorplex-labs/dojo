@@ -19,7 +19,6 @@ from dojo.protocol import DendriteQueryResponse, SyntheticTaskSynapse
 
 from .score_feedback import (
     create_score_feedback_task,
-    get_active_miners_for_hfl,
     process_score_feedback_task,
     send_hfl_request,
 )
@@ -64,13 +63,12 @@ class FeedbackLoop:
         Core implementation of the feedback loop logic.
         Selects a validator task, creates a text criteria task, and sends it to miners.
         """
-        active_miners = await get_active_miners_for_hfl(
-            validator=validator,
-            subset_size=7,
+        active_miner_uids = await validator.get_active_miner_uids(
+            subset_size=HFLConstants.TARGET_NUM_MINERS.value
         )
-        if not active_miners:
+        if len(active_miner_uids) <= HFLConstants.TARGET_NUM_MINERS.value:
             logger.warning(
-                f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
             )
             return
 
@@ -95,7 +93,7 @@ class FeedbackLoop:
             miner_responses = await send_hfl_request(
                 synapse=text_criteria_task,
                 task_type=TaskTypeEnum.TEXT_FEEDBACK,
-                axons=validator._retrieve_axons(active_miners),
+                axons=validator._retrieve_axons(active_miner_uids),
             )
 
             if not miner_responses:
@@ -376,22 +374,16 @@ class FeedbackLoop:
                             )
                         )
 
-                        active_miners = await get_active_miners_for_hfl(validator, 7)
-
-                        if not active_miners:
-                            logger.warning(
-                                f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-                            )
-                            continue
-
-                        axons = validator._retrieve_axons(active_miners)
-
+                        active_miner_uids = await validator.get_active_miner_uids()
+                        axons = validator._retrieve_axons(active_miner_uids)
                         # filter hotkey that have already been give feedback
                         axons = [
                             axon
                             for axon in axons
                             if axon.hotkey not in hotkeys_with_feedback
                         ]
+                        if len(axons) < HFLConstants.MIN_NUM_MINERS.value:
+                            continue
 
                         miner_responses = await send_hfl_request(
                             synapse=task_synapse,
@@ -724,14 +716,12 @@ class FeedbackLoop:
                         continue
 
                     # Get active miners for the new TF task
-                    active_miners = await get_active_miners_for_hfl(
-                        validator=validator,
-                        subset_size=7,
+                    active_miners = await validator.get_active_miner_uids(
+                        subset_size=HFLConstants.TARGET_NUM_MINERS.value
                     )
-
-                    if not active_miners:
+                    if len(active_miners) <= HFLConstants.TARGET_NUM_MINERS.value:
                         logger.warning(
-                            f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                            f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
                         )
                         continue
 

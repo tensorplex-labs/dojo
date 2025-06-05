@@ -208,9 +208,24 @@ class Validator(aobject):
 
         return completion_responses
 
-    async def get_active_miner_uids(self) -> list[int]:
+    async def get_active_miner_uids(self, subset_size: int = None) -> list[int]:  # pyright: ignore[reportArgumentType]
+        """Acquires the lock to safely read the active miner uids property.
+        If subset_size is specified, will safely return randomly sampled miner
+        uids from active miner pool. If active miner pool is smaller than subset
+        size, will return the whole miner uids pool.
+        """
         async with self._uids_alock:
-            return sorted(list(self._active_miner_uids))
+            if not subset_size:
+                return sorted(list(self._active_miner_uids))
+
+            safe_subset_size = min(subset_size, len(self._active_miner_uids))
+            selected_miner_uids = random.sample(
+                list(self._active_miner_uids), safe_subset_size
+            )
+            logger.info(
+                f"Selected {selected_miner_uids=} miners from {len(self._active_miner_uids)} active miners"
+            )
+            return selected_miner_uids
 
     async def set_weights(self):
         """
@@ -700,7 +715,7 @@ class Validator(aobject):
                 for uid, (url, response) in enumerate(zip(urls, responses)):
                     if response.exception or response.error:
                         logger.error(
-                            f"Failed sending to {url} due to error: {response.error}, exception: {response.exception}"
+                            f"Failed sending to {uid=} at {url=} due to error: {response.error}, exception: {response.exception}"
                         )
                         continue
 
