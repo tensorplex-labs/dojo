@@ -63,8 +63,8 @@ dependencies = [
   "langfuse==2.48.0",
   'orjson==3.10.16',
   'zstandard==0.23.0',
-  "kami-client @ git+https://github.com/tensorplex-labs/kami-client@v1.0.0",
-  "dojo-messaging @ git+https://github.com/tensorplex-labs/dojo-messaging@v1.0.2"
+  "kami-client>=1.1.1",
+  "dojo-messaging>=1.0.9"
 ]
 
 [project.optional-dependencies]
