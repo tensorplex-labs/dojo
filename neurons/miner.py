@@ -49,6 +49,7 @@ class Miner(aobject):
         await self.register_synapse_handlers()
         await self.init_metagraphs()
         # NOTE: keep track validator task id to dojo task id mapping
+        # FIXME: data persistence in redis-om
         self.vali_to_dojo_task_id: BoundedDict = BoundedDict(max_size=1000)
         # log all incoming requests
         self.hotkey_to_request: Dict[str, SyntheticTaskSynapse] = {}
