@@ -10,7 +10,7 @@ from commons.api_settings import RedisSettings
 from commons.cache import RedisCache
 from commons.dataset.exceptions import FeedbackImprovementError
 from commons.dataset.types import HumanFeedbackResponse, TextFeedbackRequest
-from commons.dataset.utils import map_human_feedback_response, map_synthetic_response
+from commons.dataset.utils import map_synthetic_response
 from commons.exceptions import FatalSyntheticGenerationError, SyntheticGenerationError
 from dojo.protocol import SyntheticQA
 from dojo.utils import retry_log
@@ -178,7 +178,7 @@ class SyntheticAPI:
         """
         await cls.init_session()
         if cls._cache is None:
-            raise FeedbackImprovementError("Redis cache not initialized")  # noqa: F821
+            raise FeedbackImprovementError("Redis cache not initialized")
 
         # The key format is "synthetic:hf:{hf_id}"
         key = f"synthetic:hf:{hf_id}"
@@ -201,6 +201,6 @@ class SyntheticAPI:
             return False, None  # Explicit failure from API
 
         # Map and return the response if available
-        response_obj = map_human_feedback_response(raw_response)
+        response_obj = HumanFeedbackResponse.model_validate(raw_response)
         logger.info(f"Successfully retrieved improved task for ID: {hf_id}")
         return True, response_obj  # Success with data

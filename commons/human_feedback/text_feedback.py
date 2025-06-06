@@ -15,6 +15,7 @@ from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, MinerResponse, ValidatorTask
 from database.prisma.types import ValidatorTaskInclude
 from dojo.protocol import (
+    CodeAnswer,
     CriteriaType,
     CriteriaTypeEnum,
     SanitizedResultEnum,
@@ -282,7 +283,7 @@ async def send_text_feedback_to_synthetic_api(
         # Create the TextFeedbackRequest object
         text_feedback_request = TextFeedbackRequest(
             base_prompt=original_task.prompt,
-            base_code=base_completion,
+            base_code=CodeAnswer.model_validate(base_completion),
             miner_feedbacks=miner_feedback,
         )
 

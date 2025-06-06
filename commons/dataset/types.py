@@ -16,29 +16,34 @@ class HumanFeedbackTask(BaseModel):
     )
     generated_code: CodeAnswer
 
+    @model_validator(mode="before")
+    @classmethod
+    def add_completion_id(cls, data):
+        if isinstance(data, dict):
+            # Add completion_id if not present (API doesn't send this)
+            if "completion_id" not in data:
+                data["completion_id"] = get_new_uuid()
+        return data
+
 
 class HumanFeedbackResponse(BaseModel):
     base_prompt: str
     base_code: CodeAnswer
     human_feedback_tasks: List[HumanFeedbackTask]
 
-    @model_validator(mode="after")
-    def verify_code_objects(self):
-        # Verify base_code is a CodeAnswer instance
-        if not isinstance(self.base_code, CodeAnswer):
-            raise ValueError(
-                f"base_code must be a CodeAnswer or MultimedeaAnswer instance, got {type(self.base_code)}"
-            )
+    @model_validator(mode="before")
+    @classmethod
+    def transform_from_api(cls, data):
+        if isinstance(data, dict):
+            # Remove API-only fields
+            data.pop("hf_id", None)
+            data.pop("success", None)
 
-        # Verify all generated_code fields are CodeAnswer instances
-        for idx, task in enumerate(self.human_feedback_tasks):
-            if not isinstance(task.generated_code, CodeAnswer):
-                raise ValueError(
-                    f"generated_code in task {idx} must be a CodeAnswer or MultimediaAnswer instance, "
-                    f"got {type(task.generated_code)}"
-                )
+            # Convert JSON string to CodeAnswer
+        if "base_code" in data:
+            data["base_code"] = CodeAnswer.model_validate_json(data["base_code"])
 
-        return self
+        return data
 
 
 class MinerFeedback(BaseModel):
