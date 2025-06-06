@@ -6,13 +6,13 @@ import aiohttp
 from loguru import logger
 from tenacity import AsyncRetrying, RetryError, stop_after_attempt, wait_exponential
 
-from commons.api_settings import RedisSettings
-from commons.cache import RedisCache
-from commons.dataset.exceptions import FeedbackImprovementError
-from commons.dataset.types import HumanFeedbackResponse, TextFeedbackRequest
-from commons.dataset.utils import map_synthetic_response
-from commons.exceptions import FatalSyntheticGenerationError, SyntheticGenerationError
+from dojo.api.synthetic_api.exceptions import FeedbackImprovementError
+from dojo.api.synthetic_api.types import HumanFeedbackResponse, TextFeedbackRequest
+from dojo.api.synthetic_api.utils import map_synthetic_response
+from dojo.api_settings import RedisSettings
+from dojo.exceptions import FatalSyntheticGenerationError, SyntheticGenerationError
 from dojo.protocol import SyntheticQA
+from dojo.storage.cache import RedisCache
 from dojo.utils import retry_log
 from dojo.utils.config import source_dotenv
 

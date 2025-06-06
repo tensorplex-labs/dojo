@@ -1,14 +1,9 @@
 import bittensor
 from async_lru import alru_cache
 from loguru import logger
-from tenacity import (
-    AsyncRetrying,
-    RetryError,
-    stop_after_attempt,
-    wait_fixed,
-)
+from tenacity import AsyncRetrying, RetryError, stop_after_attempt, wait_fixed
 
-from commons.objects import ObjectManager
+from dojo.objects import ObjectManager
 
 
 @alru_cache(maxsize=1)

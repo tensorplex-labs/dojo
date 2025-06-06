@@ -7,14 +7,10 @@ from typing import Dict, List
 import httpx
 from loguru import logger
 
-from commons.exceptions import CreateTaskFailed
-from commons.utils import loaddotenv
 from dojo import get_dojo_api_base_url
-from dojo.protocol import (
-    CodeAnswer,
-    SyntheticTaskSynapse,
-    TaskTypeEnum,
-)
+from dojo.exceptions import CreateTaskFailed
+from dojo.protocol import CodeAnswer, SyntheticTaskSynapse, TaskTypeEnum
+from dojo.utils.core import loaddotenv
 from dojo.utils.retry_utils import async_retry
 
 DOJO_API_BASE_URL = get_dojo_api_base_url()
@@ -115,6 +111,9 @@ class DojoAPI:
             if task_request.task_type == TaskTypeEnum.TEXT_FEEDBACK
             else cls.CODE_GEN_TASK_TITLE
         )
+
+        error_msg = ""
+        last_error = None
 
         for attempt in range(cls.MAX_RETRIES):
             try:

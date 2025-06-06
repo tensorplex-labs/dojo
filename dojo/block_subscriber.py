@@ -7,8 +7,8 @@ from typing import Any, Callable
 import websockets
 from loguru import logger
 
-from commons.objects import ObjectManager
 from dojo.chain import parse_block_headers
+from dojo.objects import ObjectManager
 
 BLOCK_TIME = 12
 WS_OPEN_TIMEOUT = 30
@@ -66,7 +66,7 @@ async def monitor_subscription(watchdog: SubscriptionWatchdog, max_interval_sec:
 async def start_block_subscriber(
     callbacks: list[Callable[..., Awaitable[Any] | Any]],  # pyright: ignore[reportExplicitAny]
     max_interval_sec: float,
-    url: str = ObjectManager.get_config().subtensor.chain_endpoint,
+    url: str = ObjectManager.get_config().subtensor.chain_endpoint,  # type: ignore[reportOptionalMemberAccess]
     retry_delay: float = 5.0,
     max_retries: int | None = None,
 ):

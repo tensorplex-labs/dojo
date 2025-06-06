@@ -16,14 +16,13 @@ base_path = Path.cwd()
 def check_config(config: bt.config):
     """Checks/validates the config namespace object."""
     # logger.check_config(config)
-
     log_dir = str(base_path / "logs")
     full_path = os.path.expanduser(
-        f"{log_dir}/{config.wallet.name}/{config.wallet.hotkey}/netuid{config.netuid}/{config.neuron.name}"
+        f"{log_dir}/{config.wallet.name}/{config.wallet.hotkey}/netuid{config.netuid}/{config.neuron.name}"  # type: ignore[reportOptionalMemberAccess]
     )
-    config.neuron.full_path = os.path.expanduser(full_path)
-    if not os.path.exists(config.neuron.full_path):
-        os.makedirs(config.neuron.full_path, exist_ok=True)
+    config.neuron.full_path = os.path.expanduser(full_path)  # type: ignore[reportOptionalMemberAccess]
+    if not os.path.exists(config.neuron.full_path):  # type: ignore[reportOptionalMemberAccess]
+        os.makedirs(config.neuron.full_path, exist_ok=True)  # type: ignore[reportOptionalMemberAccess]
 
     # bt.logging.enable_third_party_loggers()
 

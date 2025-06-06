@@ -20,8 +20,16 @@ from loguru import logger
 from messaging import Client, StdResponse, get_client
 from torch.nn import functional as F
 
-from commons.dataset.synthetic import SyntheticAPI
-from commons.exceptions import (
+from database.client import connect_db
+from database.mappers import map_miner_response_to_completion_responses
+from database.orm import ORM
+from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
+from database.prisma.models import HFLState, ValidatorTask
+from database.prisma.types import HFLStateUpdateInput
+from dojo import get_spec_version
+from dojo.api.synthetic_api import SyntheticAPI
+from dojo.constants import ValidatorConstant, ValidatorInterval
+from dojo.exceptions import (
     EmptyScores,
     FatalSyntheticGenerationError,
     InvalidMinerResponse,
@@ -29,27 +37,8 @@ from commons.exceptions import (
     SetWeightsFailed,
     SyntheticGenerationError,
 )
-from commons.human_feedback import HFLConstants, HFLManager, should_continue_hfl
-from commons.objects import ObjectManager
-from commons.orm import ORM
-from commons.score_storage import ScoreStorage
-from commons.scoring import Scoring, hfl
-from commons.utils import (
-    _terminal_plot,
-    aget_effective_stake,
-    aobject,
-    datetime_as_utc,
-    get_epoch_time,
-    get_new_uuid,
-    set_expire_time,
-)
-from database.client import connect_db
-from database.mappers import map_miner_response_to_completion_responses
-from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
-from database.prisma.models import HFLState, ValidatorTask
-from database.prisma.types import HFLStateUpdateInput
-from dojo import get_spec_version
-from dojo.constants import ValidatorConstant, ValidatorInterval
+from dojo.human_feedback import HFLConstants, HFLManager, should_continue_hfl
+from dojo.objects import ObjectManager
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -64,6 +53,17 @@ from dojo.protocol import (
     TaskResult,
     TaskResultSynapse,
     TextFeedbackEvent,
+)
+from dojo.scoring import Scoring, hfl
+from dojo.storage.score_storage import ScoreStorage
+from dojo.utils import (
+    aget_effective_stake,
+    aobject,
+    datetime_as_utc,
+    get_epoch_time,
+    get_new_uuid,
+    set_expire_time,
+    terminal_plot,
 )
 from dojo.utils.config import get_config
 from dojo.utils.weight_utils import (
@@ -275,7 +275,7 @@ class Validator(aobject):
         logger.info(f"weights:\n{safe_normalized_weights}")
         logger.info(f"uids:\n{uids}")
 
-        _terminal_plot(
+        terminal_plot(
             f"pre-processed weights, block: {self.block}",
             safe_normalized_weights.numpy(),
         )
@@ -283,7 +283,7 @@ class Validator(aobject):
         logger.info(f"Final weights:\n{final_weights}")
         logger.info(f"Final uids:\n{final_uids}")
 
-        _terminal_plot(
+        terminal_plot(
             f"final weights, block: {self.block}",
             final_weights.numpy(),
         )
@@ -505,7 +505,7 @@ class Validator(aobject):
 
         # Update scores with lock protection
         async with self._scores_alock:
-            _terminal_plot(
+            terminal_plot(
                 f"Scores before update, block: {self.block}",
                 current_scores.numpy(),
             )
@@ -518,7 +518,7 @@ class Validator(aobject):
             # ensure scores are non-negative
             updated_scores = torch.clamp(updated_scores, min=0.0)
 
-            _terminal_plot(
+            terminal_plot(
                 f"Scores after update, block: {self.block}",
                 updated_scores.numpy(),
             )
@@ -619,11 +619,11 @@ class Validator(aobject):
                 else:
                     self.hfl_scores = torch.clamp(hfl_scores, 0.0)
 
-                _terminal_plot(
+                terminal_plot(
                     f"synthetic scores on load, block: {self.block}",
                     self.synthetic_score.numpy(),
                 )
-                _terminal_plot(
+                terminal_plot(
                     f"HFL scores on load, block: {self.block}", self.hfl_scores.numpy()
                 )
 

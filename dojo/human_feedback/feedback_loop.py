@@ -7,14 +7,14 @@ from typing import TYPE_CHECKING, Dict, List, Tuple
 
 from loguru import logger
 
-from commons.dataset.types import MinerFeedback
-from commons.exceptions import NoNewExpiredTasksYet
-from commons.human_feedback.hfl_helpers import HFLManager
-from commons.orm import ORM
+from database.orm import ORM
 from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import MinerResponse
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskInclude
+from dojo.api.synthetic_api import MinerFeedback
+from dojo.exceptions import NoNewExpiredTasksYet
+from dojo.human_feedback.hfl_helpers import HFLManager
 from dojo.protocol import DendriteQueryResponse, SyntheticTaskSynapse
 
 from .score_feedback import (

@@ -5,7 +5,7 @@ import bittensor as bt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from strenum import StrEnum
 
-from commons.utils import get_epoch_time, get_new_uuid
+from dojo.utils.core import get_epoch_time, get_new_uuid
 
 
 class SanitizedResultEnum(StrEnum):

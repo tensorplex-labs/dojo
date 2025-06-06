@@ -12,10 +12,9 @@ from kami import AxonInfo, KamiClient, ServeAxonPayload, SubnetMetagraph
 from loguru import logger
 from messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 
-from commons.objects import ObjectManager
-from commons.utils import aget_effective_stake, aobject
-from commons.worker_api.dojo import DojoAPI
+from dojo.api.worker_api import DojoAPI
 from dojo.constants import MinerConstant, ValidatorConstant
+from dojo.objects import ObjectManager
 from dojo.protocol import (
     Heartbeat,
     ScoreResultSynapse,
@@ -23,7 +22,7 @@ from dojo.protocol import (
     TaskResult,
     TaskResultSynapse,
 )
-from dojo.utils import get_config
+from dojo.utils import aget_effective_stake, aobject, get_config
 
 from .types import ServedRequest
 

@@ -211,6 +211,9 @@ class ImportRulesChecker(checkers.BaseChecker):
 
     def _is_local_module(self, module_name):
         """Check if a module is part of your local project."""
+        if not self._local_prefixes:
+            return False
+
         return any(module_name.startswith(prefix) for prefix in self._local_prefixes)
 
 

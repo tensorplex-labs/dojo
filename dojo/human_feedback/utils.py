@@ -7,8 +7,6 @@ from datetime import datetime, timedelta, timezone
 
 from loguru import logger
 
-from commons.dataset.types import HumanFeedbackResponse
-from commons.utils import datetime_as_utc, get_new_uuid, set_expire_time
 from database.client import connect_db, prisma
 from database.prisma import Json
 from database.prisma.models import Criterion, HFLState, MinerScore, ValidatorTask
@@ -18,6 +16,7 @@ from database.prisma.types import (
     MinerScoreWhereInput,
     ValidatorTaskInclude,
 )
+from dojo.api.synthetic_api import HumanFeedbackResponse
 from dojo.protocol import (
     CodeAnswer,
     CompletionResponse,
@@ -28,6 +27,7 @@ from dojo.protocol import (
     TaskTypeEnum,
     TextFeedbackScore,
 )
+from dojo.utils.core import datetime_as_utc, get_new_uuid, set_expire_time
 
 from .types import HFLConstants, HFLInterval
 
@@ -655,7 +655,7 @@ async def create_initial_miner_scores(
         # Step 4: Calculate averages for numeric criteria (e.g., scores)
         # Example result: {"model_123": {"score": 75.0, "text": ["Good code", "Needs improvement"]}}
 
-        from commons.human_feedback.utils import calculate_criteria_averages
+        from human_feedback.utils import calculate_criteria_averages
 
         model_criteria_type_to_values = calculate_criteria_averages(
             model_to_criteria_values

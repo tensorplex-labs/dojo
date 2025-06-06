@@ -12,15 +12,13 @@ import httpx
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
-from commons.objects import ObjectManager
-from commons.utils import datetime_to_iso8601_str
 from database.client import connect_db, disconnect_db, prisma
 from database.prisma.models import Completion, MinerScore, ValidatorTask
-from database.prisma.types import (
-    ValidatorTaskWhereInput,
-)
+from database.prisma.types import ValidatorTaskWhereInput
+from dojo.objects import ObjectManager
 from dojo.protocol import Scores
 from dojo.utils.config import source_dotenv
+from dojo.utils.core import datetime_to_iso8601_str
 
 source_dotenv()
 

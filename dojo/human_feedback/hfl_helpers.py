@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
 
-from commons.utils import datetime_as_utc
 from database.client import prisma
 from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum
 from database.prisma.models import HFLState
 from database.prisma.types import HFLStateCreateInput, HFLStateUpdateInput
 from dojo.protocol import HFLEvent, TextFeedbackEvent
+from dojo.utils.core import datetime_as_utc
 
 
 class HFLManager:

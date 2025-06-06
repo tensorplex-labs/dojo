@@ -6,14 +6,11 @@ from typing import TYPE_CHECKING, List
 
 from loguru import logger
 
-from commons.dataset.synthetic import SyntheticAPI
-from commons.dataset.types import MinerFeedback, TextFeedbackRequest
-from commons.human_feedback.hfl_helpers import HFLManager
-from commons.orm import ORM
-from commons.utils import get_new_uuid, set_expire_time
+from database.orm import ORM
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, MinerResponse, ValidatorTask
 from database.prisma.types import ValidatorTaskInclude
+from dojo.api.synthetic_api import MinerFeedback, SyntheticAPI, TextFeedbackRequest
 from dojo.protocol import (
     CodeAnswer,
     CriteriaType,
@@ -24,7 +21,9 @@ from dojo.protocol import (
     TextCriteria,
     TextFeedbackEvent,
 )
+from dojo.utils.core import get_new_uuid, set_expire_time
 
+from .hfl_helpers import HFLManager
 from .sanitize import sanitize_miner_feedback
 from .types import HFLInterval
 from .utils import create_initial_miner_scores, extract_text_feedback_from_results

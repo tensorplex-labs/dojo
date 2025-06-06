@@ -5,7 +5,7 @@ redis client class to use redis using singleton pattern.
 from redis import asyncio as aioredis
 from redis.asyncio.client import Redis
 
-from commons.api_settings import RedisSettings
+from dojo.api_settings import RedisSettings
 
 
 def build_redis_url(config: RedisSettings, is_ssl: bool = True) -> str:
@@ -73,4 +73,4 @@ class RedisCache:
 
     async def close(self):
         if self.redis:
-            await self.redis.aclose()
+            await self.redis.close()
