@@ -3,11 +3,9 @@ from typing import Union
 
 import numpy as np
 import torch
+from kami import KamiClient, SubnetMetagraph
 from loguru import logger
 from numpy.typing import NDArray
-
-from dojo.kami import SubnetMetagraph
-from dojo.kami.kami import Kami
 
 U32_MAX = 4294967295
 U16_MAX = 65535
@@ -17,7 +15,7 @@ async def aprocess_weights_for_netuid(
     uids: Union[NDArray[np.int64], "torch.Tensor"],
     weights: Union[NDArray[np.float32], "torch.Tensor"],
     netuid: int,
-    kami: Kami,
+    kami: KamiClient,
     metagraph: SubnetMetagraph,
     exclude_quantile: int = 0,
 ) -> (

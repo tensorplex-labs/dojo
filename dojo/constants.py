@@ -73,6 +73,8 @@ class MinerConstant(IntEnum):
     """Miner-specific constants"""
 
     MINER_STATUS = 60
+    # using redis as a form of persistence, expire after X seconds
+    REDIS_OM_TTL = 48 * 3600
 
 
 # Export the constants directly

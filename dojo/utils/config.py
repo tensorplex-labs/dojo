@@ -1,7 +1,6 @@
 import argparse
 import os
 import sys
-from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 
@@ -9,13 +8,9 @@ import bittensor as bt
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
+from .types import Mode
+
 base_path = Path.cwd()
-
-
-class Mode(str, Enum):
-    NORMAL = "normal"
-    HIGH = "high"
-    MEDIUM = "medium"
 
 
 def check_config(config: bt.config):
@@ -33,11 +28,7 @@ def check_config(config: bt.config):
     # bt.logging.enable_third_party_loggers()
 
 
-def configure_logging(config: bt.config):
-    """
-    Configures logging based on the provided configuration.
-    """
-
+def resolve_log_level(config: bt.config) -> str:
     level = "INFO"
     if config.logging.trace:  # pyright: ignore[reportOptionalMemberAccess]
         level = "TRACE"
@@ -45,8 +36,16 @@ def configure_logging(config: bt.config):
         level = "DEBUG"
     elif config.logging.info:  # pyright: ignore[reportOptionalMemberAccess]
         level = "INFO"
+    return level
+
+
+def configure_logging(config: bt.config):
+    """
+    Configures logging based on the provided configuration.
+    """
 
     logger.remove()
+    level = resolve_log_level(config)
     logger.add(sys.stdout, level=level)
 
     # Optionally enable file logging if `record_log` and `logging_dir` are provided
