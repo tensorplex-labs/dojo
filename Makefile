@@ -148,15 +148,3 @@ back-up-scores:
 install-hfl-miner:
 	chmod +x ./scripts/hfl/hfl_miner.sh
 	./scripts/hfl/hfl_miner.sh
-
-# ---------------------------------------------------------------------------- #
-#                                   KAMI                                       #
-# ---------------------------------------------------------------------------- #
-
-kami:
-	docker compose -f docker-compose.shared.yaml up -d kami
-
-kami-down:
-	docker compose -f docker-compose.shared.yaml down kami
-back-up-scores:
-	docker cp validator:/app/scores/miner_scores.pt scores/miner_scores.pt.bak

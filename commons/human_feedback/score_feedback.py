@@ -8,7 +8,7 @@ from kami import AxonInfo
 from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
-from commons.hfl_helpers import HFLManager
+from commons.human_feedback.hfl_helpers import HFLManager
 from commons.human_feedback.types import HFLConstants
 from commons.objects import ObjectManager
 from commons.orm import ORM

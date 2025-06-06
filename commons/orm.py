@@ -13,7 +13,7 @@ from commons.exceptions import (
     NoNewExpiredTasksYet,
     NoProcessedTasksYet,
 )
-from commons.hfl_helpers import HFLManager
+from commons.human_feedback import HFLManager
 from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
 from database.mappers import (

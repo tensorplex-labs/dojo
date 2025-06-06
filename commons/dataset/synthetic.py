@@ -4,28 +4,20 @@ import traceback
 
 import aiohttp
 from loguru import logger
-from tenacity import (
-    AsyncRetrying,
-    RetryError,
-    stop_after_attempt,
-    wait_exponential,
-)
+from tenacity import AsyncRetrying, RetryError, stop_after_attempt, wait_exponential
 
 from commons.api_settings import RedisSettings
 from commons.cache import RedisCache
+from commons.dataset.exceptions import FeedbackImprovementError
 from commons.dataset.types import HumanFeedbackResponse, TextFeedbackRequest
 from commons.dataset.utils import map_human_feedback_response, map_synthetic_response
-from commons.exceptions import (
-    FatalSyntheticGenerationError,
-    FeedbackImprovementError,
-    SyntheticGenerationError,
-)
+from commons.exceptions import FatalSyntheticGenerationError, SyntheticGenerationError
 from dojo.protocol import SyntheticQA
 from dojo.utils import retry_log
 from dojo.utils.config import source_dotenv
 
-SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
 source_dotenv()
+SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
 redis_config = RedisSettings()
 
 
@@ -51,6 +43,7 @@ class SyntheticAPI:
 
         if cls._cache is not None:
             await cls._cache.close()
+            cls._cache = None
         logger.debug("Ensured SyntheticAPI session is closed.")
 
     @classmethod
@@ -74,6 +67,9 @@ class SyntheticAPI:
         await cls.init_session()
         if cls._session is None:
             raise FatalSyntheticGenerationError("Failed to initialize session")
+
+        if not SYNTHETIC_API_BASE_URL:
+            raise FatalSyntheticGenerationError("SYNTHETIC_API_URL is not configured")
 
         path = f"{SYNTHETIC_API_BASE_URL}/api/human-feedback"
         request_data = text_feedback_data.model_dump(mode="json")
@@ -182,7 +178,7 @@ class SyntheticAPI:
         """
         await cls.init_session()
         if cls._cache is None:
-            raise FeedbackImprovementError("Redis cache not initialized")
+            raise FeedbackImprovementError("Redis cache not initialized")  # noqa: F821
 
         # The key format is "synthetic:hf:{hf_id}"
         key = f"synthetic:hf:{hf_id}"

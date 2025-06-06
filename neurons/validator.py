@@ -29,8 +29,7 @@ from commons.exceptions import (
     SetWeightsFailed,
     SyntheticGenerationError,
 )
-from commons.hfl_helpers import HFLManager
-from commons.human_feedback import HFLConstants, should_continue_hfl
+from commons.human_feedback import HFLConstants, HFLManager, should_continue_hfl
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.score_storage import ScoreStorage

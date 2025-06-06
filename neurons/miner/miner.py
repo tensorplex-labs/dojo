@@ -42,7 +42,7 @@ class Miner(aobject):
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
-        self.kami: KamiClient = KamiClient()
+        self.kami: KamiClient = KamiClient(port=self.config.kami.port)
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
@@ -153,6 +153,8 @@ class Miner(aobject):
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
         external_ip = await self.server.get_external_ip()
+        uid = self.subnet_metagraph.hotkeys.index(self.keyringpair.hotkey)
+        logger.info(f"hotkey: {self.keyringpair.hotkey}, uid: {uid}")
         logger.info(
             f"Broadcasting miner server at: ip: {external_ip}, port: {self.config.axon.port} with netuid: {self.config.netuid}"
         )

@@ -9,7 +9,7 @@ from loguru import logger
 
 from commons.dataset.types import MinerFeedback
 from commons.exceptions import NoNewExpiredTasksYet
-from commons.hfl_helpers import HFLManager
+from commons.human_feedback.hfl_helpers import HFLManager
 from commons.orm import ORM
 from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum

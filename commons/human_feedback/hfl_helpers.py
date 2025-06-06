@@ -57,6 +57,7 @@ class HFLManager:
             task_id=current_task_id,
             iteration=current_iteration,  # Use the determined iteration
             timestamp=datetime_as_utc(datetime.now(timezone.utc)),
+            type=HFLStatusEnum.TF_PENDING,
         )
 
         # Prepare data for creating the HFL state

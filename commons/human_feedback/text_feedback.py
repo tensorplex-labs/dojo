@@ -8,7 +8,7 @@ from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dataset.types import MinerFeedback, TextFeedbackRequest
-from commons.hfl_helpers import HFLManager
+from commons.human_feedback.hfl_helpers import HFLManager
 from commons.orm import ORM
 from commons.utils import get_new_uuid, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
