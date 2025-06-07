@@ -34,17 +34,27 @@ if [ "$1" = 'miner' ]; then
         EXTRA_ARGS="${EXTRA_ARGS} --simulation_bad_miner"
     fi
 
+    # FIXME: remove ignore_min_stake flag before release
+    # FIXME: remove ignore_min_stake flag before release
+    # FIXME: remove ignore_min_stake flag before release
+    # FIXME: remove ignore_min_stake flag before release
+    # FIXME: remove ignore_min_stake flag before release
+    # FIXME: remove ignore_min_stake flag before release
+    # FIXME: remove ignore_min_stake flag before release
+    # FIXME: remove ignore_min_stake flag before release
+    # FIXME: remove ignore_min_stake flag before release
     python main_miner.py \
-    --netuid ${NETUID} \
-    --subtensor.network ${SUBTENSOR_NETWORK} \
-    --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
-    --logging.info \
-    --wallet.name ${WALLET_COLDKEY} \
-    --wallet.hotkey ${WALLET_HOTKEY} \
-    --axon.port ${AXON_PORT} \
-    --neuron.type miner \
-    --kami.host ${KAMI_HOST} \
-    --kami.port ${KAMI_PORT} \
+        --netuid ${NETUID} \
+        --subtensor.network ${SUBTENSOR_NETWORK} \
+        --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
+        --logging.info \
+        --wallet.name ${WALLET_COLDKEY} \
+        --wallet.hotkey ${WALLET_HOTKEY} \
+        --axon.port ${AXON_PORT} \
+        --neuron.type miner \
+        --kami.host ${KAMI_HOST} \
+        --kami.port ${KAMI_PORT} \
+        --ignore_min_stake
     ${EXTRA_ARGS}
 fi
 
@@ -70,16 +80,16 @@ if [ "$1" = 'validator' ]; then
     fi
 
     python main_validator.py \
-    --netuid ${NETUID} \
-    --subtensor.network ${SUBTENSOR_NETWORK} \
-    --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
-    --logging.info \
-    --wallet.name ${WALLET_COLDKEY} \
-    --wallet.hotkey ${WALLET_HOTKEY} \
-    --neuron.type validator \
-    --kami.host ${KAMI_HOST} \
-    --kami.port ${KAMI_PORT} \
-    ${EXTRA_ARGS}
+        --netuid ${NETUID} \
+        --subtensor.network ${SUBTENSOR_NETWORK} \
+        --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
+        --logging.info \
+        --wallet.name ${WALLET_COLDKEY} \
+        --wallet.hotkey ${WALLET_HOTKEY} \
+        --neuron.type validator \
+        --kami.host ${KAMI_HOST} \
+        --kami.port ${KAMI_PORT} \
+        ${EXTRA_ARGS}
 fi
 
 if [ "$1" = 'extract-dataset' ]; then
@@ -90,8 +100,8 @@ if [ "$1" = 'extract-dataset' ]; then
     echo "WALLET_COLDKEY: ${WALLET_COLDKEY}"
     echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"
     python scripts/extract_dataset.py \
-    --wallet.name ${WALLET_COLDKEY} \
-    --wallet.hotkey ${WALLET_HOTKEY}
+        --wallet.name ${WALLET_COLDKEY} \
+        --wallet.hotkey ${WALLET_HOTKEY}
 fi
 
 if [ "$1" = 'validator-api-service' ]; then
@@ -100,11 +110,10 @@ if [ "$1" = 'validator-api-service' ]; then
     echo "MAX_CHUNK_SIZE_MB: ${MAX_CHUNK_SIZE_MB}"
     echo "NETUID: ${NETUID}"
     python entrypoints/validator_api_service.py \
-    --netuid ${NETUID} \
-    --subtensor.network ${SUBTENSOR_NETWORK} \
-    --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT}
+        --netuid ${NETUID} \
+        --subtensor.network ${SUBTENSOR_NETWORK} \
+        --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT}
 fi
-
 
 if [ "$1" = 'migration' ]; then
     echo "Environment variables:"
