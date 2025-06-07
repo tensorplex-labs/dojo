@@ -548,76 +548,37 @@ class Validator(aobject):
         except Exception as e:
             logger.error(f"Failed to save validator state: {e}")
 
-    async def _load_state(self):
+    async def load_state(self):
+        """Loads the state of the validator from a file."""
         try:
-            await connect_db()
-            synthetic_scores, hfl_scores = await ScoreStorage.load()
-            # At upgrade time, we'll have synthetic_scores from previous version but hfl_scores will be None
-            # Handle this migration case explicitly with clear logging
-            if synthetic_scores is not None and hfl_scores is None:
-                logger.info(
-                    "Detected upgrade from previous version: loading synthetic scores only, initializing HFL scores to zeros"
-                )
-                hfl_scores = torch.zeros(len(synthetic_scores), dtype=torch.float32)
-
-            # Neither score was found
-            if synthetic_scores is None and hfl_scores is None:
-                num_processed_tasks = await ORM.get_num_processed_tasks()
-                if num_processed_tasks > 0:
-                    logger.error(
-                        "Score record not found, but you have processed tasks."
-                    )
-                else:
-                    logger.warning(
-                        "Score record not found, and no tasks processed, this is okay if you're running for the first time."
-                    )
-                return None
-
-            logger.success(
-                f"Loaded validator state: synthetic_scores shape={synthetic_scores.shape if synthetic_scores is not None else None}, hfl_scores shape={hfl_scores.shape if hfl_scores is not None else None}"
-            )
             async with self._scores_alock:
-                # If synthetic_scores is None, initialize it with zeros
-                if synthetic_scores is None:
-                    synthetic_scores = torch.zeros(len(self.metagraph.hotkeys))
+                await connect_db()
+                synthetic_score_vec, hfl_score_vec = await ScoreStorage.load()
+                if synthetic_score_vec is None:
+                    synthetic_score_vec = torch.zeros(len(self.metagraph.hotkeys))
                     logger.warning("Synthetic scores not found, initializing to zeros")
 
-                # If hfl_scores is None, initialize it with zeros
-                if hfl_scores is None:
-                    hfl_scores = torch.zeros(len(self.metagraph.hotkeys))
+                if len(synthetic_score_vec) < len(self.metagraph.hotkeys):
+                    logger.warning(
+                        "Synthetic scores state is less than current metagraph hotkeys length, adjusting length."
+                    )
+                    synthetic_score_vec = self._resize_score_tensor(synthetic_score_vec)
+                    self.synthetic_score = torch.clamp(synthetic_score_vec, 0.0)
+
+                if hfl_score_vec is None:
+                    hfl_score_vec = torch.zeros(len(self.metagraph.hotkeys))
                     logger.warning("HFL scores not found, initializing to zeros")
 
-                # If metagraph has more hotkeys than scores, adjust length for synthetic scores
-                if len(synthetic_scores) < len(self.metagraph.hotkeys):
+                if len(hfl_score_vec) < len(self.metagraph.hotkeys):
                     logger.warning(
-                        "Synthetic scores state is less than current metagraph hotkeys length, adjusting length. This should only happen when subnet is not at max UIDs yet."
+                        "HFL scores state is less than current metagraph hotkeys length, adjusting length."
                     )
-                    # Length adjusted scores
-                    adjusted_synthetic_scores = torch.zeros(len(self.metagraph.hotkeys))
-                    adjusted_synthetic_scores[: len(synthetic_scores)] = (
-                        synthetic_scores
-                    )
-                    logger.info(
-                        f"Load state: adjusted synthetic scores shape from {synthetic_scores.shape} to {adjusted_synthetic_scores.shape}"
-                    )
-                    self.synthetic_score = torch.clamp(adjusted_synthetic_scores, 0.0)
-                else:
-                    self.synthetic_score = torch.clamp(synthetic_scores, 0.0)
+                    hfl_score_vec = self._resize_score_tensor(hfl_score_vec)
+                    self.hfl_scores = torch.clamp(hfl_score_vec, 0.0)
 
-                # If metagraph has more hotkeys than scores, adjust length for HFL scores
-                if len(hfl_scores) < len(self.metagraph.hotkeys):
-                    logger.warning(
-                        "HFL scores state is less than current metagraph hotkeys length, adjusting length. This should only happen when subnet is not at max UIDs yet."
-                    )
-                    # Length adjusted scores
-                    adjusted_hfl_scores = torch.zeros(len(self.metagraph.hotkeys))
-                    adjusted_hfl_scores[: len(hfl_scores)] = hfl_scores
-                    logger.info(
-                        f"Load state: adjusted HFL scores shape from {hfl_scores.shape} to {adjusted_hfl_scores.shape}"
-                    )
-                    self.hfl_scores = torch.clamp(adjusted_hfl_scores, 0.0)
-                else:
-                    self.hfl_scores = torch.clamp(hfl_scores, 0.0)
+                logger.success(
+                    f"Loaded validator state: synthetic_scores shape={self.synthetic_score.shape}, hfl_scores shape={self.hfl_scores.shape}"
+                )
 
                 terminal_plot(
                     f"synthetic scores on load, block: {self.block}",
@@ -626,20 +587,9 @@ class Validator(aobject):
                 terminal_plot(
                     f"HFL scores on load, block: {self.block}", self.hfl_scores.numpy()
                 )
-
         except Exception as e:
-            logger.error(
-                f"Unexpected error occurred while loading validator state: {e}"
-            )
-            return None
-
-    async def load_state(self):
-        """Loads the state of the validator from a file."""
-        try:
-            await self._load_state()
-        except Exception as e:
-            logger.error(f"Failed to load validator state: {e}")
-            pass
+            traceback.print_exc()
+            logger.error(f"Error occurred while trying to load validator state: {e}")
 
     async def should_sync_metagraph(self):
         """
