@@ -252,7 +252,6 @@ class Miner(aobject):
                 )
                 try:
                     served_request.save()
-                    served_request.expire(num_seconds=MinerConstant.REDIS_OM_TTL)
                 except pydantic.ValidationError as e:
                     logger.error(e)
                 except Exception as e:
