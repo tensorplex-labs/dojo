@@ -712,7 +712,8 @@ class Validator(aobject):
                 )
 
                 active_uids: set[int] = set()
-                for uid, (url, response) in enumerate(zip(urls, responses)):
+                for axon, url, response in zip(axons, urls, responses):
+                    uid = self.metagraph.hotkeys.index(axon.hotkey)
                     if response.exception or response.error:
                         logger.error(
                             f"Failed sending to {uid=} at {url=} due to error: {response.error}, exception: {response.exception}"
