@@ -16,8 +16,12 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.datastructures import State
 
-from commons.utils import check_stake, verify_hotkey_in_metagraph, verify_signature
 from dojo.protocol import AnalyticsData, AnalyticsPayload
+from dojo.utils.blockchain import (
+    check_stake,
+    verify_hotkey_in_metagraph,
+    verify_signature,
+)
 
 analytics_router = APIRouter()
 ONE_DAY_SECONDS = 60 * 60 * 24  # cached tasks to expire after 1 day
@@ -50,7 +54,7 @@ async def _upload_to_s3(data: AnalyticsPayload, hotkey: str, state: State):
     """
     rc = state.redis
     cfg = state.api_config
-
+    new_tasks: list[AnalyticsData] = []
     if not data.tasks:
         logger.error("No analytics data to upload")
         return
@@ -59,7 +63,6 @@ async def _upload_to_s3(data: AnalyticsPayload, hotkey: str, state: State):
     await rc.connect()
     try:
         # check if any tasks have been uploaded previously
-        new_tasks: list[AnalyticsData] = []
 
         for task in data.tasks:
             val_task_id = task.validator_task_id

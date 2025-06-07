@@ -12,10 +12,9 @@ from kami import AxonInfo, KamiClient, ServeAxonPayload, SubnetMetagraph
 from loguru import logger
 from messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 
-from commons.objects import ObjectManager
-from commons.utils import aget_effective_stake, aobject
-from commons.worker_api.dojo import DojoAPI
+from dojo.api.worker_api import DojoAPI
 from dojo.constants import MinerConstant, ValidatorConstant
+from dojo.objects import ObjectManager
 from dojo.protocol import (
     Heartbeat,
     ScoreResultSynapse,
@@ -23,7 +22,7 @@ from dojo.protocol import (
     TaskResult,
     TaskResultSynapse,
 )
-from dojo.utils import get_config
+from dojo.utils import aget_effective_stake, aobject, get_config
 
 from .types import ServedRequest
 
@@ -42,7 +41,7 @@ class Miner(aobject):
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
-        self.kami: KamiClient = KamiClient()
+        self.kami: KamiClient = KamiClient(port=self.config.kami.port)
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
@@ -153,6 +152,8 @@ class Miner(aobject):
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
         external_ip = await self.server.get_external_ip()
+        uid = self.subnet_metagraph.hotkeys.index(self.keyringpair.hotkey)
+        logger.info(f"hotkey: {self.keyringpair.hotkey}, uid: {uid}")
         logger.info(
             f"Broadcasting miner server at: ip: {external_ip}, port: {self.config.axon.port} with netuid: {self.config.netuid}"
         )

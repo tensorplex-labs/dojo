@@ -25,6 +25,9 @@ Complete the .env file by changing / uncommenting the required variables
 | AXON_PORT           | Port for Axon server                                              | 8091                                        |                                                                                                                                                             |
 | VALIDATOR_MIN_STAKE | Validator Minimum Stake                                           | 5000                                        | Minimum stake required from validators. It is recommended to set value to 0 for testnet                                                                     |
 | TASK_MAX_RESULTS    | The number of workers that may submit responses for a single task | 4                                           |                                                                                                                                                             |
+| REDIS_HOST          | Redis host                                                        | redis                                       | Container name or IP                                                                                                                                        |
+| REDIS_PORT          | Redis port                                                        | 6379                                        | Default Redis port                                                                                                                                          |
+
 
 Run Dojo CLI to retrieve API Key and Subscription Key. See [Dojo CLI](#dojo-cli) for usage. Note down the API key, subscription key and append the API key to your .env file.
 

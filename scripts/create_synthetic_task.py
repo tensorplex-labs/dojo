@@ -3,14 +3,15 @@ import json
 
 from loguru import logger
 
-from commons.dataset.synthetic import SyntheticAPI
-from commons.utils import set_expire_time
-from commons.worker_api.dojo import DojoAPI
+from dojo.api.synthetic_api import SyntheticAPI
+from dojo.api.worker_api import DojoAPI
 from dojo.protocol import (
+    CriteriaType,
     ScoreCriteria,
     SyntheticTaskSynapse,
     TaskTypeEnum,
 )
+from dojo.utils.core import set_expire_time
 
 
 async def main():
@@ -20,7 +21,7 @@ async def main():
         return
 
     # Create criteria for each completion response
-    criteria = [
+    criteria: list[CriteriaType] = [
         ScoreCriteria(
             min=1.0,
             max=100.0,
