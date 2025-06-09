@@ -37,6 +37,21 @@ def optimize_payload_for_transport(
     return synapse_copy
 
 
+async def check_redis_connection():
+    """Check if Redis OM is connected to the correct Redis server"""
+    try:
+        from redis_om import get_redis_connection
+
+        redis_conn = get_redis_connection()
+        result = redis_conn.ping()
+        logger.info(f"✅ Connection test result: {result}")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Redis OM connection debug failed: {e}")
+        return False
+
+
 class Miner(aobject):
     async def __init__(self):
         self.config = ObjectManager.get_config()
@@ -50,6 +65,8 @@ class Miner(aobject):
         self.keyringpair = await self.kami.get_keyringpair()
         await self.register_synapse_handlers()
         await self.init_metagraphs()
+        if not await check_redis_connection():
+            raise ConnectionError()
         # log all incoming requests
 
     async def register_synapse_handlers(self):
@@ -252,12 +269,14 @@ class Miner(aobject):
                 )
                 try:
                     served_request.save()
+                    served_request.expire(num_seconds=int(MinerConstant.REDIS_OM_TTL))
                 except pydantic.ValidationError as e:
                     logger.error(e)
                 except Exception as e:
                     logger.error(f"Error while trying to set TTL on redis data: {e}")
                 synapse.ack = True
                 synapse = optimize_payload_for_transport(synapse)
+
             else:
                 logger.error("Failed to create task: no task IDs returned")
 
@@ -267,6 +286,7 @@ class Miner(aobject):
             )
             logger.debug(traceback.print_exc())
 
+        logger.info("Task creation part is done")
         return synapse
 
     async def task_result_handler(

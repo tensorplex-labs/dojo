@@ -715,7 +715,7 @@ class Validator(aobject):
                 for axon, url, response in zip(axons, urls, responses):
                     uid = self.metagraph.hotkeys.index(axon.hotkey)
                     if response.exception or response.error:
-                        logger.error(
+                        logger.trace(
                             f"Failed sending to {uid=} at {url=} due to error: {response.error}, exception: {response.exception}"
                         )
                         continue
@@ -1177,7 +1177,7 @@ class Validator(aobject):
                 )
                 try:
                     logger.info(
-                        f"Miner hotkey: {axon.hotkey}, ack: {response.ack}, status_code: {status_code}"
+                        f"Miner hotkey: {axon.hotkey}, ack: {response.body.ack}, status_code: {status_code}"
                     )
                     if (
                         response.body.ack
@@ -1232,6 +1232,8 @@ class Validator(aobject):
         )
 
         miner_responses = await self.send_synthetic_task(synapse, axons)
+        # TODO: remove this
+        logger.info(f"miner_responses: {miner_responses}")
         self._log_request_failures(miner_responses, axons)
 
         valid_miner_responses: List[SyntheticTaskSynapse] = []
@@ -1240,7 +1242,7 @@ class Validator(aobject):
                 if (
                     not response.body.ack
                     or not response.client_response
-                    or response.client_response != HTTPStatus.OK
+                    or response.client_response.status != HTTPStatus.OK
                 ):
                     continue
 
@@ -1281,6 +1283,8 @@ class Validator(aobject):
             return
 
         logger.debug("Attempting to saving dendrite response")
+        # TODO: remove this
+        logger.info(f"valid_miner_responses: {valid_miner_responses}")
         validator_task = await ORM.save_task(
             validator_task=synapse,
             miner_responses=valid_miner_responses,
