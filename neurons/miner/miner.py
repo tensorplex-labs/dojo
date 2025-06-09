@@ -44,8 +44,10 @@ async def check_redis_connection():
         from redis_om import get_redis_connection
 
         redis_conn = get_redis_connection()
+        connection_info = redis_conn.connection_pool.connection_kwargs
+        port = connection_info.get("port", "unknown")
         result = redis_conn.ping()
-        logger.info(f"✅ Connection test result: {result}")
+        logger.info(f"✅ Connection test result: {result} on port: {port}")
         return True
 
     except Exception as e:
@@ -58,7 +60,7 @@ class Miner(aobject):
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
-        self.kami: KamiClient = KamiClient()
+        self.kami: KamiClient = KamiClient(port=self.config.kami.port)
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
@@ -270,8 +272,11 @@ class Miner(aobject):
                     validator_task_id=synapse.task_id, dojo_task_id=dojo_task_id
                 )
                 try:
+                    # 1. Save first
                     served_request.save()
                     served_request.expire(num_seconds=int(MinerConstant.REDIS_OM_TTL))
+                    logger.info(f"🔍 ServedRequest primary key: {served_request.pk}")
+
                 except pydantic.ValidationError as e:
                     logger.error(e)
                 except Exception as e:

@@ -797,7 +797,7 @@ class Validator(aobject):
                 )
                 expire_to = datetime_as_utc(datetime.now(timezone.utc))
                 logger.info(
-                    f"Updating with expire_from: {expire_from} and expire_to: {expire_to}"
+                    f"Updating tasks with expire_from: {expire_from} and expire_to: {expire_to}"
                 )
 
                 # Update task results before scoring
@@ -1216,6 +1216,8 @@ class Validator(aobject):
             subset_size: Optional size to limit number of miners queried
         """
 
+        # TODO: remove this
+        logger.info(f"ground_truth: {ground_truth}")
         if not synapse.completion_responses:
             logger.error("No completion responses to send")
             return
@@ -1672,7 +1674,7 @@ class Validator(aobject):
                                 ].scores.ground_truth_score
                                 is not None
                             ):
-                                hotkey_to_scores[miner_response.axon.hotkey] = (
+                                hotkey_to_scores[miner_response.miner_hotkey] = (
                                     completion.criteria_types[
                                         0
                                     ].scores.ground_truth_score
@@ -1776,6 +1778,7 @@ class Validator(aobject):
                     f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE} to be considered miner"
                 )
                 continue
+
             miner_axons.append(axon)
 
         return miner_axons

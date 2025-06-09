@@ -352,6 +352,9 @@ class Scoring:
         if not isinstance(criteria, ScoreCriteria):
             raise NotImplementedError("Only score criteria is supported")
 
+        # TODO: remove this
+        logger.info(f"scoring: valid responses\n{valid_responses}")
+        logger.info(f"scoring: ground truth\n{ground_truth}")
         (
             gt_score,
             miner_outputs,
@@ -361,12 +364,17 @@ class Scoring:
             cubic_reward_scores,
         ) = cls.ground_truth_scoring(criteria, ground_truth, valid_responses)
 
+        logger.info(f"🔍 BEFORE transpose - miner_outputs shape: {miner_outputs.shape}")
+        logger.info(f"🔍 Number of valid_responses: {len(valid_responses)}")
+        logger.info(
+            f"🔍 Completions per response: {[len(r.completion_responses or []) for r in valid_responses]}"
+        )
         if miner_outputs_normalised.shape[0] == 1:
             miner_outputs_normalised = miner_outputs_normalised.T
             miner_outputs = miner_outputs.T
 
         for i, response in enumerate(valid_responses):
-            if not response.axon or not response.axon.hotkey:
+            if not response.miner_hotkey:
                 continue
 
             for j, completion_response in enumerate(

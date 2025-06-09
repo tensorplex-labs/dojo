@@ -525,7 +525,7 @@ class ORM:
                 # Map validator task using mapper function
                 # FIXME: can i simply use the ground_truths param
                 validator_task_data = map_task_synapse_object_to_validator_task(
-                    validator_task, metadata
+                    validator_task, ground_truth, metadata
                 )
                 if not validator_task_data:
                     logger.error("Failed to map validator task")

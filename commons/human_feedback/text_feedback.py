@@ -71,14 +71,11 @@ async def create_text_feedback_task(
         ]
         selected_completion.criteria_types = text_criteria
 
-        prompt = f"""Please analyze this output and suggest specific improvements:
-        Prompt: {validator_task.prompt}
-        """
         # Create a new task with the same prompt but different criteria type
         new_tf_task = SyntheticTaskSynapse(
             task_id=get_new_uuid(),
             previous_task_id=validator_task.task_id,
-            prompt=prompt,
+            prompt=validator_task.prompt,
             task_type=TaskTypeEnum.TEXT_FEEDBACK,
             expire_at=set_expire_time(int(HFLInterval.TASK_DEADLINE)),
             completion_responses=[

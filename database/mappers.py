@@ -30,6 +30,7 @@ from .types import Metadata
 # ---------------------------------------------------------------------------- #
 def map_task_synapse_object_to_validator_task(
     synapse: SyntheticTaskSynapse,
+    ground_truth: dict[str, int] | None = None,
     qa_metadata: dict | None = None,
 ) -> ValidatorTaskCreateInput:
     """Maps a SyntheticTaskSynapse to ValidatorTask database model input.
@@ -49,9 +50,9 @@ def map_task_synapse_object_to_validator_task(
                 rank_id=rank_id,
                 ground_truth_score=float(rank_id),  # TODO: Add normalised gt score
             )
-            for model_id, rank_id in synapse.ground_truth.items()
+            for model_id, rank_id in ground_truth.items()
         ]
-        if synapse.ground_truth
+        if ground_truth
         else []
     )
     augment_type = qa_metadata["augment_type"] if qa_metadata else ""

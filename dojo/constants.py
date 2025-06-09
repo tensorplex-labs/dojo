@@ -40,7 +40,7 @@ class HighValidatorConstants(IntEnum):
     """Synthetic task constants for high-speed testing mode"""
 
     TASK_DEADLINE = 180  # 3 minutes
-    VALIDATOR_RUN = 30  # 5 minutes
+    VALIDATOR_RUN = 300  # 5 minutes
     VALIDATOR_HEARTBEAT = 15
     VALIDATOR_UPDATE_SCORE = 120  # 2 minutes
     VALIDATOR_UPDATE_TASK = 30
