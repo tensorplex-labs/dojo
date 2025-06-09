@@ -339,7 +339,7 @@ def map_miner_response_to_completion_responses(
                     TextCriteria(
                         query="",
                         text_feedback="",
-                        score=tf_score,
+                        scores=tf_score,
                     )
                 )
 

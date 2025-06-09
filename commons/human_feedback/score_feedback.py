@@ -9,7 +9,6 @@ from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.hfl_helpers import HFLManager
-from commons.human_feedback.types import HFLConstants
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_time
@@ -93,9 +92,10 @@ async def create_score_feedback_task(
 
         # Get active miners for SF task
         active_miners = await validator.get_active_miner_uids()
-        if len(active_miners) <= HFLConstants.MIN_NUM_MINERS.value:
-            logger.error(f"No active miners found for SF task for {tf_task.id}")
-            return None
+        # disable this for testnet
+        # if len(active_miners) <= HFLConstants.MIN_NUM_MINERS.value:
+        #     logger.error(f"No active miners found for SF task for {tf_task.id}")
+        #     return None
 
         # Send to miners
         miner_responses: list[SyntheticTaskSynapse] | None = await send_hfl_request(

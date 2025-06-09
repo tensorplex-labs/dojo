@@ -66,7 +66,7 @@ class TextCriteria(BaseModel):
     type: str = Field(default=CriteriaTypeEnum.TEXT.value, frozen=True)
     query: str = Field(description="Query for the task", frozen=True)
     text_feedback: str = Field(description="Text feedback for the task", frozen=True)
-    score: TextFeedbackScore | None = Field(
+    scores: TextFeedbackScore | None = Field(
         description="Text feedback score for the task", default=None
     )
 

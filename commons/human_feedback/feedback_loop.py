@@ -720,11 +720,12 @@ class FeedbackLoop:
                     active_miners = await validator.get_active_miner_uids(
                         subset_size=HFLConstants.TARGET_NUM_MINERS.value
                     )
-                    if len(active_miners) <= HFLConstants.TARGET_NUM_MINERS.value:
-                        logger.warning(
-                            f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-                        )
-                        continue
+                    # Disable this for testnet
+                    # if len(active_miners) <= HFLConstants.TARGET_NUM_MINERS.value:
+                    #     logger.warning(
+                    #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                    #     )
+                    #     continue
 
                     # Send the task to miners
                     miner_responses = await send_hfl_request(

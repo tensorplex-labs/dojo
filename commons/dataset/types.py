@@ -60,7 +60,8 @@ class TextFeedbackRequest(BaseModel):
     """
 
     base_prompt: str = Field(description="Original prompt that was given to the LLM")
-    base_code: CodeAnswer = Field(description="Completion from the model")
+    # NOTE: this is a CodeAnswer object, but we need to send it as a string, as the synthetic API expects a string
+    base_code: str = Field(description="Completion from the model")
     miner_feedbacks: List[MinerFeedback] = Field(
         description="List of human feedback completions from miners"
     )
