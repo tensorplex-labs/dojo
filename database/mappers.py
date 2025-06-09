@@ -149,7 +149,7 @@ def map_task_synapse_object_to_miner_response(
         validator_task_id=validator_task_id,
         hotkey=synapse.miner_hotkey,
         coldkey=synapse.miner_coldkey,
-        task_result=Json(json.dumps({})),
+        task_result=Json(json.dumps([])),
     )
 
 

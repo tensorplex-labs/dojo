@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from kami import AxonInfo, KamiClient, ServeAxonPayload, SubnetMetagraph
 from loguru import logger
 from messaging import HOTKEY_HEADER, PydanticModel, Request, Server
+from redis_om.model import Migrator
 
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject
@@ -67,6 +68,7 @@ class Miner(aobject):
         await self.init_metagraphs()
         if not await check_redis_connection():
             raise ConnectionError()
+        Migrator().run()
         # log all incoming requests
 
     async def register_synapse_handlers(self):
