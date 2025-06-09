@@ -69,7 +69,6 @@ model ValidatorTask {
 model MinerResponse {
     id                String   @id @unique @default(uuid())
     validator_task_id String
-    dojo_task_id      String
     hotkey            String
     coldkey           String
     task_result       Json     @db.JsonB
@@ -80,8 +79,7 @@ model MinerResponse {
     validator_task_relation ValidatorTask @relation(fields: [validator_task_id], references: [id])
     scores                  MinerScore[]
 
-    @@unique([validator_task_id, dojo_task_id, hotkey])
-    @@index([dojo_task_id])
+    @@unique([validator_task_id, hotkey])
     @@map("miner_response")
 }
 

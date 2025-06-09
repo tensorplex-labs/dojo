@@ -1458,40 +1458,36 @@ class Validator(aobject):
         If no task results, return None. Else append it to miner completion response.
         """
         # Validate miner response
-        if (
-            not miner_response.axon
-            or not hasattr(miner_response.axon, "hotkey")
-            or not miner_response.axon.hotkey
-            or not miner_response.dojo_task_id
-        ):
+        # TODO please come this againnnnnnn
+        if not miner_response.miner_hotkey:
             raise InvalidMinerResponse(
-                f"""Missing hotkey, task_id, or axon:
-                axon: {miner_response.axon}
-                hotkey: {miner_response.axon.hotkey if miner_response.axon else None}
-                dojo_task_id: {miner_response.dojo_task_id}"""
+                f"""Missing hotkey, task_id:
+                hotkey: {miner_response.miner_hotkey}
+                validator_task_id: {miner_response.task_id}"""
             )
 
         # Fetch task results
         task_results: List[TaskResult] = await self._get_task_results_from_miner(
-            miner_hotkey=miner_response.axon.hotkey, validator_task_id=validator_task_id
+            miner_hotkey=miner_response.miner_hotkey,
+            validator_task_id=validator_task_id,
         )
 
         if not task_results:
             logger.info(
-                f"No task results from miner: {miner_response.axon.hotkey} for dojo task id: {miner_response.dojo_task_id}, skipping"
+                f"No task results from miner: {miner_response.miner_hotkey} for validator task id: {miner_response.task_id}, skipping"
             )
             return None
 
         # Update the task results in the database
         success = await ORM.update_miner_task_results(
-            miner_hotkey=miner_response.axon.hotkey,
-            dojo_task_id=miner_response.dojo_task_id,
+            miner_hotkey=miner_response.miner_hotkey,
+            validator_task_id=validator_task_id,
             task_results=task_results,
         )
 
         if not success:
             logger.warning(
-                f"Failed to update task_result for miner {miner_response.axon.hotkey}"
+                f"Failed to update task_result for miner {miner_response.miner_hotkey}"
             )
 
         # Calculate average scores
@@ -1515,7 +1511,7 @@ class Validator(aobject):
 
         Args:
             miner_hotkey (str): The hotkey of the miner to query
-            dojo_task_id (str): The ID of the task to fetch results for
+            validator_task_id (str): The ID of the task to fetch results for
             max_retries (int): number of max retries for underlying request to target miner
 
         Returns:
@@ -1660,8 +1656,8 @@ class Validator(aobject):
             # Create hotkey_to_completion_responses mapping and hotkey_to_scores mapping
             hotkey_to_completion_responses = {}
             for miner_response in updated_miner_responses:
-                if miner_response.axon and miner_response.axon.hotkey:
-                    hotkey_to_completion_responses[miner_response.axon.hotkey] = (
+                if miner_response.miner_hotkey:
+                    hotkey_to_completion_responses[miner_response.miner_hotkey] = (
                         miner_response.completion_responses
                     )
 

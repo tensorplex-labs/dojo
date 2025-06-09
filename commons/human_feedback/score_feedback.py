@@ -166,9 +166,9 @@ async def process_score_feedback_task(
         # Process each miner response
         success_count = 0
         for miner_response in sf_task.miner_responses:
-            if not miner_response.hotkey or not miner_response.dojo_task_id:
+            if not miner_response.hotkey:
                 logger.warning(
-                    f"Skipping miner response {miner_response.id} due to missing hotkey or dojo task id, hotkey: {miner_response.hotkey}, dojo task id: {miner_response.dojo_task_id}"
+                    f"Skipping miner response {miner_response.id} due to missing hotkey, hotkey: {miner_response.hotkey} for sf task {sf_task.id}"
                 )
                 continue
 
@@ -184,7 +184,7 @@ async def process_score_feedback_task(
             # Update task results in database
             success = await ORM.update_miner_task_results(
                 miner_hotkey=miner_response.hotkey,
-                dojo_task_id=miner_response.dojo_task_id,
+                validator_task_id=sf_task.id,
                 task_results=task_results,
             )
 

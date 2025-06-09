@@ -562,7 +562,7 @@ class FeedbackLoop:
         1. Query SF_PENDING tasks that have expired within a time window
         2. For each task:
             - Get all miner responses
-            - Query each miner for task results using their dojo_task_id
+            - Query each miner for task results using validator task id
             - Update task results in database
             - Update HFL state to SF_COMPLETED
         """
@@ -587,7 +587,7 @@ class FeedbackLoop:
                     {
                         "HFLState": True,
                         "miner_responses": {
-                            "where": {"task_result": {"equals": Json("{}")}}
+                            "where": {"task_result": {"equals": Json("[]")}}
                         },
                     }
                 ),

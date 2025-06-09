@@ -1,7 +1,5 @@
 import json
 
-import bittensor as bt
-
 from commons.utils import datetime_to_iso8601_str, iso8601_str_to_datetime
 from database.prisma import Json
 from database.prisma.enums import CriteriaTypeEnum, TaskTypeEnum
@@ -147,12 +145,8 @@ def map_task_synapse_object_to_miner_response(
     if not synapse.miner_hotkey or not synapse.miner_coldkey:
         raise ValueError("Miner hotkey and coldkey are required")
 
-    if not synapse.dojo_task_id:
-        raise ValueError("Dojo task ID is required")
-
     return MinerResponseCreateInput(
         validator_task_id=validator_task_id,
-        dojo_task_id=synapse.dojo_task_id,
         hotkey=synapse.miner_hotkey,
         coldkey=synapse.miner_coldkey,
         task_result=Json(json.dumps({})),
@@ -223,7 +217,6 @@ def map_validator_task_to_task_synapse_object(
         ground_truth=ground_truth,
         miner_hotkey=None,
         miner_coldkey=None,
-        dojo_task_id=None,
     )
 
 
@@ -283,8 +276,6 @@ def map_miner_response_to_task_synapse_object(
         ground_truth=None,
         miner_hotkey=miner_response.hotkey,
         miner_coldkey=miner_response.coldkey,
-        dojo_task_id=miner_response.dojo_task_id,
-        axon=bt.TerminalInfo(hotkey=miner_response.hotkey),
     )
 
 

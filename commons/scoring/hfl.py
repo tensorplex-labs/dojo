@@ -461,7 +461,7 @@ def filter_valid_miner_responses(
 
     for response in miner_responses:
         # Skip responses without hotkey
-        if not response.hotkey or not response.dojo_task_id:
+        if not response.hotkey:
             continue
 
         # Check if scores are required and present

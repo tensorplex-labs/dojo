@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from typing import List
 
-import bittensor as bt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from strenum import StrEnum
 
@@ -127,7 +126,7 @@ class SyntheticQA(BaseModel):
         return self
 
 
-class SyntheticTaskSynapse(bt.Synapse):
+class SyntheticTaskSynapse(BaseModel):
     ack: bool = Field(description="Acknowledgement of the synapse", default=False)
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
@@ -150,10 +149,6 @@ class SyntheticTaskSynapse(bt.Synapse):
     completion_responses: List[CompletionResponse] | None = Field(
         description="List of completions for the task",
         default=None,
-    )
-    # FIXME: need to remove this or something, it's useless atm
-    dojo_task_id: str | None = Field(
-        description="Dojo task ID returned by miner", default=None
     )
     ground_truth: dict[str, int] | None = Field(
         description="Mapping of unique identifiers to their ground truth values",
