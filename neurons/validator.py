@@ -12,7 +12,6 @@ from http import HTTPStatus
 from typing import AsyncGenerator, Dict, List, TypeAlias
 
 import aiohttp
-import bittensor as bt
 import numpy as np
 import torch
 from kami import AxonInfo, KamiClient, SetWeightsPayload, SubnetMetagraph
@@ -97,8 +96,6 @@ class Validator(aobject):
     _active_miner_uids: set[int] = set()
     _forward_semaphore = asyncio.Semaphore(16)  # Limit to 16 concurrent forward calls
 
-    subtensor: bt.subtensor
-    wallet: bt.wallet  # type: ignore
     metagraph: SubnetMetagraph
     spec_version: int = get_spec_version()
     kami: KamiClient
@@ -988,7 +985,6 @@ class Validator(aobject):
                             traceback.print_exc()
                             continue
 
-                logger.info(f"Processed request ids: {processed_request_ids}")
                 if processed_request_ids:
                     await ORM.mark_validator_task_as_processed(processed_request_ids)
 
@@ -2002,9 +1998,6 @@ class Validator(aobject):
                             )
                         )
                 scores_list.append(miner_completion_scores)
-
-        logger.info(f"Participating hotkeys: {participating_hotkeys}")
-        logger.info(f"Scores list: {scores_list}")
         return participating_hotkeys, scores_list
 
     def _resize_score_tensor(

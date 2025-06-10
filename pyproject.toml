@@ -34,7 +34,7 @@ dependencies = [
   "aiohttp==3.10.11",
   "bittensor @ git+https://github.com/opentensor/bittensor.git@release/9.0.0",
   "bittensor-cli @ git+https://github.com/opentensor/btcli.git@release/9.0.0",
-  "bittensor_drand @ git+https://github.com/opentensor/bittensor-drand.git@release/0.5.0",
+  "bittensor_drand @ git+https://github.com/opentensor/bittensor-drand.git@v0.5.0",
   "fastapi==0.110.1",
   "httpx==0.27.0",
   "loguru==0.7.2",
@@ -64,7 +64,7 @@ dependencies = [
   'orjson==3.10.16',
   'zstandard==0.23.0',
   "kami-client>=1.1.1",
-  "dojo-messaging>=1.0.9",
+  "dojo-messaging>=1.0.10",
   "redis-om==0.3.5"
 ]
 
