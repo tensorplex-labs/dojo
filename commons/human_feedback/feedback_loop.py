@@ -66,7 +66,7 @@ class FeedbackLoop:
         active_miner_uids = await validator.get_active_miner_uids(
             subset_size=HFLConstants.TARGET_NUM_MINERS.value
         )
-        # Disable this for testnet
+        # FIXME enable this for mainnet
         # if len(active_miner_uids) <= HFLConstants.TARGET_NUM_MINERS.value:
         #     logger.warning(
         #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
@@ -716,7 +716,7 @@ class FeedbackLoop:
                     active_miners = await validator.get_active_miner_uids(
                         subset_size=HFLConstants.TARGET_NUM_MINERS.value
                     )
-                    # Disable this for testnet
+                    # FIXME enable this for mainnet
                     # if len(active_miners) <= HFLConstants.TARGET_NUM_MINERS.value:
                     #     logger.warning(
                     #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"

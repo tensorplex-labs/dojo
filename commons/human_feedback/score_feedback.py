@@ -92,7 +92,7 @@ async def create_score_feedback_task(
 
         # Get active miners for SF task
         active_miners = await validator.get_active_miner_uids()
-        # disable this for testnet
+        # FIXME enable this for mainnet
         # if len(active_miners) <= HFLConstants.MIN_NUM_MINERS.value:
         #     logger.error(f"No active miners found for SF task for {tf_task.id}")
         #     return None
