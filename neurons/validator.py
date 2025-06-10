@@ -128,7 +128,7 @@ class Validator(aobject):
         self.client = Client(hotkey=self.keyringpair.hotkey, session=get_client())
         self.uid = self.metagraph.hotkeys.index(self.keyringpair.hotkey)
         logger.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
+            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} with hotkey {self.keyringpair.hotkey}"
         )
 
         self.step = 0
@@ -988,6 +988,7 @@ class Validator(aobject):
                             traceback.print_exc()
                             continue
 
+                logger.info(f"Processed request ids: {processed_request_ids}")
                 if processed_request_ids:
                     await ORM.mark_validator_task_as_processed(processed_request_ids)
 
@@ -1781,6 +1782,7 @@ class Validator(aobject):
                     f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE} to be considered miner"
                 )
                 continue
+
             miner_axons.append(axon)
 
         return miner_axons

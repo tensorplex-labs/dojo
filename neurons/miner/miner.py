@@ -68,6 +68,9 @@ class Miner(aobject):
         self.keyringpair = await self.kami.get_keyringpair()
         await self.register_synapse_handlers()
         await self.init_metagraphs()
+        logger.info(
+            f"Miner hotkey: {self.keyringpair.hotkey} uid: {self.subnet_metagraph.hotkeys.index(self.keyringpair.hotkey)}"
+        )
         if not await check_redis_connection():
             raise ConnectionError()
         Migrator().run()

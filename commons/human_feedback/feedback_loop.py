@@ -287,6 +287,7 @@ class FeedbackLoop:
                 ),
             ):
                 if not tf_tasks_batch:
+                    logger.info("No TF_PENDING tasks found")
                     continue
 
                 sufficient_response_task_ids: list[str] = []
