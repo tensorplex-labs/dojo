@@ -45,8 +45,8 @@ from dojo.constants import ValidatorInterval
 from dojo.protocol import (
     DendriteQueryResponse,
     HFLEvent,
+    Score,
     ScoreFeedbackEvent,
-    Scores,
     SyntheticTaskSynapse,
     TaskResult,
     TextFeedbackEvent,
@@ -442,7 +442,7 @@ class ORM:
                                     continue
 
                                 # Create scores object
-                                scores = Scores(
+                                scores = Score(
                                     raw_score=completion.score,
                                     rank_id=completion.rank_id,
                                     # Initialize other scores as None - they'll be computed later

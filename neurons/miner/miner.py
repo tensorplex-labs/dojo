@@ -241,14 +241,7 @@ class Miner(aobject):
         if all(val is None for val in synapse.model_dump().values()):
             logger.warning(f"All scores in {synapse_name} are None")
 
-        logger.info(
-            f"Task {synapse.validator_task_id}"
-            f"\n\tGround Truth Score: {synapse.scores.ground_truth_score}"
-            f"\n\tCosine Similarity: {synapse.scores.cosine_similarity_score}"
-            f"\n\tNormalised Cosine Similarity: {synapse.scores.normalised_cosine_similarity_score}"
-            f"\n\tCubic Reward Score: {synapse.scores.cubic_reward_score}"
-            f"\n\tHFL Score: {synapse.scores.icc_score}"
-        )
+        logger.info(f"⬆️ Responding to score result synapse: {synapse}")
 
     async def synthetic_task_handler(
         self, request: Request, synapse: SyntheticTaskSynapse

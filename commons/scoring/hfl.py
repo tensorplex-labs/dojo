@@ -19,7 +19,7 @@ from database.prisma.models import (
     MinerScore,
     ValidatorTask,
 )
-from dojo.protocol import Scores
+from dojo.protocol import Score
 
 TF_WEIGHT = HFLConstants.TF_WEIGHT.value
 SF_WEIGHT = HFLConstants.SF_WEIGHT.value
@@ -90,7 +90,7 @@ async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
         # TODO: refactor to an ORM utils maybe
         miner_raw_scores: list[float] = []
         for score in miner_response.scores or []:
-            scores = Scores.model_validate_json(score.scores)
+            scores = Score.model_validate_json(score.scores)
             if scores.raw_score is not None:
                 miner_raw_scores.append(scores.raw_score)
 
@@ -392,7 +392,7 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
                 # NOTE: cid is PK of completion, not completion_id
                 cid = score.criterion_relation.completion_id
                 completion_id = cid_to_completion_id[cid]
-                scores = Scores.model_validate_json(score.scores)
+                scores = Score.model_validate_json(score.scores)
                 if completion_id not in stats_by_completion_id:
                     stats_by_completion_id[completion_id] = {"sum": 0, "count": 0}
 

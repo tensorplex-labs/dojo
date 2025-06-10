@@ -53,13 +53,13 @@ from dojo import get_spec_version
 from dojo.constants import ValidatorConstant, ValidatorInterval
 from dojo.protocol import (
     CompletionResponse,
+    CompletionScore,
     CriteriaType,
     CriteriaTypeEnum,
     DendriteQueryResponse,
     Heartbeat,
     ScoreCriteria,
     ScoreResultSynapse,
-    Scores,
     SyntheticQA,
     SyntheticTaskSynapse,
     TaskResult,
@@ -145,7 +145,10 @@ class Validator(aobject):
         await self.load_state()
 
     async def _send_scores(
-        self, validator_task_id: str, hotkeys: List[str], scores: List[Scores]
+        self,
+        validator_task_id: str,
+        hotkeys: List[str],
+        scores: list[list[CompletionScore]],
     ):
         """Send scores that taostats, CLI, etc. cannot see for miners who participated."""
         miners_uids = await self.get_active_miner_uids()
@@ -1778,7 +1781,6 @@ class Validator(aobject):
                     f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE} to be considered miner"
                 )
                 continue
-
             miner_axons.append(axon)
 
         return miner_axons
@@ -1943,7 +1945,7 @@ class Validator(aobject):
 
     async def _prepare_scoring_result(
         self, task_id: str
-    ) -> tuple[list[str], list[Scores]]:
+    ) -> tuple[list[str], list[list[CompletionScore]]]:
         """
         Prepare scoring results for a specific task to send back to miners.
 
@@ -1978,6 +1980,7 @@ class Validator(aobject):
             participating_hotkeys.append(hotkey)
 
             # Use the mapper to convert to CompletionResponse objects
+            miner_completion_scores = []
             completion_responses = map_miner_response_to_completion_responses(
                 miner_response=miner_response,
                 completions=task.completions,
@@ -1990,8 +1993,16 @@ class Validator(aobject):
                         completion.criteria_types
                         and completion.criteria_types[0].scores
                     ):
-                        scores_list.append(completion.criteria_types[0].scores)
+                        miner_completion_scores.append(
+                            CompletionScore(
+                                completion_id=completion.completion_id,
+                                score=completion.criteria_types[0].scores,
+                            )
+                        )
+                scores_list.append(miner_completion_scores)
 
+        logger.info(f"Participating hotkeys: {participating_hotkeys}")
+        logger.info(f"Scores list: {scores_list}")
         return participating_hotkeys, scores_list
 
     def _resize_score_tensor(

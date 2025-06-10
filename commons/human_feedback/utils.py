@@ -709,9 +709,9 @@ async def create_initial_miner_scores(
                     # Create appropriate scores object based on criterion type
                     if criterion_type == "score":
                         # For score type, create a structured Scores object
-                        from dojo.protocol import Scores
+                        from dojo.protocol import Score
 
-                        scores_obj = Scores(
+                        scores_obj = Score(
                             raw_score=values,  # This is the calculated average
                             # Initialize other scores as None
                             rank_id=None,

@@ -15,8 +15,8 @@ from dojo import get_commit_hash, get_latest_git_tag
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
+    Score,
     ScoreCriteria,
-    Scores,
     SyntheticTaskSynapse,
     TextCriteria,
     TextFeedbackScore,
@@ -322,9 +322,7 @@ def map_miner_response_to_completion_responses(
                     ScoreCriteria(
                         min=config.get("min", 0.0),
                         max=config.get("max", 10.0),
-                        scores=Scores.model_validate(score_data)
-                        if score_data
-                        else None,
+                        scores=Score.model_validate(score_data) if score_data else None,
                     )
                 )
             elif criterion.criteria_type == CriteriaTypeEnum.TEXT:
