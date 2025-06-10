@@ -1,8 +1,8 @@
-from redis_om import Field, JsonModel
+from redis_om import Field, HashModel
 
 
 # NOTE: minimal way of saving data for miners, to keep things flexible
-class ServedRequest(JsonModel):
+class ServedRequest(HashModel, index=True):
     """Represents a served request for the miner, for requests that came from a validator"""
 
     validator_task_id: str = Field(index=True)
