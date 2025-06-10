@@ -293,17 +293,15 @@ class FeedbackLoop:
 
                 # Process each task in the batch
                 for task in tf_tasks_batch:
-                    hotkeys_with_feedback: list[str] = []
+                    used_hotkeys: list[str] = [
+                        mr.hotkey for mr in task.miner_responses or []
+                    ]
 
                     # Fetch and process miner feedback
                     (
                         miner_feedbacks,
                         valid_responses,
                     ) = await fetch_miner_feedback_for_task(validator, task)
-
-                    hotkeys_with_feedback.extend(
-                        [miner_feedback.hotkey for miner_feedback in miner_feedbacks]
-                    )
 
                     # Check if we have sufficient responses
                     response_count = len(miner_feedbacks)
@@ -377,11 +375,9 @@ class FeedbackLoop:
 
                         active_miner_uids = await validator.get_active_miner_uids()
                         axons = validator._retrieve_axons(active_miner_uids)
-                        # filter hotkey that have already been give feedback
+                        # filter miners who already received this task
                         axons = [
-                            axon
-                            for axon in axons
-                            if axon.hotkey not in hotkeys_with_feedback
+                            axon for axon in axons if axon.hotkey not in used_hotkeys
                         ]
                         if len(axons) < HFLConstants.MIN_NUM_MINERS.value:
                             continue
