@@ -185,16 +185,8 @@ async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
         )
 
     logger.info(f"hotkey to tf raw score: {hotkey_to_tf_score}")
-    hotkeys = list(hotkey_to_tf_score.keys())
-    raw_scores = list(hotkey_to_tf_score.values())
-
-    # Convert to tensor and normalize
-    scores_tensor = torch.tensor(raw_scores, dtype=torch.float32)
-    normalized_tensor = minmax_scale(scores_tensor)
-    # Reconstruct dictionary
-    normalized_tf_scores = dict(zip(hotkeys, normalized_tensor.tolist()))
-
-    return normalized_tf_scores
+    normalized_tf_score = _normalize_tf_scores(hotkey_to_tf_score)
+    return normalized_tf_score
 
 
 async def _calc_score_deltas(sf_task: ValidatorTask) -> dict[str, float]:
@@ -461,7 +453,7 @@ def filter_valid_miner_responses(
 
     for response in miner_responses:
         # Skip responses without hotkey
-        if not response.hotkey or not response.dojo_task_id:
+        if not response.hotkey:
             continue
 
         # Check if scores are required and present
@@ -500,3 +492,27 @@ def filter_valid_miner_responses(
         valid_responses.append(response)
 
     return valid_responses
+
+
+def _normalize_tf_scores(hotkey_to_tf_score: dict[str, float]) -> dict[str, float]:
+    if not hotkey_to_tf_score:
+        return {}
+
+    raw_scores = list(hotkey_to_tf_score.values())
+    scores_tensor = torch.tensor(raw_scores, dtype=torch.float32)
+    clamped_tensor = torch.clamp(scores_tensor, min=0.0)
+
+    # Edge case: All scores are the same (like your 0.0, 0.0, 0.0 case)
+    if len(clamped_tensor) == 1:
+        # If zero, then gets 0.0 (no contribution)
+        score = 0.0 if clamped_tensor[0] == 0.0 else 1.0
+        return {hotkey: score for hotkey in hotkey_to_tf_score.keys()}
+
+    # Normal case: different scores
+    # Check if all values became 0.0 after clamping
+    if torch.all(clamped_tensor == 0.0):
+        return {hotkey: 0.0 for hotkey in hotkey_to_tf_score.keys()}
+
+    normalized_tensor = minmax_scale(clamped_tensor)
+
+    return dict(zip(hotkey_to_tf_score.keys(), normalized_tensor.tolist()))

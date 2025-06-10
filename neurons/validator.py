@@ -715,7 +715,7 @@ class Validator(aobject):
                 for axon, url, response in zip(axons, urls, responses):
                     uid = self.metagraph.hotkeys.index(axon.hotkey)
                     if response.exception or response.error:
-                        logger.error(
+                        logger.trace(
                             f"Failed sending to {uid=} at {url=} due to error: {response.error}, exception: {response.exception}"
                         )
                         continue
@@ -797,7 +797,7 @@ class Validator(aobject):
                 )
                 expire_to = datetime_as_utc(datetime.now(timezone.utc))
                 logger.info(
-                    f"Updating with expire_from: {expire_from} and expire_to: {expire_to}"
+                    f"Updating tasks with expire_from: {expire_from} and expire_to: {expire_to}"
                 )
 
                 # Update task results before scoring
@@ -1177,7 +1177,7 @@ class Validator(aobject):
                 )
                 try:
                     logger.info(
-                        f"Miner hotkey: {axon.hotkey}, ack: {response.ack}, status_code: {status_code}"
+                        f"Miner hotkey: {axon.hotkey}, ack: {response.body.ack}, status_code: {status_code}"
                     )
                     if (
                         response.body.ack
@@ -1216,6 +1216,8 @@ class Validator(aobject):
             subset_size: Optional size to limit number of miners queried
         """
 
+        # TODO: remove this
+        logger.info(f"ground_truth: {ground_truth}")
         if not synapse.completion_responses:
             logger.error("No completion responses to send")
             return
@@ -1232,6 +1234,8 @@ class Validator(aobject):
         )
 
         miner_responses = await self.send_synthetic_task(synapse, axons)
+        # TODO: remove this
+        logger.info(f"miner_responses: {miner_responses}")
         self._log_request_failures(miner_responses, axons)
 
         valid_miner_responses: List[SyntheticTaskSynapse] = []
@@ -1240,7 +1244,7 @@ class Validator(aobject):
                 if (
                     not response.body.ack
                     or not response.client_response
-                    or response.client_response != HTTPStatus.OK
+                    or response.client_response.status != HTTPStatus.OK
                 ):
                     continue
 
@@ -1281,6 +1285,8 @@ class Validator(aobject):
             return
 
         logger.debug("Attempting to saving dendrite response")
+        # TODO: remove this
+        logger.info(f"valid_miner_responses: {valid_miner_responses}")
         validator_task = await ORM.save_task(
             validator_task=synapse,
             miner_responses=valid_miner_responses,
@@ -1454,40 +1460,36 @@ class Validator(aobject):
         If no task results, return None. Else append it to miner completion response.
         """
         # Validate miner response
-        if (
-            not miner_response.axon
-            or not hasattr(miner_response.axon, "hotkey")
-            or not miner_response.axon.hotkey
-            or not miner_response.dojo_task_id
-        ):
+        # TODO please come this againnnnnnn
+        if not miner_response.miner_hotkey:
             raise InvalidMinerResponse(
-                f"""Missing hotkey, task_id, or axon:
-                axon: {miner_response.axon}
-                hotkey: {miner_response.axon.hotkey if miner_response.axon else None}
-                dojo_task_id: {miner_response.dojo_task_id}"""
+                f"""Missing hotkey, task_id:
+                hotkey: {miner_response.miner_hotkey}
+                validator_task_id: {miner_response.task_id}"""
             )
 
         # Fetch task results
         task_results: List[TaskResult] = await self._get_task_results_from_miner(
-            miner_hotkey=miner_response.axon.hotkey, validator_task_id=validator_task_id
+            miner_hotkey=miner_response.miner_hotkey,
+            validator_task_id=validator_task_id,
         )
 
         if not task_results:
             logger.info(
-                f"No task results from miner: {miner_response.axon.hotkey} for dojo task id: {miner_response.dojo_task_id}, skipping"
+                f"No task results from miner: {miner_response.miner_hotkey} for validator task id: {miner_response.task_id}, skipping"
             )
             return None
 
         # Update the task results in the database
         success = await ORM.update_miner_task_results(
-            miner_hotkey=miner_response.axon.hotkey,
-            dojo_task_id=miner_response.dojo_task_id,
+            miner_hotkey=miner_response.miner_hotkey,
+            validator_task_id=validator_task_id,
             task_results=task_results,
         )
 
         if not success:
             logger.warning(
-                f"Failed to update task_result for miner {miner_response.axon.hotkey}"
+                f"Failed to update task_result for miner {miner_response.miner_hotkey}"
             )
 
         # Calculate average scores
@@ -1511,7 +1513,7 @@ class Validator(aobject):
 
         Args:
             miner_hotkey (str): The hotkey of the miner to query
-            dojo_task_id (str): The ID of the task to fetch results for
+            validator_task_id (str): The ID of the task to fetch results for
             max_retries (int): number of max retries for underlying request to target miner
 
         Returns:
@@ -1656,8 +1658,8 @@ class Validator(aobject):
             # Create hotkey_to_completion_responses mapping and hotkey_to_scores mapping
             hotkey_to_completion_responses = {}
             for miner_response in updated_miner_responses:
-                if miner_response.axon and miner_response.axon.hotkey:
-                    hotkey_to_completion_responses[miner_response.axon.hotkey] = (
+                if miner_response.miner_hotkey:
+                    hotkey_to_completion_responses[miner_response.miner_hotkey] = (
                         miner_response.completion_responses
                     )
 
@@ -1672,7 +1674,7 @@ class Validator(aobject):
                                 ].scores.ground_truth_score
                                 is not None
                             ):
-                                hotkey_to_scores[miner_response.axon.hotkey] = (
+                                hotkey_to_scores[miner_response.miner_hotkey] = (
                                     completion.criteria_types[
                                         0
                                     ].scores.ground_truth_score
@@ -1776,6 +1778,7 @@ class Validator(aobject):
                     f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE} to be considered miner"
                 )
                 continue
+
             miner_axons.append(axon)
 
         return miner_axons

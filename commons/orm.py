@@ -97,7 +97,7 @@ class ORM:
         }
 
         if filter_empty_result:
-            miner_responses_include["where"] = {"task_result": {"equals": Json("{}")}}
+            miner_responses_include["where"] = {"task_result": {"equals": Json("[]")}}
 
         include_query = ValidatorTaskInclude(
             {
@@ -295,7 +295,7 @@ class ORM:
     @staticmethod
     async def update_miner_task_results(
         miner_hotkey: str,
-        dojo_task_id: str,
+        validator_task_id: str,
         task_results: List[TaskResult],
         max_retries: int = 3,
     ) -> bool:
@@ -303,7 +303,7 @@ class ORM:
 
         Args:
             miner_hotkey (str): The hotkey of the miner
-            dojo_task_id (str): The Dojo task ID
+            validator_task_id (str): The validator task ID
             task_results (List[TaskResult]): List of task results to store
             max_retries (int, optional): Maximum number of retry attempts. Defaults to 3.
 
@@ -322,7 +322,7 @@ class ORM:
                     updated = await prisma.minerresponse.update_many(
                         where={
                             "hotkey": miner_hotkey,
-                            "dojo_task_id": dojo_task_id,
+                            "validator_task_id": validator_task_id,
                         },
                         data={
                             "task_result": task_results_json,
@@ -332,7 +332,7 @@ class ORM:
 
                     if updated:
                         logger.success(
-                            f"Updated task results for miner {miner_hotkey}, dojo_task_id {dojo_task_id}"
+                            f"Updated task results for miner {miner_hotkey}, validator_task_id {validator_task_id}"
                         )
                         return True
                     else:
@@ -409,13 +409,13 @@ class ORM:
                             db_miner_response = await tx.minerresponse.find_first(
                                 where={
                                     "hotkey": miner_response.miner_hotkey,
-                                    "dojo_task_id": miner_response.dojo_task_id or "",
+                                    "validator_task_id": miner_response.task_id,
                                 }
                             )
 
                             if not db_miner_response:
                                 raise ValueError(
-                                    f"Miner response not found for dojo_task_id: {miner_response.dojo_task_id}, "
+                                    f"Miner response not found for validator_task_id: {miner_response.task_id}, "
                                     f"hotkey: {miner_response.miner_hotkey}"
                                 )
 
@@ -525,7 +525,7 @@ class ORM:
                 # Map validator task using mapper function
                 # FIXME: can i simply use the ground_truths param
                 validator_task_data = map_task_synapse_object_to_validator_task(
-                    validator_task, metadata
+                    validator_task, ground_truth, metadata
                 )
                 if not validator_task_data:
                     logger.error("Failed to map validator task")
@@ -1235,13 +1235,9 @@ class ORM:
             async with prisma.tx() as tx:
                 # Process each miner response
                 for response in miner_responses:
-                    if (
-                        not response.dojo_task_id
-                        or not response.miner_hotkey
-                        or not response.miner_coldkey
-                    ):
+                    if not response.miner_hotkey or not response.miner_coldkey:
                         logger.warning(
-                            "Missing dojo_task_id or hotkey in miner response"
+                            "Missing miner_hotkey or miner_coldkey in miner response"
                         )
                         continue
 
@@ -1255,23 +1251,21 @@ class ORM:
                         )
 
                         if existing_response:
-                            # Update the existing response with the new dojo_task_id
+                            # Update the existing response with the new validator_task_id
                             await tx.minerresponse.update(
                                 where={"id": existing_response.id},
                                 data={
-                                    "dojo_task_id": response.dojo_task_id,
                                     "updated_at": datetime_as_utc(datetime.now()),
                                 },
                             )
                             logger.debug(
-                                f"Updated existing response for miner {response.miner_hotkey} with new dojo_task_id"
+                                f"Updated existing response for miner {response.miner_hotkey} with new validator task id {validator_task_id}"
                             )
                         else:
                             # Create a new response
                             await tx.minerresponse.create(
                                 data={
                                     "validator_task_id": validator_task_id,
-                                    "dojo_task_id": response.dojo_task_id,
                                     "hotkey": response.miner_hotkey,
                                     "coldkey": response.miner_coldkey,
                                     "task_result": Json(json.dumps([])),

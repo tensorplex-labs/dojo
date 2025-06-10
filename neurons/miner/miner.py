@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from kami import AxonInfo, KamiClient, ServeAxonPayload, SubnetMetagraph
 from loguru import logger
 from messaging import HOTKEY_HEADER, PydanticModel, Request, Server
+from redis_om.model import Migrator
 
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject
@@ -37,12 +38,29 @@ def optimize_payload_for_transport(
     return synapse_copy
 
 
+async def check_redis_connection():
+    """Check if Redis OM is connected to the correct Redis server"""
+    try:
+        from redis_om import get_redis_connection
+
+        redis_conn = get_redis_connection()
+        connection_info = redis_conn.connection_pool.connection_kwargs
+        port = connection_info.get("port", "unknown")
+        result = redis_conn.ping()
+        logger.info(f"✅ Connection test result: {result} on port: {port}")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Redis OM connection debug failed: {e}")
+        return False
+
+
 class Miner(aobject):
     async def __init__(self):
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
-        self.kami: KamiClient = KamiClient()
+        self.kami: KamiClient = KamiClient(port=self.config.kami.port)
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
@@ -50,6 +68,9 @@ class Miner(aobject):
         self.keyringpair = await self.kami.get_keyringpair()
         await self.register_synapse_handlers()
         await self.init_metagraphs()
+        if not await check_redis_connection():
+            raise ConnectionError()
+        Migrator().run()
         # log all incoming requests
 
     async def register_synapse_handlers(self):
@@ -251,13 +272,18 @@ class Miner(aobject):
                     validator_task_id=synapse.task_id, dojo_task_id=dojo_task_id
                 )
                 try:
+                    # 1. Save first
                     served_request.save()
+                    served_request.expire(num_seconds=int(MinerConstant.REDIS_OM_TTL))
+                    logger.info(f"🔍 ServedRequest primary key: {served_request.pk}")
+
                 except pydantic.ValidationError as e:
                     logger.error(e)
                 except Exception as e:
                     logger.error(f"Error while trying to set TTL on redis data: {e}")
                 synapse.ack = True
                 synapse = optimize_payload_for_transport(synapse)
+
             else:
                 logger.error("Failed to create task: no task IDs returned")
 
@@ -267,6 +293,7 @@ class Miner(aobject):
             )
             logger.debug(traceback.print_exc())
 
+        logger.info("Task creation part is done")
         return synapse
 
     async def task_result_handler(

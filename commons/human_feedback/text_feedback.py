@@ -71,14 +71,11 @@ async def create_text_feedback_task(
         ]
         selected_completion.criteria_types = text_criteria
 
-        prompt = f"""Please analyze this output and suggest specific improvements:
-        Prompt: {validator_task.prompt}
-        """
         # Create a new task with the same prompt but different criteria type
         new_tf_task = SyntheticTaskSynapse(
             task_id=get_new_uuid(),
             previous_task_id=validator_task.task_id,
-            prompt=prompt,
+            prompt=validator_task.prompt,
             task_type=TaskTypeEnum.TEXT_FEEDBACK,
             expire_at=set_expire_time(int(HFLInterval.TASK_DEADLINE)),
             completion_responses=[
@@ -116,9 +113,7 @@ async def fetch_miner_feedback_for_task(
     responses_needing_fetch: List[MinerResponse] = []
 
     # Identify valid miner responses
-    valid_miner_responses = [
-        resp for resp in task.miner_responses or [] if resp.hotkey and resp.dojo_task_id
-    ]
+    valid_miner_responses = [resp for resp in task.miner_responses or [] if resp.hotkey]
 
     if not valid_miner_responses:
         logger.warning(f"No valid miner responses found for task {task.id}")
@@ -191,7 +186,7 @@ async def fetch_miner_feedback_for_task(
         # Update the database with fresh results
         success = await ORM.update_miner_task_results(
             miner_hotkey=miner_response.hotkey,
-            dojo_task_id=miner_response.dojo_task_id,
+            validator_task_id=task.id,
             task_results=sanitized_result,
         )
 
@@ -421,7 +416,7 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                     )
                 else:
                     logger.warning(
-                        f"Sanitization failed for dojo_task_id: {task_result.task_id} with text feedback: {text_feedback}"
+                        f"Sanitization failed for validator task id: {task_result.task_id} with text feedback: {text_feedback}"
                     )
                     # Replace with "invalid" if not valid
                     sanitized_criterion = criterion.copy()

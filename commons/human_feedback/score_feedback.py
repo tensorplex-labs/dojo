@@ -9,7 +9,6 @@ from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.hfl_helpers import HFLManager
-from commons.human_feedback.types import HFLConstants
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_time
@@ -93,9 +92,10 @@ async def create_score_feedback_task(
 
         # Get active miners for SF task
         active_miners = await validator.get_active_miner_uids()
-        if len(active_miners) <= HFLConstants.MIN_NUM_MINERS.value:
-            logger.error(f"No active miners found for SF task for {tf_task.id}")
-            return None
+        # FIXME enable this for mainnet
+        # if len(active_miners) <= HFLConstants.MIN_NUM_MINERS.value:
+        #     logger.error(f"No active miners found for SF task for {tf_task.id}")
+        #     return None
 
         # Send to miners
         miner_responses: list[SyntheticTaskSynapse] | None = await send_hfl_request(
@@ -166,9 +166,9 @@ async def process_score_feedback_task(
         # Process each miner response
         success_count = 0
         for miner_response in sf_task.miner_responses:
-            if not miner_response.hotkey or not miner_response.dojo_task_id:
+            if not miner_response.hotkey:
                 logger.warning(
-                    f"Skipping miner response {miner_response.id} due to missing hotkey or dojo task id, hotkey: {miner_response.hotkey}, dojo task id: {miner_response.dojo_task_id}"
+                    f"Skipping miner response {miner_response.id} due to missing hotkey, hotkey: {miner_response.hotkey} for sf task {sf_task.id}"
                 )
                 continue
 
@@ -184,7 +184,7 @@ async def process_score_feedback_task(
             # Update task results in database
             success = await ORM.update_miner_task_results(
                 miner_hotkey=miner_response.hotkey,
-                dojo_task_id=miner_response.dojo_task_id,
+                validator_task_id=sf_task.id,
                 task_results=task_results,
             )
 

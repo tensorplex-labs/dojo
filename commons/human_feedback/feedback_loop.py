@@ -66,11 +66,12 @@ class FeedbackLoop:
         active_miner_uids = await validator.get_active_miner_uids(
             subset_size=HFLConstants.TARGET_NUM_MINERS.value
         )
-        if len(active_miner_uids) <= HFLConstants.TARGET_NUM_MINERS.value:
-            logger.warning(
-                f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-            )
-            return
+        # FIXME enable this for mainnet
+        # if len(active_miner_uids) <= HFLConstants.TARGET_NUM_MINERS.value:
+        #     logger.warning(
+        #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+        #     )
+        #     return
 
         result = await self.select_validator_task()
         if result:
@@ -292,17 +293,15 @@ class FeedbackLoop:
 
                 # Process each task in the batch
                 for task in tf_tasks_batch:
-                    hotkeys_with_feedback: list[str] = []
+                    used_hotkeys: list[str] = [
+                        mr.hotkey for mr in task.miner_responses or []
+                    ]
 
                     # Fetch and process miner feedback
                     (
                         miner_feedbacks,
                         valid_responses,
                     ) = await fetch_miner_feedback_for_task(validator, task)
-
-                    hotkeys_with_feedback.extend(
-                        [miner_feedback.hotkey for miner_feedback in miner_feedbacks]
-                    )
 
                     # Check if we have sufficient responses
                     response_count = len(miner_feedbacks)
@@ -376,11 +375,9 @@ class FeedbackLoop:
 
                         active_miner_uids = await validator.get_active_miner_uids()
                         axons = validator._retrieve_axons(active_miner_uids)
-                        # filter hotkey that have already been give feedback
+                        # filter miners who already received this task
                         axons = [
-                            axon
-                            for axon in axons
-                            if axon.hotkey not in hotkeys_with_feedback
+                            axon for axon in axons if axon.hotkey not in used_hotkeys
                         ]
                         if len(axons) < HFLConstants.MIN_NUM_MINERS.value:
                             continue
@@ -562,7 +559,7 @@ class FeedbackLoop:
         1. Query SF_PENDING tasks that have expired within a time window
         2. For each task:
             - Get all miner responses
-            - Query each miner for task results using their dojo_task_id
+            - Query each miner for task results using validator task id
             - Update task results in database
             - Update HFL state to SF_COMPLETED
         """
@@ -587,7 +584,7 @@ class FeedbackLoop:
                     {
                         "HFLState": True,
                         "miner_responses": {
-                            "where": {"task_result": {"equals": Json("{}")}}
+                            "where": {"task_result": {"equals": Json("[]")}}
                         },
                     }
                 ),
@@ -719,11 +716,12 @@ class FeedbackLoop:
                     active_miners = await validator.get_active_miner_uids(
                         subset_size=HFLConstants.TARGET_NUM_MINERS.value
                     )
-                    if len(active_miners) <= HFLConstants.TARGET_NUM_MINERS.value:
-                        logger.warning(
-                            f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-                        )
-                        continue
+                    # FIXME enable this for mainnet
+                    # if len(active_miners) <= HFLConstants.TARGET_NUM_MINERS.value:
+                    #     logger.warning(
+                    #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                    #     )
+                    #     continue
 
                     # Send the task to miners
                     miner_responses = await send_hfl_request(

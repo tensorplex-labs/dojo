@@ -361,12 +361,8 @@ class Scoring:
             cubic_reward_scores,
         ) = cls.ground_truth_scoring(criteria, ground_truth, valid_responses)
 
-        if miner_outputs_normalised.shape[0] == 1:
-            miner_outputs_normalised = miner_outputs_normalised.T
-            miner_outputs = miner_outputs.T
-
         for i, response in enumerate(valid_responses):
-            if not response.axon or not response.axon.hotkey:
+            if not response.miner_hotkey:
                 continue
 
             for j, completion_response in enumerate(
