@@ -12,7 +12,6 @@ from http import HTTPStatus
 from typing import AsyncGenerator, Dict, List, TypeAlias
 
 import aiohttp
-import bittensor as bt
 import numpy as np
 import torch
 from kami import AxonInfo, KamiClient, SetWeightsPayload, SubnetMetagraph
@@ -97,8 +96,6 @@ class Validator(aobject):
     _active_miner_uids: set[int] = set()
     _forward_semaphore = asyncio.Semaphore(16)  # Limit to 16 concurrent forward calls
 
-    subtensor: bt.subtensor
-    wallet: bt.wallet  # type: ignore
     metagraph: SubnetMetagraph
     spec_version: int = get_spec_version()
     kami: KamiClient
