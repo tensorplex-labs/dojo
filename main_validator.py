@@ -43,7 +43,6 @@ async def _shutdown_validator():
     logger.info("Performing shutdown tasks...")
     validator = await ObjectManager.get_validator()
     if validator:
-        validator.subtensor.substrate.close()
         await validator.save_state()
     await SyntheticAPI.close_session()
     await disconnect_db()
