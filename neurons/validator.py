@@ -1554,7 +1554,7 @@ class Validator(aobject):
                 )
                 return response.body.task_results
 
-            logger.error(
+            logger.debug(
                 f"No results from miner {miner_hotkey} for task {validator_task_id} after {max_retries} attempts"
             )
             return []
@@ -1779,6 +1779,9 @@ class Validator(aobject):
                 )
                 continue
 
+            # FIXME: remove this
+            if int(uid) == 15:
+                continue
             miner_axons.append(axon)
 
         return miner_axons

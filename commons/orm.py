@@ -14,6 +14,7 @@ from commons.exceptions import (
     NoProcessedTasksYet,
 )
 from commons.hfl_helpers import HFLManager
+from commons.human_feedback.types import HFLInterval
 from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
 from database.mappers import (
@@ -1226,9 +1227,6 @@ class ORM:
         Returns:
             Tuple of (number of saved responses, whether retry count was updated)
         """
-        if not miner_responses:
-            return 0, hfl_state
-
         saved_count = 0
 
         try:
@@ -1282,6 +1280,17 @@ class ORM:
                             f"Error saving miner response for {response.miner_hotkey}: {e}"
                         )
                         continue
+
+                extend_expire_at = datetime.now(timezone.utc) + timedelta(
+                    seconds=int(HFLInterval.TASK_DEADLINE)
+                )
+
+                await tx.validatortask.update(
+                    where={"id": validator_task_id},
+                    data={
+                        "expire_at": extend_expire_at,
+                    },
+                )
 
                 updated_hfl_state = await HFLManager.update_state(
                     hfl_state_id=hfl_state.id,

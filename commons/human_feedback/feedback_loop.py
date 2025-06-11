@@ -275,6 +275,10 @@ class FeedbackLoop:
                 hours_ago_start=2, hours_ago_end=0, buffer_minutes=10
             )
 
+            logger.info(
+                f"Processing TF_PENDING tasks with expire_from: {expire_from} and expire_to: {expire_to}"
+            )
+
             # Process TF_PENDING tasks in batches
             async for tf_tasks_batch, _ in ORM.get_tasks_by_hfl_status(
                 status=HFLStatusEnum.TF_PENDING,
@@ -356,6 +360,9 @@ class FeedbackLoop:
                         response_count < HFLConstants.TF_MIN_RESPONSES.value
                         and retry_count < HFLConstants.TF_MAX_RETRY.value
                     ):
+                        logger.info(
+                            f"Task {task.id} has {response_count} valid responses, processing with retry"
+                        )
                         task_synapse = await get_task_synapse_for_retry(task.id)
 
                         if not task_synapse:
@@ -380,19 +387,12 @@ class FeedbackLoop:
                         axons = [
                             axon for axon in axons if axon.hotkey not in used_hotkeys
                         ]
-                        if len(axons) < HFLConstants.MIN_NUM_MINERS.value:
-                            continue
 
                         miner_responses = await send_hfl_request(
                             synapse=task_synapse,
                             task_type=TaskTypeEnum.TEXT_FEEDBACK,
                             axons=axons,
                         )
-                        if not miner_responses:
-                            logger.warning(
-                                f"No miner responses found for task {task.id}"
-                            )
-                            continue
 
                         # deobfuscate model names
                         for response in miner_responses:
@@ -724,6 +724,13 @@ class FeedbackLoop:
                     #     )
                     #     continue
 
+                    (
+                        obfuscated_model_to_model,
+                        text_criteria_task.completion_responses,
+                    ) = validator.obfuscate_model_names(
+                        text_criteria_task.completion_responses or []
+                    )
+
                     # Send the task to miners
                     miner_responses = await send_hfl_request(
                         synapse=text_criteria_task,
@@ -737,6 +744,13 @@ class FeedbackLoop:
                         )
                         continue
 
+                    # Deobfuscate model names before saving (ADD THIS)
+                    text_criteria_task.completion_responses = (
+                        validator.deobfuscate_model_names(
+                            text_criteria_task.completion_responses or [],
+                            obfuscated_model_to_model,
+                        )
+                    )
                     # Save the new TF task and update the HFL state
                     validator_task, updated_hfl_state = await ORM.save_tf_task(
                         validator_task=text_criteria_task,
