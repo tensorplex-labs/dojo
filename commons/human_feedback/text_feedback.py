@@ -168,21 +168,21 @@ async def fetch_miner_feedback_for_task(
     task_results_list = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
     # A list of miner responses that have been updated with the new results
-    for i, result in enumerate(task_results_list):
-        if isinstance(result, BaseException):
+    for i, results in enumerate(task_results_list):
+        if isinstance(results, BaseException):
             logger.warning(
-                f"Error fetching results for miner {responses_needing_fetch[i].hotkey}: {result}"
+                f"Error fetching results for miner {responses_needing_fetch[i].hotkey}: {results}"
             )
             continue
 
-        if not result:  # Empty or None result
+        if not results:  # Empty or None result
             continue
 
         miner_response = responses_needing_fetch[i]
 
-        logger.info(f"original result from miners........ {result}")
+        logger.info(f"original result from miners........ {results}")
 
-        sanitized_result = await sanitize_text_feedback(result)
+        sanitized_result = await sanitize_text_feedback(results)
         # Update the database with fresh results
         success = await ORM.update_miner_task_results(
             miner_hotkey=miner_response.hotkey,
@@ -196,7 +196,7 @@ async def fetch_miner_feedback_for_task(
             )
             continue
 
-        logger.info(f"Task results for miner {miner_response.hotkey}: {result}")
+        logger.info(f"Task results for miner {miner_response.hotkey}: {results}")
         # Create initial miner scores with their relations
         # Extract text feedback
         feedback_text, selected_task_result = extract_text_feedback_from_results(

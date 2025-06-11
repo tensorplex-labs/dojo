@@ -265,7 +265,9 @@ class Miner(aobject):
             if task_ids := await DojoAPI.create_task(synapse):
                 dojo_task_id = task_ids[0]
                 served_request = ServedRequest(
-                    validator_task_id=synapse.task_id, dojo_task_id=dojo_task_id
+                    validator_task_id=synapse.task_id,
+                    dojo_task_id=dojo_task_id,
+                    hotkey=self.keyringpair.hotkey,
                 )
                 try:
                     # 1. Save first
@@ -308,7 +310,8 @@ class Miner(aobject):
 
         try:
             served_request = ServedRequest.find(
-                ServedRequest.validator_task_id == synapse.validator_task_id
+                ServedRequest.validator_task_id == synapse.validator_task_id,
+                ServedRequest.hotkey == self.keyringpair.hotkey,
             ).first()
             if not served_request:
                 message = f"Did not serve request from validator with {synapse.validator_task_id}"

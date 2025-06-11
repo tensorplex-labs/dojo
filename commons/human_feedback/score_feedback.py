@@ -98,7 +98,7 @@ async def create_score_feedback_task(
         #     return None
 
         # Send to miners
-        miner_responses: list[SyntheticTaskSynapse] | None = await send_hfl_request(
+        miner_responses: list[SyntheticTaskSynapse] = await send_hfl_request(
             synapse=task_synapse,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
             axons=validator._retrieve_axons(active_miners),
@@ -241,7 +241,7 @@ async def send_hfl_request(
     synapse: SyntheticTaskSynapse,
     task_type: TaskTypeEnum,
     axons: list[AxonInfo],
-) -> list[SyntheticTaskSynapse] | None:
+) -> list[SyntheticTaskSynapse]:
     """
     Send Human Feedback Loop requests to miners.
 
@@ -256,7 +256,11 @@ async def send_hfl_request(
     """
     if not synapse.completion_responses:
         logger.error(f"No completion responses for synapse: {synapse}")
-        return None
+        return []
+
+    if not axons:
+        logger.warning(f"No axons for {task_type} task: {synapse.task_id}")
+        return []
 
     logger.info(
         f"Sending {task_type} request to miners: {[axon.hotkey for axon in axons]}"
@@ -278,7 +282,7 @@ async def send_hfl_request(
 
     if not valid_miner_responses:
         logger.info(f"No valid responses received for {task_type} task... skipping")
-        return None
+        return []
 
     return valid_miner_responses
 
