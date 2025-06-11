@@ -9,8 +9,8 @@ from commons.utils import _terminal_plot
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
+    Score,
     ScoreCriteria,
-    Scores,
     SyntheticTaskSynapse,
 )
 
@@ -368,7 +368,7 @@ class Scoring:
             for j, completion_response in enumerate(
                 response.completion_responses or []
             ):
-                scores = Scores(
+                scores = Score(
                     raw_score=float(miner_outputs[i, j]),
                     ground_truth_score=float(gt_score[i]),
                     normalised_score=float(miner_outputs_normalised[i, j]),

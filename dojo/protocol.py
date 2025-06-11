@@ -25,7 +25,7 @@ class CriteriaTypeEnum(StrEnum):
     TEXT = "text"
 
 
-class Scores(BaseModel):
+class Score(BaseModel):
     raw_score: float | None = Field(description="Raw score of the miner", default=None)
     rank_id: int | None = Field(description="Rank of the miner", default=None)
     normalised_score: float | None = Field(
@@ -59,7 +59,7 @@ class ScoreCriteria(BaseModel):
     type: str = Field(default=CriteriaTypeEnum.SCORE.value, frozen=True)
     min: float = Field(description="Minimum score for the task", frozen=True)
     max: float = Field(description="Maximum score for the task", frozen=True)
-    scores: Scores | None = Field(description="Scores of the completion", default=None)
+    scores: Score | None = Field(description="Scores of the completion", default=None)
 
 
 class TextCriteria(BaseModel):
@@ -162,11 +162,18 @@ class SyntheticTaskSynapse(BaseModel):
     )
 
 
+class CompletionScore(BaseModel):
+    completion_id: str = Field(description="ID of the completion")
+    score: Score | TextFeedbackScore = Field(description="Score of the completion")
+
+
 class ScoreResultSynapse(BaseModel):
     validator_task_id: str = Field(
         description="Unique identifier for the request",
     )
-    scores: Scores = Field(description="Scores object for a miner for that task id")
+    scores: list[CompletionScore] = Field(
+        description="List of CompletionScore objects for a miner for that task id"
+    )
 
 
 class Heartbeat(BaseModel):

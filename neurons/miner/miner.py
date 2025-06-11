@@ -68,6 +68,9 @@ class Miner(aobject):
         self.keyringpair = await self.kami.get_keyringpair()
         await self.register_synapse_handlers()
         await self.init_metagraphs()
+        logger.info(
+            f"Miner hotkey: {self.keyringpair.hotkey} uid: {self.subnet_metagraph.hotkeys.index(self.keyringpair.hotkey)}"
+        )
         if not await check_redis_connection():
             raise ConnectionError()
         Migrator().run()
@@ -241,14 +244,7 @@ class Miner(aobject):
         if all(val is None for val in synapse.model_dump().values()):
             logger.warning(f"All scores in {synapse_name} are None")
 
-        logger.info(
-            f"Task {synapse.validator_task_id}"
-            f"\n\tGround Truth Score: {synapse.scores.ground_truth_score}"
-            f"\n\tCosine Similarity: {synapse.scores.cosine_similarity_score}"
-            f"\n\tNormalised Cosine Similarity: {synapse.scores.normalised_cosine_similarity_score}"
-            f"\n\tCubic Reward Score: {synapse.scores.cubic_reward_score}"
-            f"\n\tHFL Score: {synapse.scores.icc_score}"
-        )
+        logger.info(f"⬆️ Responding to score result synapse: {synapse}")
 
     async def synthetic_task_handler(
         self, request: Request, synapse: SyntheticTaskSynapse
