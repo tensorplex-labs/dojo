@@ -46,7 +46,7 @@ def configure_logging(config: bt.config):
 
     logger.remove()
     level = resolve_log_level(config)
-    logger.add(sys.stdout, level=level)
+    logger.add(sys.stdout, level=level, colorize=True)
 
     # Optionally enable file logging if `record_log` and `logging_dir` are provided
     if config.record_log and config.logging_dir:
