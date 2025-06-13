@@ -1,5 +1,6 @@
 import asyncio
 import gc
+import os
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -18,6 +19,8 @@ from dojo.chain import get_async_subtensor
 from dojo.utils.config import source_dotenv
 
 source_dotenv()
+
+ENABLE_HFL = os.getenv("ENABLE_HFL", "true").lower() == "true"
 
 
 @asynccontextmanager
@@ -98,12 +101,20 @@ async def main():
         #     )
         # ),
         asyncio.create_task(validator.block_updater()),
-        asyncio.create_task(feedback_loop.start_feedback_loop(validator)),
-        asyncio.create_task(feedback_loop.update_tf_task_results(validator)),
-        asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
-        asyncio.create_task(feedback_loop.update_sf_task_results(validator)),
-        asyncio.create_task(feedback_loop.create_next_tf_tasks(validator)),
     ]
+    if ENABLE_HFL:
+        running_tasks.extend(
+            [
+                asyncio.create_task(feedback_loop.start_feedback_loop(validator)),
+                asyncio.create_task(feedback_loop.update_tf_task_results(validator)),
+                asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
+                asyncio.create_task(feedback_loop.update_sf_task_results(validator)),
+                asyncio.create_task(feedback_loop.create_next_tf_tasks(validator)),
+            ]
+        )
+    else:
+        logger.info("HFL is disabled, skipping HFL tasks")
+
     # set a callback on validator.run() to check for fatal errors.
     running_tasks[1].add_done_callback(_check_fatal_errors)
 

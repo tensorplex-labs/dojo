@@ -32,6 +32,7 @@ Complete the .env file by changing / uncommenting the required variables
 | VALIDATOR_API_BASE_URL  | Data Collection Endpoint                  | <https://dojo-validator-api.tensorplex.ai>  |                                                                                                                                                             |
 | DOJO_LOKI_URL           | Loki Endpoint                             | <https://dojo-logs.tensorplex.ai>           |                                                                                                                                                             |
 | VALIDATOR_HOTKEY        | SS58 Address for labelling                | -                                           |                                                                                                                                                             |
+| ENABLE_HFL              | Enable Human Feedback Loop                | false                                       | Set to true to enable the Human Feedback Loop feature                                                                                                        |
 
 Start the validator
 
