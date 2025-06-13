@@ -394,7 +394,10 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
 
             for criterion in result_item.criteria:
                 # Only process text type criteria
-                if criterion["type"] != CriteriaTypeEnum.TEXT.value:
+                if criterion.get("type", "") != CriteriaTypeEnum.TEXT.value:
+                    logger.debug(
+                        f"Skipping sanitization for non-text criteria: {criterion.get('type', 'unknown')}"
+                    )
                     sanitized_criteria.append(criterion)
                     continue
 
@@ -405,8 +408,15 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                     else ""
                 )
 
+                # Skip sanitization for empty feedback
+                if not text_feedback:
+                    logger.info("Empty text feedback found - skipping sanitization")
+                    sanitized_criterion = criterion.copy()
+                    sanitized_criterion["text_feedback"] = ""  # Keep as empty
+                    sanitized_criteria.append(sanitized_criterion)
+                    continue
+
                 # Apply sanitization checks
-                # @dev - what should happen if not feedback_text?
                 sanitization_result = await sanitize_miner_feedback(text_feedback)
                 if sanitization_result.is_safe:
                     # Keep original text feedback if valid
