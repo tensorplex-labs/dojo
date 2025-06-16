@@ -101,7 +101,7 @@ class Validator(aobject):
         await connect_db()
 
         self.MAX_BLOCK_CHECK_ATTEMPTS = 3
-        self.QUALITY_WEIGHT = 0.8
+        self.QUALITY_WEIGHT = 1.0
         self._last_block = None
         self._block_check_attempts = 0
         self._connection_lock = asyncio.Lock()
