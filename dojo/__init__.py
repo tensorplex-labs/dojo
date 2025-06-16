@@ -2,8 +2,10 @@ import os
 import subprocess
 
 from git import Repo
+from loguru import logger
 
-from dojo.utils.config import get_config, source_dotenv
+from dojo.constants import ValidatorConstant, ValidatorInterval
+from dojo.utils.config import get_mode, source_dotenv
 
 source_dotenv()
 
@@ -50,40 +52,27 @@ def get_spec_version():
     )
 
 
-VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
-TASK_DEADLINE = 6 * 60 * 60
-
-# Define the time intervals for various tasks.
-VALIDATOR_RUN = 900
-VALIDATOR_HEARTBEAT = 200
-
-VALIDATOR_UPDATE_TASK = 600
-VALIDATOR_UPDATE_SCORE = 3600
-BUFFER_PERIOD = 2700
-
-VALIDATOR_STATUS = 60
-MINER_STATUS = 60
-DOJO_TASK_MONITORING = 300
-ANALYTICS_UPLOAD = 65 * 60
-assert VALIDATOR_UPDATE_SCORE < TASK_DEADLINE
-
-if get_config().fast_mode:
-    print("Running in fast mode for testing purposes...")
-    VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
-    TASK_DEADLINE = 180
-    VALIDATOR_RUN = 60
-    VALIDATOR_HEARTBEAT = 15
-    VALIDATOR_UPDATE_SCORE = 120
-    VALIDATOR_UPDATE_TASK = 30
-    BUFFER_PERIOD = 90
-    VALIDATOR_STATUS = 1200
-    MINER_STATUS = 1200
-    DOJO_TASK_MONITORING = 15
-
-
 def get_dojo_api_base_url() -> str:
     base_url = os.getenv("DOJO_API_BASE_URL")
     if base_url is None:
         raise ValueError("DOJO_API_BASE_URL is not set in the environment.")
-
     return base_url
+
+
+# Print mode information
+logger.info(f"Running in {get_mode().value} mode")
+
+
+__all__ = [
+    # Constants
+    "ValidatorInterval",
+    "ValidatorConstant",
+    "get_mode",
+    # Git functions
+    "get_latest_git_tag",
+    "get_latest_remote_tag",
+    "get_commit_hash",
+    "get_spec_version",
+    # API URL
+    "get_dojo_api_base_url",
+]

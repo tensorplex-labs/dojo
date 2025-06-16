@@ -11,11 +11,22 @@ networks:
   subtensor:
     name: subtensor
 
+volumes:
+  redis-miner-volume:
+
 services:
   #  watchtower:
   #    extends:
   #      file: docker-compose.shared.yaml
   #      service: watchtower
+  redis:
+    extends:
+      file: docker-compose.shared.yaml
+      service: redis
+    volumes:
+      - redis-miner-volume:/data
+    networks:
+      - dojo-miner
 
   dojo-cli:
     container_name: dojo-cli
@@ -49,7 +60,10 @@ services:
       - subtensor
     logging: *default-logging
     depends_on:
-      - kami
+      kami:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   kami:
     extends:

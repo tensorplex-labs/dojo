@@ -1,4 +1,6 @@
-from dojo.utils.config import get_config
+from loguru import logger
+
+from dojo.utils import get_config
 
 
 class ObjectManager:
@@ -9,34 +11,26 @@ class ObjectManager:
 
     @classmethod
     async def get_miner(cls):
-        if get_config().simulation:
-            # TODO: re-implement simulator
-            # from simulator.miner import MinerSim
-            #
-            # if cls._miner is None:
-            #     cls._miner = await MinerSim()
-            pass
-        else:
-            from neurons.miner import Miner
+        from neurons.miner.miner import Miner
 
-            if cls._miner is None:
+        if cls._miner is None:
+            try:
                 cls._miner = await Miner()
+            except Exception as e:
+                logger.error(f"Failed to initialize Miner: {e}")
+                raise
         return cls._miner
 
     @classmethod
     async def get_validator(cls):
-        if get_config().simulation:
-            # TODO: re-implement simulator
-            # from simulator.validator import ValidatorSim
-            #
-            # if cls._validator is None:
-            #     cls._validator = ValidatorSim()
-            pass
-        else:
-            from neurons.validator import Validator
+        from neurons.validator import Validator
 
-            if cls._validator is None:
+        if cls._validator is None:
+            try:
                 cls._validator = await Validator()
+            except Exception as e:
+                logger.error(f"Failed to initialize Validator: {e}")
+                raise
         return cls._validator
 
     @classmethod

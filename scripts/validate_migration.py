@@ -185,7 +185,6 @@ async def validate_child_data(sample_percentage=10, batch_size=1000):
             miner_response = await prisma.minerresponse.find_first(
                 where={
                     "validator_task_id": child_request.parent_id,
-                    "dojo_task_id": child_request.dojo_task_id,
                     "hotkey": child_request.hotkey,
                 },
                 include={"scores": True},
@@ -197,7 +196,6 @@ async def validate_child_data(sample_percentage=10, batch_size=1000):
                     f"\n❌ Miner response missing for child request {child_request.id}"
                 )
                 print(f"   Parent Request: {child_request.parent_id}")
-                print(f"   Dojo Task: {child_request.dojo_task_id}")
                 print(f"   Hotkey: {child_request.hotkey}")
                 continue
 
