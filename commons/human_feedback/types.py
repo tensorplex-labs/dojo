@@ -23,7 +23,7 @@ class HFLConstants(Enum):
 
     MAX_ITERATIONS = 3
     MIN_THRESHOLD = 50
-    MAX_THRESHOLD = 101  # turn back to 90 on mainnet
+    MAX_THRESHOLD = 90  # turn back to 90 on mainnet
     CONSENSUS_THRESHOLD = 101  # turn back to 90 on mainnet
     TF_WEIGHT = 0.7
     SF_WEIGHT = 0.3

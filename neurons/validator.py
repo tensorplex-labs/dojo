@@ -1216,8 +1216,6 @@ class Validator(aobject):
             subset_size: Optional size to limit number of miners queried
         """
 
-        # TODO: remove this
-        logger.info(f"ground_truth: {ground_truth}")
         if not synapse.completion_responses:
             logger.error("No completion responses to send")
             return
@@ -1234,8 +1232,7 @@ class Validator(aobject):
         )
 
         miner_responses = await self.send_synthetic_task(synapse, axons)
-        # TODO: remove this
-        logger.info(f"miner_responses: {miner_responses}")
+
         self._log_request_failures(miner_responses, axons)
 
         valid_miner_responses: List[SyntheticTaskSynapse] = []
@@ -1460,7 +1457,6 @@ class Validator(aobject):
         If no task results, return None. Else append it to miner completion response.
         """
         # Validate miner response
-        # TODO please come this againnnnnnn
         if not miner_response.miner_hotkey:
             raise InvalidMinerResponse(
                 f"""Missing hotkey, task_id:

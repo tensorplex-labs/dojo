@@ -66,12 +66,11 @@ class FeedbackLoop:
         active_miner_uids = await validator.get_active_miner_uids(
             subset_size=HFLConstants.TARGET_NUM_MINERS.value
         )
-        # FIXME enable this for mainnet
-        # if len(active_miner_uids) <= HFLConstants.TARGET_NUM_MINERS.value:
-        #     logger.warning(
-        #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-        #     )
-        #     return
+        if len(active_miner_uids) <= 0:
+            logger.warning(
+                f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+            )
+            return
 
         result = await self.select_validator_task()
         if result:
@@ -717,12 +716,11 @@ class FeedbackLoop:
                     active_miners = await validator.get_active_miner_uids(
                         subset_size=HFLConstants.TARGET_NUM_MINERS.value
                     )
-                    # FIXME enable this for mainnet
-                    # if len(active_miners) <= HFLConstants.TARGET_NUM_MINERS.value:
-                    #     logger.warning(
-                    #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-                    #     )
-                    #     continue
+                    if len(active_miners) <= 0:
+                        logger.warning(
+                            f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                        )
+                        continue
 
                     (
                         obfuscated_model_to_model,

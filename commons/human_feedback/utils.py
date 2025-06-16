@@ -308,7 +308,7 @@ async def evaluate_miner_consensus(
 
             # Check for threshold criteria
             if min_threshold is not None and max_threshold is not None:
-                if min_threshold <= percentage < max_threshold:
+                if min_threshold <= percentage <= max_threshold:
                     threshold_met_completion = completion_id
                     logger.info(
                         f"Found eligible completion {completion_id} with {percentage:.1f}% "
