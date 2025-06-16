@@ -9,9 +9,9 @@ from commons.utils import _terminal_plot
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
+    Score,
     ScoreCriteria,
-    Scores,
-    TaskSynapseObject,
+    SyntheticTaskSynapse,
 )
 
 
@@ -152,7 +152,7 @@ class Scoring:
     def ground_truth_scoring(
         criteria: CriteriaType,
         ground_truth: dict[str, int],
-        miner_responses: List[TaskSynapseObject],
+        miner_responses: List[SyntheticTaskSynapse],
     ) -> tuple[
         torch.Tensor,
         np.ndarray,
@@ -168,7 +168,7 @@ class Scoring:
         Args:
             criteria (CriteriaType): Criteria type
             ground_truth (dict[str, int]): Ground truth, where key is completion id and value is rank.
-            miner_responses (List[TaskSynapseObject]): Miner responses
+            miner_responses (List[SyntheticTaskSynapse]): Miner responses
 
         Raises:
             ValueError: If miner responses are empty or contain None values.
@@ -270,9 +270,9 @@ class Scoring:
     @classmethod
     def calculate_score(
         cls,
-        validator_task: TaskSynapseObject,
-        miner_responses: List[TaskSynapseObject],
-    ) -> List[TaskSynapseObject]:
+        validator_task: SyntheticTaskSynapse,
+        miner_responses: List[SyntheticTaskSynapse],
+    ) -> List[SyntheticTaskSynapse]:
         """Calculates scores for miners.
 
         Args:
@@ -345,9 +345,9 @@ class Scoring:
     def score_by_criteria(
         cls,
         criteria: CriteriaType,
-        valid_responses: List[TaskSynapseObject],
+        valid_responses: List[SyntheticTaskSynapse],
         ground_truth: Dict[str, int],
-    ) -> List[TaskSynapseObject]:
+    ) -> List[SyntheticTaskSynapse]:
         """Calculates and assigns scores based on criteria type."""
         if not isinstance(criteria, ScoreCriteria):
             raise NotImplementedError("Only score criteria is supported")
@@ -361,18 +361,14 @@ class Scoring:
             cubic_reward_scores,
         ) = cls.ground_truth_scoring(criteria, ground_truth, valid_responses)
 
-        if miner_outputs_normalised.shape[0] == 1:
-            miner_outputs_normalised = miner_outputs_normalised.T
-            miner_outputs = miner_outputs.T
-
         for i, response in enumerate(valid_responses):
-            if not response.axon or not response.axon.hotkey:
+            if not response.miner_hotkey:
                 continue
 
             for j, completion_response in enumerate(
                 response.completion_responses or []
             ):
-                scores = Scores(
+                scores = Score(
                     raw_score=float(miner_outputs[i, j]),
                     ground_truth_score=float(gt_score[i]),
                     normalised_score=float(miner_outputs_normalised[i, j]),

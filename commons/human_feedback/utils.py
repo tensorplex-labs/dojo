@@ -23,8 +23,8 @@ from dojo.protocol import (
     CompletionResponse,
     SanitizedResultEnum,
     ScoreCriteria,
+    SyntheticTaskSynapse,
     TaskResult,
-    TaskSynapseObject,
     TaskTypeEnum,
     TextFeedbackScore,
 )
@@ -106,7 +106,7 @@ def extract_text_feedback_from_results(
                             updated_at=result.get("updated_at", datetime.now()),
                             status=result.get("status", ""),
                             result_data=result.get("result_data", []),
-                            dojo_task_id=result.get("dojo_task_id", ""),
+                            task_id=result.get("task_id", ""),
                             worker_id=result.get("worker_id", ""),
                         )
                         return text_feedback, [task_result]
@@ -140,19 +140,19 @@ def map_human_feedback_to_task_synapse(
     response_data: HumanFeedbackResponse,
     original_model_name: str | None = None,
     original_completion_id: str | None = None,
-) -> TaskSynapseObject | None:
+) -> SyntheticTaskSynapse | None:
     """
-    Map the HumanFeedbackResponse to a TaskSynapseObject.
+    Map the HumanFeedbackResponse to a SyntheticTaskSynapse.
 
     Args:
         response_data: HumanFeedbackResponse object from Synthetic API
 
     Returns:
-        A TaskSynapseObject ready to be sent to miners, or None if conversion fails
+        A SyntheticTaskSynapse ready to be sent to miners, or None if conversion fails
     """
     try:
         # Create a new synthetic task for scoring
-        task_synapse = TaskSynapseObject(
+        task_synapse = SyntheticTaskSynapse(
             task_id=get_new_uuid(),
             prompt=response_data.base_prompt,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
@@ -709,9 +709,9 @@ async def create_initial_miner_scores(
                     # Create appropriate scores object based on criterion type
                     if criterion_type == "score":
                         # For score type, create a structured Scores object
-                        from dojo.protocol import Scores
+                        from dojo.protocol import Score
 
-                        scores_obj = Scores(
+                        scores_obj = Score(
                             raw_score=values,  # This is the calculated average
                             # Initialize other scores as None
                             rank_id=None,

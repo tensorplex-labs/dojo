@@ -1,7 +1,5 @@
 import json
 
-import bittensor as bt
-
 from commons.utils import datetime_to_iso8601_str, iso8601_str_to_datetime
 from database.prisma import Json
 from database.prisma.enums import CriteriaTypeEnum, TaskTypeEnum
@@ -17,9 +15,9 @@ from dojo import get_commit_hash, get_latest_git_tag
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
+    Score,
     ScoreCriteria,
-    Scores,
-    TaskSynapseObject,
+    SyntheticTaskSynapse,
     TextCriteria,
     TextFeedbackScore,
 )
@@ -31,13 +29,14 @@ from .types import Metadata
 #                 MAP PROTOCOL OBJECTS TO DATABASE MODEL INPUTS                #
 # ---------------------------------------------------------------------------- #
 def map_task_synapse_object_to_validator_task(
-    synapse: TaskSynapseObject,
+    synapse: SyntheticTaskSynapse,
+    ground_truth: dict[str, int] | None = None,
     qa_metadata: dict | None = None,
 ) -> ValidatorTaskCreateInput:
-    """Maps a TaskSynapseObject to ValidatorTask database model input.
+    """Maps a SyntheticTaskSynapse to ValidatorTask database model input.
 
     Args:
-        synapse (TaskSynapseObject): The task synapse object to map
+        synapse (SyntheticTaskSynapse): The task synapse object to map
         qa_metadata (dict | None): metadata from synthetic-API QA generation.
     Returns:
         ValidatorTaskCreateInput: The database model input
@@ -51,9 +50,9 @@ def map_task_synapse_object_to_validator_task(
                 rank_id=rank_id,
                 ground_truth_score=float(rank_id),  # TODO: Add normalised gt score
             )
-            for model_id, rank_id in synapse.ground_truth.items()
+            for model_id, rank_id in ground_truth.items()
         ]
-        if synapse.ground_truth
+        if ground_truth
         else []
     )
     augment_type = qa_metadata["augment_type"] if qa_metadata else ""
@@ -77,7 +76,7 @@ def map_task_synapse_object_to_validator_task(
 
 
 def map_task_synapse_object_to_completions(
-    synapse: TaskSynapseObject, validator_task_id: str
+    synapse: SyntheticTaskSynapse, validator_task_id: str
 ) -> list[CompletionCreateInput]:
     """Maps completion responses to database model inputs"""
 
@@ -132,13 +131,13 @@ def _get_criteria_config(criteria: CriteriaType) -> dict:
 
 
 def map_task_synapse_object_to_miner_response(
-    synapse: TaskSynapseObject,
+    synapse: SyntheticTaskSynapse,
     validator_task_id: str,
 ) -> MinerResponseCreateInput:
-    """Maps a TaskSynapseObject to MinerResponse database model input.
+    """Maps a SyntheticTaskSynapse to MinerResponse database model input.
 
     Args:
-        synapse (TaskSynapseObject): The task synapse object to map
+        synapse (SyntheticTaskSynapse): The task synapse object to map
         validator_task_id (str): The ID of the parent validator task
 
     Returns:
@@ -147,15 +146,11 @@ def map_task_synapse_object_to_miner_response(
     if not synapse.miner_hotkey or not synapse.miner_coldkey:
         raise ValueError("Miner hotkey and coldkey are required")
 
-    if not synapse.dojo_task_id:
-        raise ValueError("Dojo task ID is required")
-
     return MinerResponseCreateInput(
         validator_task_id=validator_task_id,
-        dojo_task_id=synapse.dojo_task_id,
         hotkey=synapse.miner_hotkey,
         coldkey=synapse.miner_coldkey,
-        task_result=Json(json.dumps({})),
+        task_result=Json(json.dumps([])),
     )
 
 
@@ -164,14 +159,14 @@ def map_task_synapse_object_to_miner_response(
 # ---------------------------------------------------------------------------- #
 def map_validator_task_to_task_synapse_object(
     model: ValidatorTask,
-) -> TaskSynapseObject:
-    """Maps a ValidatorTask database model to TaskSynapseObject.
+) -> SyntheticTaskSynapse:
+    """Maps a ValidatorTask database model to SyntheticTaskSynapse.
 
     Args:
         model (ValidatorTask): The database model to map
 
     Returns:
-        TaskSynapseObject: The protocol object
+        SyntheticTaskSynapse: The protocol object
     """
     # Map completion responses
     completion_responses = []
@@ -213,7 +208,7 @@ def map_validator_task_to_task_synapse_object(
     #     miner_coldkey = miner.coldkey
     #     dojo_task_id = miner.dojo_task_id
 
-    return TaskSynapseObject(
+    return SyntheticTaskSynapse(
         task_id=model.id,
         previous_task_id=model.previous_task_id,
         prompt=model.prompt,
@@ -223,22 +218,21 @@ def map_validator_task_to_task_synapse_object(
         ground_truth=ground_truth,
         miner_hotkey=None,
         miner_coldkey=None,
-        dojo_task_id=None,
     )
 
 
 def map_miner_response_to_task_synapse_object(
     miner_response: MinerResponse,
     validator_task: ValidatorTask,
-) -> TaskSynapseObject:
-    """Maps a MinerResponse database model to TaskSynapseObject.
+) -> SyntheticTaskSynapse:
+    """Maps a MinerResponse database model to SyntheticTaskSynapse.
 
     Args:
         miner_response (MinerResponse): The miner response database model to map
         validator_task (ValidatorTask): The validator task containing completions and criteria
 
     Returns:
-        TaskSynapseObject: The protocol object
+        SyntheticTaskSynapse: The protocol object
     """
     completion_responses = []
     for completion in validator_task.completions or []:
@@ -273,7 +267,7 @@ def map_miner_response_to_task_synapse_object(
             )
         )
 
-    return TaskSynapseObject(
+    return SyntheticTaskSynapse(
         task_id=miner_response.validator_task_id,
         previous_task_id=validator_task.previous_task_id,
         prompt=validator_task.prompt,
@@ -283,8 +277,6 @@ def map_miner_response_to_task_synapse_object(
         ground_truth=None,
         miner_hotkey=miner_response.hotkey,
         miner_coldkey=miner_response.coldkey,
-        dojo_task_id=miner_response.dojo_task_id,
-        axon=bt.TerminalInfo(hotkey=miner_response.hotkey),
     )
 
 
@@ -330,9 +322,7 @@ def map_miner_response_to_completion_responses(
                     ScoreCriteria(
                         min=config.get("min", 0.0),
                         max=config.get("max", 10.0),
-                        scores=Scores.model_validate(score_data)
-                        if score_data
-                        else None,
+                        scores=Score.model_validate(score_data) if score_data else None,
                     )
                 )
             elif criterion.criteria_type == CriteriaTypeEnum.TEXT:
@@ -347,7 +337,7 @@ def map_miner_response_to_completion_responses(
                     TextCriteria(
                         query="",
                         text_feedback="",
-                        score=tf_score,
+                        scores=tf_score,
                     )
                 )
 

@@ -6,6 +6,7 @@ contains logic to sanitize incoming miner feedback before we store it in db.
 import asyncio
 import os
 import re
+import traceback
 
 from langfuse.decorators import langfuse_context, observe
 from loguru import logger
@@ -92,6 +93,7 @@ async def _moderate_with_llm(miner_feedback: str) -> bool:
         )
     except Exception as e:
         logger.error(f"Unexpected error moderating miner feedback: {e}")
+        logger.debug(f"Traceback: {traceback.format_exc()}")
         return False
 
     # uncomment to see response when testing.

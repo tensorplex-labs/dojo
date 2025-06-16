@@ -4,22 +4,20 @@ import traceback
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from bittensor.core.chain_data.axon_info import AxonInfo
+from kami import AxonInfo
 from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.hfl_helpers import HFLManager
+from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_time
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskUpdateInput
-from dojo.protocol import ScoreFeedbackEvent, TaskSynapseObject, TextFeedbackEvent
+from dojo.protocol import ScoreFeedbackEvent, SyntheticTaskSynapse, TextFeedbackEvent
 
-from .utils import (
-    create_initial_miner_scores,
-    map_human_feedback_to_task_synapse,
-)
+from .utils import create_initial_miner_scores, map_human_feedback_to_task_synapse
 
 if TYPE_CHECKING:
     from neurons.validator import Validator
@@ -70,7 +68,7 @@ async def create_score_feedback_task(
             )
             return None
 
-        # Map the raw response to a TaskSynapseObject
+        # Map the raw response to a SyntheticTaskSynapse
         task_synapse = map_human_feedback_to_task_synapse(
             improved_task_data,
             original_model_name=tf_task.completions[0].model,
@@ -79,7 +77,7 @@ async def create_score_feedback_task(
 
         if not task_synapse or not task_synapse.completion_responses:
             logger.error(
-                "Failed to map improved task data to TaskSynapseObject or no completion responses"
+                "Failed to map improved task data to SyntheticTaskSynapse or no completion responses"
             )
             return None
 
@@ -93,19 +91,21 @@ async def create_score_feedback_task(
         task_synapse.completion_responses = completion_responses
 
         # Get active miners for SF task
-        active_miners = await get_active_miners_for_hfl(validator)
-        if not active_miners:
-            logger.error(f"No active miners found for SF task for {tf_task.id}")
-            return None
+        active_miners = await validator.get_active_miner_uids()
+        # FIXME enable this for mainnet
+        # if len(active_miners) <= HFLConstants.MIN_NUM_MINERS.value:
+        #     logger.error(f"No active miners found for SF task for {tf_task.id}")
+        #     return None
 
         # Send to miners
-        miner_responses: list[TaskSynapseObject] | None = await send_hfl_request(
-            validator=validator,
+        miner_responses: list[SyntheticTaskSynapse] = await send_hfl_request(
             synapse=task_synapse,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
             axons=validator._retrieve_axons(active_miners),
         )
-        logger.info(f"Miner responses: {miner_responses}")
+        logger.info(
+            f"Received {len(miner_responses) if miner_responses else 0} miner responses from: {[resp.miner_hotkey for resp in (miner_responses or [])]}"
+        )
 
         if not miner_responses:
             logger.error(f"Failed to send improved task to miners for {tf_task.id}")
@@ -166,16 +166,16 @@ async def process_score_feedback_task(
         # Process each miner response
         success_count = 0
         for miner_response in sf_task.miner_responses:
-            if not miner_response.hotkey or not miner_response.dojo_task_id:
+            if not miner_response.hotkey:
                 logger.warning(
-                    f"Skipping miner response {miner_response.id} due to missing hotkey or dojo task id, hotkey: {miner_response.hotkey}, dojo task id: {miner_response.dojo_task_id}"
+                    f"Skipping miner response {miner_response.id} due to missing hotkey, hotkey: {miner_response.hotkey} for sf task {sf_task.id}"
                 )
                 continue
 
             # Get task results from miner
             task_results = await validator._get_task_results_from_miner(
                 miner_hotkey=miner_response.hotkey,
-                dojo_task_id=miner_response.dojo_task_id,
+                validator_task_id=sf_task.id,
             )
 
             if not task_results:
@@ -184,7 +184,7 @@ async def process_score_feedback_task(
             # Update task results in database
             success = await ORM.update_miner_task_results(
                 miner_hotkey=miner_response.hotkey,
-                dojo_task_id=miner_response.dojo_task_id,
+                validator_task_id=sf_task.id,
                 task_results=task_results,
             )
 
@@ -237,66 +237,11 @@ async def process_score_feedback_task(
         return False
 
 
-async def get_active_miners_for_hfl(
-    validator,
-    subset_size: int | None = None,
-    min_miners: int = 3,
-) -> list[int] | None:
-    """
-    Get a subset of active miners suitable for HFL tasks.
-
-    Args:
-        validator: The Validator instance containing miner information
-        subset_size: The desired number of miners to return
-        min_miners: Minimum number of miners required (raises error if not met)
-
-    Returns:
-        List of UID integers for selected miners
-    """
-    # Get the current active miner UIDs from the validator
-    async with validator._uids_alock:
-        active_miners = sorted(list(validator._active_miner_uids))
-
-    if not active_miners:
-        logger.warning(
-            f"No active miners available for HFL tasks: {validator._active_miner_uids}"
-        )
-        return None
-
-    # Make sure we have enough miners
-    if len(active_miners) < min_miners:
-        logger.warning(
-            f"Not enough active miners for HFL tasks. Need at least {min_miners}, "
-            f"but only found {len(active_miners)}"
-        )
-        return None
-
-    if not subset_size:
-        logger.info(
-            f"No subset size provided, returning all {len(active_miners)} active miners"
-        )
-        return active_miners
-
-    # Safeguard against subset size being greater than the number of active miners
-    subset_size = min(subset_size, len(active_miners))
-
-    # Randomly select the requested number of miners
-    import random
-
-    selected_miners = random.sample(active_miners, subset_size)
-
-    logger.info(
-        f"Selected {len(selected_miners)} miners for HFL task from {len(active_miners)} active miners"
-    )
-    return selected_miners
-
-
 async def send_hfl_request(
-    validator: "Validator",
-    synapse: TaskSynapseObject,
+    synapse: SyntheticTaskSynapse,
     task_type: TaskTypeEnum,
     axons: list[AxonInfo],
-) -> list[TaskSynapseObject] | None:
+) -> list[SyntheticTaskSynapse]:
     """
     Send Human Feedback Loop requests to miners.
 
@@ -311,50 +256,33 @@ async def send_hfl_request(
     """
     if not synapse.completion_responses:
         logger.error(f"No completion responses for synapse: {synapse}")
-        return None
+        return []
+
+    if not axons:
+        logger.warning(f"No axons for {task_type} task: {synapse.task_id}")
+        return []
 
     logger.info(
         f"Sending {task_type} request to miners: {[axon.hotkey for axon in axons]}"
     )
 
     # Send request to miners
-    miner_responses = await validator._send_requests_to_miners(
-        validator.dendrite,
-        axons,
-        synapse,
-        shuffled=True,
-    )
+    _validator = await ObjectManager.get_validator()
+    miner_responses = await _validator.send_synthetic_task(synapse=synapse, axons=axons)
 
     # Process responses
-    valid_miner_responses = []
-    for response in miner_responses:
-        try:
-            if not response.dojo_task_id:
-                continue
-
-            # Add minimal required identification for HFL
-            response.miner_hotkey = response.axon.hotkey if response.axon else None
-
-            # Get coldkey
-            if response.axon and response.axon.hotkey:
-                try:
-                    hotkey_index = validator.metagraph.hotkeys.index(
-                        response.axon.hotkey
-                    )
-                    response.miner_coldkey = validator.metagraph.coldkeys[hotkey_index]
-                except (ValueError, IndexError):
-                    response.miner_coldkey = None
-            else:
-                response.miner_coldkey = None
-
-            valid_miner_responses.append(response)
-        except Exception as e:
-            logger.error(f"Error processing HFL response: {e}")
+    valid_miner_responses: list[SyntheticTaskSynapse] = []
+    for response, axon in zip(miner_responses, axons):
+        if not response.body.ack:
             continue
+        task = response.body
+        task.miner_hotkey = axon.hotkey
+        task.miner_coldkey = axon.coldkey
+        valid_miner_responses.append(task)
 
     if not valid_miner_responses:
         logger.info(f"No valid responses received for {task_type} task... skipping")
-        return None
+        return []
 
     return valid_miner_responses
 

@@ -14,6 +14,7 @@ from commons.exceptions import (
     NoProcessedTasksYet,
 )
 from commons.hfl_helpers import HFLManager
+from commons.human_feedback.types import HFLInterval
 from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
 from database.mappers import (
@@ -45,10 +46,10 @@ from dojo.constants import ValidatorInterval
 from dojo.protocol import (
     DendriteQueryResponse,
     HFLEvent,
+    Score,
     ScoreFeedbackEvent,
-    Scores,
+    SyntheticTaskSynapse,
     TaskResult,
-    TaskSynapseObject,
     TextFeedbackEvent,
 )
 
@@ -97,7 +98,7 @@ class ORM:
         }
 
         if filter_empty_result:
-            miner_responses_include["where"] = {"task_result": {"equals": Json("{}")}}
+            miner_responses_include["where"] = {"task_result": {"equals": Json("[]")}}
 
         include_query = ValidatorTaskInclude(
             {
@@ -295,7 +296,7 @@ class ORM:
     @staticmethod
     async def update_miner_task_results(
         miner_hotkey: str,
-        dojo_task_id: str,
+        validator_task_id: str,
         task_results: List[TaskResult],
         max_retries: int = 3,
     ) -> bool:
@@ -303,7 +304,7 @@ class ORM:
 
         Args:
             miner_hotkey (str): The hotkey of the miner
-            dojo_task_id (str): The Dojo task ID
+            validator_task_id (str): The validator task ID
             task_results (List[TaskResult]): List of task results to store
             max_retries (int, optional): Maximum number of retry attempts. Defaults to 3.
 
@@ -322,7 +323,7 @@ class ORM:
                     updated = await prisma.minerresponse.update_many(
                         where={
                             "hotkey": miner_hotkey,
-                            "dojo_task_id": dojo_task_id,
+                            "validator_task_id": validator_task_id,
                         },
                         data={
                             "task_result": task_results_json,
@@ -332,7 +333,7 @@ class ORM:
 
                     if updated:
                         logger.success(
-                            f"Updated task results for miner {miner_hotkey}, dojo_task_id {dojo_task_id}"
+                            f"Updated task results for miner {miner_hotkey}, validator_task_id {validator_task_id}"
                         )
                         return True
                     else:
@@ -364,7 +365,7 @@ class ORM:
     # TODO: How to store miner scores
     @staticmethod
     async def update_miner_raw_scores(
-        miner_responses: List[TaskSynapseObject],
+        miner_responses: List[SyntheticTaskSynapse],
         batch_size: int = 10,
         max_retries: int = 20,
     ) -> tuple[bool, list[int]]:
@@ -372,7 +373,7 @@ class ORM:
         NOTE: this is to be used when the task is first saved to validator's database.
 
         Args:
-            miner_responses: List of TaskSynapseObject containing miner responses
+            miner_responses: List of SyntheticTaskSynapse containing miner responses
             batch_size: Number of responses to process in each batch
             max_retries: Maximum number of retry attempts for failed batches
 
@@ -409,13 +410,13 @@ class ORM:
                             db_miner_response = await tx.minerresponse.find_first(
                                 where={
                                     "hotkey": miner_response.miner_hotkey,
-                                    "dojo_task_id": miner_response.dojo_task_id or "",
+                                    "validator_task_id": miner_response.task_id,
                                 }
                             )
 
                             if not db_miner_response:
                                 raise ValueError(
-                                    f"Miner response not found for dojo_task_id: {miner_response.dojo_task_id}, "
+                                    f"Miner response not found for validator_task_id: {miner_response.task_id}, "
                                     f"hotkey: {miner_response.miner_hotkey}"
                                 )
 
@@ -442,7 +443,7 @@ class ORM:
                                     continue
 
                                 # Create scores object
-                                scores = Scores(
+                                scores = Score(
                                     raw_score=completion.score,
                                     rank_id=completion.rank_id,
                                     # Initialize other scores as None - they'll be computed later
@@ -500,10 +501,11 @@ class ORM:
 
         return False, failed_batch_indices
 
+    # FIXME: caller is using both ground_truth field from Synapse and ground truth, make up your mind...
     @staticmethod
     async def save_task(
-        validator_task: TaskSynapseObject,
-        miner_responses: List[TaskSynapseObject],
+        validator_task: SyntheticTaskSynapse,
+        miner_responses: List[SyntheticTaskSynapse],
         ground_truth: dict[str, int],
         metadata: dict | None = None,
     ) -> ValidatorTask | None:
@@ -522,8 +524,9 @@ class ORM:
                 logger.trace("Starting transaction for saving task.")
 
                 # Map validator task using mapper function
+                # FIXME: can i simply use the ground_truths param
                 validator_task_data = map_task_synapse_object_to_validator_task(
-                    validator_task, metadata
+                    validator_task, ground_truth, metadata
                 )
                 if not validator_task_data:
                     logger.error("Failed to map validator task")
@@ -572,7 +575,7 @@ class ORM:
     @staticmethod
     async def update_miner_scores(
         task_id: str,
-        miner_responses: List[TaskSynapseObject],
+        miner_responses: List[SyntheticTaskSynapse],
         batch_size: int = 10,
         max_retries: int = 3,
     ) -> tuple[bool, list[str]]:
@@ -990,8 +993,8 @@ class ORM:
 
     @staticmethod
     async def save_tf_task(
-        validator_task: TaskSynapseObject,
-        miner_responses: list[TaskSynapseObject],
+        validator_task: SyntheticTaskSynapse,
+        miner_responses: list[SyntheticTaskSynapse],
         previous_task_id: str,
         selected_completion_id: str,
         is_next_task: bool = False,
@@ -1085,8 +1088,8 @@ class ORM:
 
     @staticmethod
     async def save_sf_task(
-        validator_task: TaskSynapseObject,
-        miner_responses: list[TaskSynapseObject],
+        validator_task: SyntheticTaskSynapse,
+        miner_responses: list[SyntheticTaskSynapse],
         hfl_state: HFLState,
         previous_task_id: str,
         human_feedback_response: HumanFeedbackResponse,
@@ -1210,7 +1213,7 @@ class ORM:
     async def save_tf_retry_responses(
         validator_task_id: str,
         hfl_state: HFLState,
-        miner_responses: list[TaskSynapseObject],
+        miner_responses: list[SyntheticTaskSynapse],
     ) -> tuple[int, HFLState]:
         """
         Save additional miner responses for an existing validator task and update
@@ -1224,22 +1227,15 @@ class ORM:
         Returns:
             Tuple of (number of saved responses, whether retry count was updated)
         """
-        if not miner_responses:
-            return 0, hfl_state
-
         saved_count = 0
 
         try:
             async with prisma.tx() as tx:
                 # Process each miner response
                 for response in miner_responses:
-                    if (
-                        not response.dojo_task_id
-                        or not response.miner_hotkey
-                        or not response.miner_coldkey
-                    ):
+                    if not response.miner_hotkey or not response.miner_coldkey:
                         logger.warning(
-                            "Missing dojo_task_id or hotkey in miner response"
+                            "Missing miner_hotkey or miner_coldkey in miner response"
                         )
                         continue
 
@@ -1253,26 +1249,24 @@ class ORM:
                         )
 
                         if existing_response:
-                            # Update the existing response with the new dojo_task_id
+                            # Update the existing response with the new validator_task_id
                             await tx.minerresponse.update(
                                 where={"id": existing_response.id},
                                 data={
-                                    "dojo_task_id": response.dojo_task_id,
                                     "updated_at": datetime_as_utc(datetime.now()),
                                 },
                             )
                             logger.debug(
-                                f"Updated existing response for miner {response.miner_hotkey} with new dojo_task_id"
+                                f"Updated existing response for miner {response.miner_hotkey} with new validator task id {validator_task_id}"
                             )
                         else:
                             # Create a new response
                             await tx.minerresponse.create(
                                 data={
                                     "validator_task_id": validator_task_id,
-                                    "dojo_task_id": response.dojo_task_id,
                                     "hotkey": response.miner_hotkey,
                                     "coldkey": response.miner_coldkey,
-                                    "task_result": Json(json.dumps({})),
+                                    "task_result": Json(json.dumps([])),
                                 }
                             )
                             logger.debug(
@@ -1286,6 +1280,17 @@ class ORM:
                             f"Error saving miner response for {response.miner_hotkey}: {e}"
                         )
                         continue
+
+                extend_expire_at = datetime.now(timezone.utc) + timedelta(
+                    seconds=int(HFLInterval.TASK_DEADLINE)
+                )
+
+                await tx.validatortask.update(
+                    where={"id": validator_task_id},
+                    data={
+                        "expire_at": extend_expire_at,
+                    },
+                )
 
                 updated_hfl_state = await HFLManager.update_state(
                     hfl_state_id=hfl_state.id,

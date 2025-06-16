@@ -18,26 +18,23 @@ from dojo.protocol import (
     CriteriaType,
     CriteriaTypeEnum,
     SanitizedResultEnum,
+    SyntheticTaskSynapse,
     TaskResult,
-    TaskSynapseObject,
     TextCriteria,
     TextFeedbackEvent,
 )
 
 from .sanitize import sanitize_miner_feedback
 from .types import HFLInterval
-from .utils import (
-    create_initial_miner_scores,
-    extract_text_feedback_from_results,
-)
+from .utils import create_initial_miner_scores, extract_text_feedback_from_results
 
 if TYPE_CHECKING:
     from neurons.validator import Validator
 
 
 async def create_text_feedback_task(
-    validator_task: TaskSynapseObject, completion_id: str
-) -> TaskSynapseObject | None:
+    validator_task: SyntheticTaskSynapse, completion_id: str
+) -> SyntheticTaskSynapse | None:
     """
     Generates a text criteria task based on a selected validator task and completion.
     This task will be used to evaluate the quality of miners' scoring.
@@ -74,14 +71,11 @@ async def create_text_feedback_task(
         ]
         selected_completion.criteria_types = text_criteria
 
-        prompt = f"""Please analyze this output and suggest specific improvements:
-        Prompt: {validator_task.prompt}
-        """
         # Create a new task with the same prompt but different criteria type
-        new_tf_task = TaskSynapseObject(
+        new_tf_task = SyntheticTaskSynapse(
             task_id=get_new_uuid(),
             previous_task_id=validator_task.task_id,
-            prompt=prompt,
+            prompt=validator_task.prompt,
             task_type=TaskTypeEnum.TEXT_FEEDBACK,
             expire_at=set_expire_time(int(HFLInterval.TASK_DEADLINE)),
             completion_responses=[
@@ -119,9 +113,7 @@ async def fetch_miner_feedback_for_task(
     responses_needing_fetch: List[MinerResponse] = []
 
     # Identify valid miner responses
-    valid_miner_responses = [
-        resp for resp in task.miner_responses or [] if resp.hotkey and resp.dojo_task_id
-    ]
+    valid_miner_responses = [resp for resp in task.miner_responses or [] if resp.hotkey]
 
     if not valid_miner_responses:
         logger.warning(f"No valid miner responses found for task {task.id}")
@@ -166,8 +158,7 @@ async def fetch_miner_feedback_for_task(
     fetch_tasks = [
         asyncio.create_task(
             validator._get_task_results_from_miner(
-                miner_hotkey=resp.hotkey,
-                dojo_task_id=resp.dojo_task_id,
+                miner_hotkey=resp.hotkey, validator_task_id=task.id
             )
         )
         for resp in responses_needing_fetch
@@ -177,25 +168,25 @@ async def fetch_miner_feedback_for_task(
     task_results_list = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
     # A list of miner responses that have been updated with the new results
-    for i, result in enumerate(task_results_list):
-        if isinstance(result, BaseException):
+    for i, results in enumerate(task_results_list):
+        if isinstance(results, BaseException):
             logger.warning(
-                f"Error fetching results for miner {responses_needing_fetch[i].hotkey}: {result}"
+                f"Error fetching results for miner {responses_needing_fetch[i].hotkey}: {results}"
             )
             continue
 
-        if not result:  # Empty or None result
+        if not results:  # Empty or None result
             continue
 
         miner_response = responses_needing_fetch[i]
 
-        logger.info(f"original result from miners........ {result}")
+        logger.info(f"original result from miners........ {results}")
 
-        sanitized_result = await sanitize_text_feedback(result)
+        sanitized_result = await sanitize_text_feedback(results)
         # Update the database with fresh results
         success = await ORM.update_miner_task_results(
             miner_hotkey=miner_response.hotkey,
-            dojo_task_id=miner_response.dojo_task_id,
+            validator_task_id=task.id,
             task_results=sanitized_result,
         )
 
@@ -205,7 +196,7 @@ async def fetch_miner_feedback_for_task(
             )
             continue
 
-        logger.info(f"Task results for miner {miner_response.hotkey}: {result}")
+        logger.info(f"Task results for miner {miner_response.hotkey}: {results}")
         # Create initial miner scores with their relations
         # Extract text feedback
         feedback_text, selected_task_result = extract_text_feedback_from_results(
@@ -330,15 +321,15 @@ async def send_text_feedback_to_synthetic_api(
         return None
 
 
-async def get_task_synapse_for_retry(task_id: str) -> TaskSynapseObject | None:
+async def get_task_synapse_for_retry(task_id: str) -> SyntheticTaskSynapse | None:
     """
-    Retrieve and convert a validator task to a TaskSynapseObject for retry purposes.
+    Retrieve and convert a validator task to a SyntheticTaskSynapse for retry purposes.
 
     Args:
         task_id: The task ID to retrieve
 
     Returns:
-        TaskSynapseObject ready for retry or None if conversion fails
+        SyntheticTaskSynapse ready for retry or None if conversion fails
     """
     try:
         # Fetch the task from the database
@@ -348,7 +339,7 @@ async def get_task_synapse_for_retry(task_id: str) -> TaskSynapseObject | None:
             logger.warning(f"Task with ID {task_id} not found")
             return None
 
-        # Convert to TaskSynapseObject using the existing mapper function
+        # Convert to SyntheticTaskSynapse using the existing mapper function
         from database.mappers import map_validator_task_to_task_synapse_object
 
         task_synapse = map_validator_task_to_task_synapse_object(task)
@@ -425,7 +416,7 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                     )
                 else:
                     logger.warning(
-                        f"Sanitization failed for dojo_task_id: {task_result.dojo_task_id} with text feedback: {text_feedback}"
+                        f"Sanitization failed for validator task id: {task_result.task_id} with text feedback: {text_feedback}"
                     )
                     # Replace with "invalid" if not valid
                     sanitized_criterion = criterion.copy()

@@ -3,7 +3,7 @@ from typing import List
 from pydantic import BaseModel, Field, model_validator
 
 from commons.utils import get_new_uuid
-from dojo.protocol import CodeAnswer, MultimediaAnswer
+from dojo.protocol import CodeAnswer
 
 
 class HumanFeedbackTask(BaseModel):
@@ -19,20 +19,20 @@ class HumanFeedbackTask(BaseModel):
 
 class HumanFeedbackResponse(BaseModel):
     base_prompt: str
-    base_code: CodeAnswer | MultimediaAnswer
+    base_code: CodeAnswer
     human_feedback_tasks: List[HumanFeedbackTask]
 
     @model_validator(mode="after")
     def verify_code_objects(self):
         # Verify base_code is a CodeAnswer instance
-        if not isinstance(self.base_code, CodeAnswer | MultimediaAnswer):
+        if not isinstance(self.base_code, CodeAnswer):
             raise ValueError(
                 f"base_code must be a CodeAnswer or MultimedeaAnswer instance, got {type(self.base_code)}"
             )
 
         # Verify all generated_code fields are CodeAnswer instances
         for idx, task in enumerate(self.human_feedback_tasks):
-            if not isinstance(task.generated_code, CodeAnswer | MultimediaAnswer):
+            if not isinstance(task.generated_code, CodeAnswer):
                 raise ValueError(
                     f"generated_code in task {idx} must be a CodeAnswer or MultimediaAnswer instance, "
                     f"got {type(task.generated_code)}"
@@ -60,9 +60,8 @@ class TextFeedbackRequest(BaseModel):
     """
 
     base_prompt: str = Field(description="Original prompt that was given to the LLM")
-    base_code: CodeAnswer | MultimediaAnswer | str | None = Field(
-        description="Completion from the model"
-    )
+    # NOTE: this is a CodeAnswer object, but we need to send it as a string, as the synthetic API expects a string
+    base_code: str = Field(description="Completion from the model")
     miner_feedbacks: List[MinerFeedback] = Field(
         description="List of human feedback completions from miners"
     )

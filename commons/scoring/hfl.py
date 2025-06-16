@@ -3,11 +3,13 @@ import json
 import traceback
 from collections import defaultdict
 
+import torch
 from loguru import logger
 from pydantic import ValidationError
 
 from commons.human_feedback import HFLConstants
 from commons.orm import ORM
+from commons.scoring.scoring import minmax_scale
 from commons.stats import calculate_icc
 from database.prisma.enums import HFLStatusEnum
 from database.prisma.models import (
@@ -17,7 +19,7 @@ from database.prisma.models import (
     MinerScore,
     ValidatorTask,
 )
-from dojo.protocol import Scores
+from dojo.protocol import Score
 
 TF_WEIGHT = HFLConstants.TF_WEIGHT.value
 SF_WEIGHT = HFLConstants.SF_WEIGHT.value
@@ -46,6 +48,7 @@ async def score_hfl_tasks(
 
         # Rest of your scoring logic
         hotkey_to_tf_score = await _calc_tf_score(task)
+
         if not hotkey_to_tf_score:
             logger.warning(f"Failed to calculate TF score for task {task.id}")
             return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
@@ -87,8 +90,8 @@ async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
         # TODO: refactor to an ORM utils maybe
         miner_raw_scores: list[float] = []
         for score in miner_response.scores or []:
-            scores = Scores.model_validate_json(score.scores)
-            if scores.raw_score:
+            scores = Score.model_validate_json(score.scores)
+            if scores.raw_score is not None:
                 miner_raw_scores.append(scores.raw_score)
 
         hotkey_to_raw_scores[miner_response.hotkey] = miner_raw_scores
@@ -99,6 +102,7 @@ async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
         )
         return {}
 
+    logger.info(f"hotkey to raw scores: {hotkey_to_raw_scores}")
     hotkey_to_icc = calculate_icc(hotkey_to_scores=hotkey_to_raw_scores)
     return hotkey_to_icc
 
@@ -180,7 +184,9 @@ async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
             f"Miner {hotkey} feedback led to completion {completion_id} with score delta: {score_delta}"
         )
 
-    return dict(hotkey_to_tf_score)
+    logger.info(f"hotkey to tf raw score: {hotkey_to_tf_score}")
+    normalized_tf_score = _normalize_tf_scores(hotkey_to_tf_score)
+    return normalized_tf_score
 
 
 async def _calc_score_deltas(sf_task: ValidatorTask) -> dict[str, float]:
@@ -386,11 +392,11 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
                 # NOTE: cid is PK of completion, not completion_id
                 cid = score.criterion_relation.completion_id
                 completion_id = cid_to_completion_id[cid]
-                scores = Scores.model_validate_json(score.scores)
+                scores = Score.model_validate_json(score.scores)
                 if completion_id not in stats_by_completion_id:
                     stats_by_completion_id[completion_id] = {"sum": 0, "count": 0}
 
-                if not scores.raw_score:
+                if scores.raw_score is None:
                     logger.warning(
                         f"No raw score found miner response id: {miner_response.id} and score id: {score.id}"
                     )
@@ -411,6 +417,11 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
     # Calculate the average score for each completion
     cid_to_avg_score: dict[str, float] = {}
     for completion_id, scores in stats_by_completion_id.items():
+        if scores["count"] == 0:
+            logger.warning(
+                f"No scores count found for completion {completion_id}, skipping"
+            )
+            continue
         average_score = scores["sum"] / scores["count"]
         cid_to_avg_score[completion_id] = average_score
         logger.info(f"Completion {completion_id}: Average score = {average_score}")
@@ -442,7 +453,7 @@ def filter_valid_miner_responses(
 
     for response in miner_responses:
         # Skip responses without hotkey
-        if not response.hotkey or not response.dojo_task_id:
+        if not response.hotkey:
             continue
 
         # Check if scores are required and present
@@ -481,3 +492,27 @@ def filter_valid_miner_responses(
         valid_responses.append(response)
 
     return valid_responses
+
+
+def _normalize_tf_scores(hotkey_to_tf_score: dict[str, float]) -> dict[str, float]:
+    if not hotkey_to_tf_score:
+        return {}
+
+    raw_scores = list(hotkey_to_tf_score.values())
+    scores_tensor = torch.tensor(raw_scores, dtype=torch.float32)
+    clamped_tensor = torch.clamp(scores_tensor, min=0.0)
+
+    # Edge case: All scores are the same (like your 0.0, 0.0, 0.0 case)
+    if len(clamped_tensor) == 1:
+        # If zero, then gets 0.0 (no contribution)
+        score = 0.0 if clamped_tensor[0] == 0.0 else 1.0
+        return {hotkey: score for hotkey in hotkey_to_tf_score.keys()}
+
+    # Normal case: different scores
+    # Check if all values became 0.0 after clamping
+    if torch.all(clamped_tensor == 0.0):
+        return {hotkey: 0.0 for hotkey in hotkey_to_tf_score.keys()}
+
+    normalized_tensor = minmax_scale(clamped_tensor)
+
+    return dict(zip(hotkey_to_tf_score.keys(), normalized_tensor.tolist()))

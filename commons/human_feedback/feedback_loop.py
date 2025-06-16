@@ -15,11 +15,10 @@ from database.prisma import Json
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import MinerResponse
 from database.prisma.types import HFLStateUpdateInput, ValidatorTaskInclude
-from dojo.protocol import DendriteQueryResponse, TaskSynapseObject
+from dojo.protocol import DendriteQueryResponse, SyntheticTaskSynapse
 
 from .score_feedback import (
     create_score_feedback_task,
-    get_active_miners_for_hfl,
     process_score_feedback_task,
     send_hfl_request,
 )
@@ -30,10 +29,7 @@ from .text_feedback import (
     send_text_feedback_to_synthetic_api,
 )
 from .types import HFLConstants, HFLInterval
-from .utils import (
-    evaluate_miner_consensus,
-    get_time_window_for_tasks,
-)
+from .utils import evaluate_miner_consensus, get_time_window_for_tasks
 
 if TYPE_CHECKING:
     from neurons.validator import Validator
@@ -67,15 +63,15 @@ class FeedbackLoop:
         Core implementation of the feedback loop logic.
         Selects a validator task, creates a text criteria task, and sends it to miners.
         """
-        active_miners = await get_active_miners_for_hfl(
-            validator=validator,
-            subset_size=7,
+        active_miner_uids = await validator.get_active_miner_uids(
+            subset_size=HFLConstants.TARGET_NUM_MINERS.value
         )
-        if not active_miners:
-            logger.warning(
-                f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-            )
-            return
+        # FIXME enable this for mainnet
+        # if len(active_miner_uids) <= HFLConstants.TARGET_NUM_MINERS.value:
+        #     logger.warning(
+        #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+        #     )
+        #     return
 
         result = await self.select_validator_task()
         if result:
@@ -96,10 +92,9 @@ class FeedbackLoop:
             )
 
             miner_responses = await send_hfl_request(
-                validator=validator,
                 synapse=text_criteria_task,
                 task_type=TaskTypeEnum.TEXT_FEEDBACK,
-                axons=validator._retrieve_axons(active_miners),
+                axons=validator._retrieve_axons(active_miner_uids),
             )
 
             if not miner_responses:
@@ -131,7 +126,7 @@ class FeedbackLoop:
                 f"Started HFL with state ID: {hfl_state.id}, original task: {selected_task.task_id}, TF task: {validator_task.id}"
             )
 
-    async def select_validator_task(self) -> Tuple[TaskSynapseObject, str] | None:
+    async def select_validator_task(self) -> Tuple[SyntheticTaskSynapse, str] | None:
         """
         Selects a validator task from the latest expired tasks within a specific time window.
         Time window:
@@ -142,7 +137,7 @@ class FeedbackLoop:
         of the miners scored it the highest.
 
         Returns:
-            Tuple[TaskSynapseObject, str] | None: A tuple of (validator task, completion_id) if criteria are met;
+            Tuple[SyntheticTaskSynapse, str] | None: A tuple of (validator task, completion_id) if criteria are met;
         """
         expire_from, expire_to = get_time_window_for_tasks(
             hours_ago_start=1, hours_ago_end=0
@@ -182,7 +177,7 @@ class FeedbackLoop:
 
     async def _evaluate_task(
         self, dendrite_response: DendriteQueryResponse
-    ) -> Tuple[TaskSynapseObject, str] | None:
+    ) -> Tuple[SyntheticTaskSynapse, str] | None:
         """
         Evaluates a single task based on its miner scores from the MinerScore table.
         For each completion in the task, computes what percentage of miners scored it
@@ -193,10 +188,10 @@ class FeedbackLoop:
             dendrite_response (DendriteQueryResponse): Contains the validator task and related miner responses.
 
         Returns:
-            Optional[Tuple[TaskSynapseObject, str]]: Tuple of (validator task, completion_id) if criteria are met;
+            Optional[Tuple[SyntheticTaskSynapse, str]]: Tuple of (validator task, completion_id) if criteria are met;
             otherwise None.
         """
-        validator_task: TaskSynapseObject = dendrite_response.validator_task
+        validator_task: SyntheticTaskSynapse = dendrite_response.validator_task
 
         if not validator_task.task_id:
             logger.debug("Task ID is missing")
@@ -280,6 +275,10 @@ class FeedbackLoop:
                 hours_ago_start=2, hours_ago_end=0, buffer_minutes=10
             )
 
+            logger.info(
+                f"Processing TF_PENDING tasks with expire_from: {expire_from} and expire_to: {expire_to}"
+            )
+
             # Process TF_PENDING tasks in batches
             async for tf_tasks_batch, _ in ORM.get_tasks_by_hfl_status(
                 status=HFLStatusEnum.TF_PENDING,
@@ -292,23 +291,22 @@ class FeedbackLoop:
                 ),
             ):
                 if not tf_tasks_batch:
+                    logger.info("No TF_PENDING tasks found")
                     continue
 
                 sufficient_response_task_ids: list[str] = []
 
                 # Process each task in the batch
                 for task in tf_tasks_batch:
-                    hotkeys_with_feedback: list[str] = []
+                    used_hotkeys: list[str] = [
+                        mr.hotkey for mr in task.miner_responses or []
+                    ]
 
                     # Fetch and process miner feedback
                     (
                         miner_feedbacks,
                         valid_responses,
                     ) = await fetch_miner_feedback_for_task(validator, task)
-
-                    hotkeys_with_feedback.extend(
-                        [miner_feedback.hotkey for miner_feedback in miner_feedbacks]
-                    )
 
                     # Check if we have sufficient responses
                     response_count = len(miner_feedbacks)
@@ -322,10 +320,9 @@ class FeedbackLoop:
 
                     # Get retry count from HFL state
                     retry_count = task.HFLState.tf_retry_count or 0
-                    MAX_RETRY_ATTEMPTS = 5
 
-                    if response_count >= 3:
-                        # Process task with sufficient responses
+                    # NOTE: Process task with sufficient responses
+                    if response_count >= HFLConstants.TF_MIN_RESPONSES.value:
                         logger.info(
                             f"Task {task.id} has {response_count} valid responses, processing"
                         )
@@ -358,8 +355,14 @@ class FeedbackLoop:
                         # Store selected responses
                         selected_responses_by_task[task.id] = selected_responses
 
-                    elif retry_count < MAX_RETRY_ATTEMPTS:
-                        # Handle task with insufficient responses needing retry
+                    # NOTE: Process task with insufficient responses needing retry
+                    elif (
+                        response_count < HFLConstants.TF_MIN_RESPONSES.value
+                        and retry_count < HFLConstants.TF_MAX_RETRY.value
+                    ):
+                        logger.info(
+                            f"Task {task.id} has {response_count} valid responses, processing with retry"
+                        )
                         task_synapse = await get_task_synapse_for_retry(task.id)
 
                         if not task_synapse:
@@ -378,34 +381,18 @@ class FeedbackLoop:
                             )
                         )
 
-                        active_miners = await get_active_miners_for_hfl(validator, 7)
-
-                        if not active_miners:
-                            logger.warning(
-                                f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-                            )
-                            continue
-
-                        axons = validator._retrieve_axons(active_miners)
-
-                        # filter hotkey that have already been give feedback
+                        active_miner_uids = await validator.get_active_miner_uids()
+                        axons = validator._retrieve_axons(active_miner_uids)
+                        # filter miners who already received this task
                         axons = [
-                            axon
-                            for axon in axons
-                            if axon.hotkey not in hotkeys_with_feedback
+                            axon for axon in axons if axon.hotkey not in used_hotkeys
                         ]
 
                         miner_responses = await send_hfl_request(
-                            validator=validator,
                             synapse=task_synapse,
                             task_type=TaskTypeEnum.TEXT_FEEDBACK,
                             axons=axons,
                         )
-                        if not miner_responses:
-                            logger.warning(
-                                f"No miner responses found for task {task.id}"
-                            )
-                            continue
 
                         # deobfuscate model names
                         for response in miner_responses:
@@ -425,15 +412,20 @@ class FeedbackLoop:
                             f"Saved {count} miner responses for task {task.id}, retry count: {updated_hfl_state.tf_retry_count}"
                         )
 
-                    else:
+                    # NOTE: We still have insufficient responses < 3 but we have reached max retries
+                    elif (
+                        response_count < HFLConstants.TF_MIN_RESPONSES.value
+                        and retry_count >= HFLConstants.TF_MAX_RETRY.value
+                    ):
                         # Handle task with insufficient responses at max retries
                         logger.warning(
-                            f"Task {task.id} failed to get enough responses after {MAX_RETRY_ATTEMPTS} attempts. "
+                            f"Task {task.id} failed to get enough responses after {HFLConstants.TF_MAX_RETRY.value} attempts. "
                             f"Using available {response_count} responses."
                         )
+                        # Cover edge case where we have no responses after max retries
                         if response_count == 0:
                             logger.warning(
-                                f"Task {task.id} has no responses after {MAX_RETRY_ATTEMPTS} attempts, ending HFL"
+                                f"Task {task.id} has no responses after {HFLConstants.TF_MAX_RETRY.value} attempts, ending HFL"
                             )
                             await HFLManager.update_state(
                                 hfl_state_id=task.HFLState.id,
@@ -568,7 +560,7 @@ class FeedbackLoop:
         1. Query SF_PENDING tasks that have expired within a time window
         2. For each task:
             - Get all miner responses
-            - Query each miner for task results using their dojo_task_id
+            - Query each miner for task results using validator task id
             - Update task results in database
             - Update HFL state to SF_COMPLETED
         """
@@ -593,7 +585,7 @@ class FeedbackLoop:
                     {
                         "HFLState": True,
                         "miner_responses": {
-                            "where": {"task_result": {"equals": Json("{}")}}
+                            "where": {"task_result": {"equals": Json("[]")}}
                         },
                     }
                 ),
@@ -644,7 +636,7 @@ class FeedbackLoop:
         Flow:
         1. Query tasks with TF_SCHEDULED HFL states
         2. For each task:
-            - Map the SF task to a TaskSynapseObject
+            - Map the SF task to a SyntheticTaskSynapse
             - Create the next TF task based on the best completion
             - Update HFL state to TF_PENDING
         """
@@ -698,7 +690,7 @@ class FeedbackLoop:
                         )
                         continue
 
-                    # Directly map the sf_task to a TaskSynapseObject
+                    # Directly map the sf_task to a SyntheticTaskSynapse
                     from database.mappers import (
                         map_validator_task_to_task_synapse_object,
                     )
@@ -706,7 +698,7 @@ class FeedbackLoop:
                     improved_task = map_validator_task_to_task_synapse_object(sf_task)
                     if not improved_task:
                         logger.error(
-                            f"Failed to map task {sf_task.id} to TaskSynapseObject"
+                            f"Failed to map task {sf_task.id} to SyntheticTaskSynapse"
                         )
                         continue
 
@@ -722,20 +714,25 @@ class FeedbackLoop:
                         continue
 
                     # Get active miners for the new TF task
-                    active_miners = await get_active_miners_for_hfl(
-                        validator=validator,
-                        subset_size=7,
+                    active_miners = await validator.get_active_miner_uids(
+                        subset_size=HFLConstants.TARGET_NUM_MINERS.value
                     )
+                    # FIXME enable this for mainnet
+                    # if len(active_miners) <= HFLConstants.TARGET_NUM_MINERS.value:
+                    #     logger.warning(
+                    #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                    #     )
+                    #     continue
 
-                    if not active_miners:
-                        logger.warning(
-                            f"No active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-                        )
-                        continue
+                    (
+                        obfuscated_model_to_model,
+                        text_criteria_task.completion_responses,
+                    ) = validator.obfuscate_model_names(
+                        text_criteria_task.completion_responses or []
+                    )
 
                     # Send the task to miners
                     miner_responses = await send_hfl_request(
-                        validator=validator,
                         synapse=text_criteria_task,
                         task_type=TaskTypeEnum.TEXT_FEEDBACK,
                         axons=validator._retrieve_axons(active_miners),
@@ -747,6 +744,13 @@ class FeedbackLoop:
                         )
                         continue
 
+                    # Deobfuscate model names before saving (ADD THIS)
+                    text_criteria_task.completion_responses = (
+                        validator.deobfuscate_model_names(
+                            text_criteria_task.completion_responses or [],
+                            obfuscated_model_to_model,
+                        )
+                    )
                     # Save the new TF task and update the HFL state
                     validator_task, updated_hfl_state = await ORM.save_tf_task(
                         validator_task=text_criteria_task,

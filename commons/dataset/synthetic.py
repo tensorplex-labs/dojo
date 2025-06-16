@@ -7,7 +7,6 @@ from loguru import logger
 from tenacity import (
     AsyncRetrying,
     RetryError,
-    before_sleep_log,
     stop_after_attempt,
     wait_exponential,
 )
@@ -22,6 +21,7 @@ from commons.exceptions import (
     SyntheticGenerationError,
 )
 from dojo.protocol import SyntheticQA
+from dojo.utils import retry_log
 from dojo.utils.config import source_dotenv
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
@@ -82,7 +82,7 @@ class SyntheticAPI:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(6),
                 wait=wait_exponential(multiplier=1, max=30),
-                before_sleep=before_sleep_log(logger, log_level=10, exc_info=True),
+                before_sleep=retry_log,
             ):
                 with attempt:
                     async with cls._session.post(path, json=request_data) as response:
@@ -129,7 +129,7 @@ class SyntheticAPI:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(MAX_RETRIES),
                 wait=wait_exponential(multiplier=1, max=30),
-                before_sleep=before_sleep_log(logger, log_level=10, exc_info=True),
+                before_sleep=retry_log,
             ):
                 with attempt:
                     async with cls._session.get(path) as response:
