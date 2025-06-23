@@ -285,9 +285,7 @@ async def send_text_feedback_to_synthetic_api(
         )
 
         # Send to synthetic API
-        logger.info(
-            f"Sending {len(miner_feedback)} feedback responses to synthetic API"
-        )
+        logger.info(f"Sending feedback responses to synthetic API: {miner_feedback=}")
         syn_req_id = await SyntheticAPI.send_text_feedback(text_feedback_request)
 
         if not syn_req_id:
@@ -297,6 +295,7 @@ async def send_text_feedback_to_synthetic_api(
             return None
 
         # Update HFL state with the synthetic request ID
+        feedback_contents = [feedback.feedback for feedback in miner_feedback]
         hfl_state = await HFLManager.update_state(
             hfl_state_id=hfl_state.id,
             updates={
@@ -306,7 +305,7 @@ async def send_text_feedback_to_synthetic_api(
             event_data=TextFeedbackEvent(
                 task_id=validator_task_id,
                 iteration=hfl_state.current_iteration,
-                message=f"Sent {len(miner_feedback)} text feedback to synthetic API for task {validator_task_id}, got syn_req_id: {syn_req_id}",
+                message=f"Sent {len(miner_feedback)} text feedback to synthetic API for task {validator_task_id}, got syn_req_id: {syn_req_id}, feedback: {feedback_contents}",
             ),
         )
 
