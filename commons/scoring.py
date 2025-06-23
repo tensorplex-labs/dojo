@@ -35,7 +35,7 @@ def _reward_cubic(
     Returns:
         np.ndarray: Transformed points based on the cubic function.
     """
-    # ensure miner outputs and ground truth are float32
+    # Convert to float32 and calculate dot product
     miner_outputs = miner_outputs.astype(np.float32)
     ground_truth = ground_truth.astype(np.float32)
 
@@ -43,58 +43,30 @@ def _reward_cubic(
     assert len(miner_outputs.shape) == 2
     assert len(ground_truth.shape) == 1
 
-    # shape: (num_miners,)
-    # number range [-1, 1]
     dot_product = np.dot(miner_outputs, ground_truth)
-
-    # Convert nans to -1 to send it to the bottom
     dot_product = np.nan_to_num(dot_product, nan=-1)
 
-    # perturbation = np.random.normal(
-    #     0, np.std(dot_product) * 0.01, size=dot_product.shape
-    # )
-    # dot_product = dot_product + perturbation
+    # Normalize to sum to 1
+    dot_product_norm = F.normalize(torch.from_numpy(dot_product), p=1, dim=0)
 
-    # transform from range [-1, 1] to [0, 1]
-    dot_product_norm = (dot_product + 1) / 2
-    logger.debug(
-        f"scoring: dot product shape: {dot_product_norm.shape}\n array: {dot_product_norm}"
-    )
-    # ensure sum is 1
-    dot_product_norm = F.normalize(torch.from_numpy(dot_product_norm), p=1, dim=0)
-    assert dot_product_norm.shape[0] == miner_outputs.shape[0]
+    # Apply cubic transformation
+    cubic_scores = scaling * (dot_product_norm - translation) ** 3 + offset
+    cubic_scores = np.nan_to_num(cubic_scores, nan=0)
 
-    # apply the cubic transformation
-    cubic_reward_scores = scaling * (dot_product_norm - translation) ** 3 + offset
-    logger.debug(
-        f"scoring: cubic reward points shape: {cubic_reward_scores.shape}\n array: {cubic_reward_scores}"
-    )
+    # Final normalization to [0, 1] range
+    final_scores = minmax_scale(cubic_scores).numpy()
 
-    # case where a miner provides the same score for all completions
-    # convert any nans to zero
-    points = np.nan_to_num(cubic_reward_scores, nan=0)
-    logger.debug(
-        f"scoring: cubic reward no nans shape: {points.shape}\n array: {points}"
-    )
+    # Only normalize at the end to ensure sum=1
+    final_scores = final_scores / np.sum(final_scores)
+
+    # Visualization
     if visualize:
-        _terminal_plot("scoring: cubic reward (raw)", points, sort=True)
+        _terminal_plot("scoring: cubic reward (raw)", cubic_scores, sort=True)
+        _terminal_plot(
+            "scoring: cubic reward (minmax, normalised scaled)", final_scores, sort=True
+        )
 
-    # ensure all values are in the range [0, 1]
-    points = minmax_scale(points)
-    logger.debug(
-        f"scoring: cubic reward minmax scaled shape: {points.shape}\n array: {points}"
-    )
-    points = points.numpy()
-    if visualize:
-        _terminal_plot("scoring: cubic reward (minmax scaled)", points, sort=True)
-
-    assert isinstance(points, np.ndarray)
-    return (
-        points,
-        dot_product,
-        dot_product_norm,
-        cubic_reward_scores,
-    )
+    return final_scores, dot_product, dot_product_norm, torch.from_numpy(cubic_scores)
 
 
 def _get_miner_response_by_criteria(criteria, response: CompletionResponse):
@@ -207,22 +179,17 @@ class Scoring:
         # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
         # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
         (
-            cubic_reward,
-            cosine_similarity_scores,
-            normalised_cosine_similarity_scores,
+            final_score,
+            dot_product,
+            dot_product_norm,
             cubic_reward_scores,
         ) = _reward_cubic(miner_outputs, ground_truth_arr, 0.006, 7, 2, visualize=True)
-        logger.debug(f"scoring: cubic reward\n{cubic_reward}")
-
-        # normalize to ensure sum is 1
-        cubic_reward = cubic_reward / np.sum(cubic_reward)
-
-        logger.debug(f"scoring: cubic reward normalized (sum=1)\n{cubic_reward}")
+        logger.debug(f"scoring: cubic reward\n{final_score}")
 
         # calculate sum for each segment of the cubic reward
         try:
             # create a copy of cubic reward
-            cubic_reward_copy = np.copy(cubic_reward)
+            cubic_reward_copy = np.copy(final_score)
             cubic_reward_copy.sort()
             segment_size = len(cubic_reward_copy) // 5
             segment_sums = [
@@ -235,10 +202,10 @@ class Scoring:
             pass
 
         return (
-            torch.from_numpy(cubic_reward.copy()),
+            torch.from_numpy(final_score.copy()),
             miner_outputs,
-            cosine_similarity_scores,
-            normalised_cosine_similarity_scores,
+            dot_product,
+            dot_product_norm,
             cubic_reward_scores,
         )
 
@@ -333,8 +300,8 @@ class Scoring:
         (
             gt_score,
             miner_outputs,
-            cosine_similarity_scores,
-            normalised_cosine_similarity_scores,
+            dot_product,
+            dot_product_norm,
             cubic_reward_scores,
         ) = cls.ground_truth_scoring(criteria, ground_truth, valid_responses)
 
@@ -348,10 +315,8 @@ class Scoring:
                 scores = Scores(
                     raw_score=float(miner_outputs[i, j]),
                     ground_truth_score=float(gt_score[i]),
-                    cosine_similarity_score=float(cosine_similarity_scores[i]),
-                    normalised_cosine_similarity_score=float(
-                        normalised_cosine_similarity_scores[i]
-                    ),
+                    dot_product=float(dot_product[i]),
+                    dot_product_norm=float(dot_product_norm[i]),
                     cubic_reward_score=float(cubic_reward_scores[i]),
                 )
 
@@ -375,20 +340,18 @@ if __name__ == "__main__":
             [100, 95, 80, 60],
             [80, 75, 60, 40],
             [90, 85, 70, 50],
-            [100, 95, 80, 60],
+            [-1, -2, -3, -4],
         ]
     )
     ground_truth = np.array([82, 70, 55, 15])
     (
-        cubic_reward,
-        cosine_similarity_scores,
-        normalised_cosine_similarity_scores,
+        final_score,
+        dot_product,
+        dot_product_norm,
         cubic_reward_scores,
     ) = _reward_cubic(miner_outputs, ground_truth, 0.006, 7.0, 2.0, visualize=True)
 
-    logger.info(f"scoring: cubic reward\n{cubic_reward}")
-    logger.info(f"scoring: cosine similarity scores\n{cosine_similarity_scores}")
-    logger.info(
-        f"scoring: normalised cosine similarity scores\n{normalised_cosine_similarity_scores}"
-    )
+    logger.info(f"scoring: final score\n{final_score}")
+    logger.info(f"scoring: dot product\n{dot_product}")
+    logger.info(f"scoring: dot product norm\n{dot_product_norm}")
     logger.info(f"scoring: cubic reward scores\n{cubic_reward_scores}")

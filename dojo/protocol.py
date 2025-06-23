@@ -27,11 +27,11 @@ class Scores(BaseModel):
     ground_truth_score: float | None = Field(
         description="Ground truth score of the miner", default=None
     )
-    cosine_similarity_score: float | None = Field(
-        description="Cosine similarity score of the miner", default=None
+    dot_product: float | None = Field(
+        description="Dot product score of the miner", default=None
     )
-    normalised_cosine_similarity_score: float | None = Field(
-        description="Normalised cosine similarity score of the miner", default=None
+    dot_product_norm: float | None = Field(
+        description="Normalised dot product score of the miner", default=None
     )
     cubic_reward_score: float | None = Field(
         description="Cubic reward score of the miner", default=None

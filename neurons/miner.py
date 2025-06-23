@@ -232,8 +232,8 @@ class Miner(aobject):
                             logger.info(
                                 f"Task {synapse.task_id} shared scores:"
                                 f"\n\tGround Truth Score: {scores.ground_truth_score}"
-                                f"\n\tCosine Similarity: {scores.cosine_similarity_score}"
-                                f"\n\tNormalised Cosine Similarity: {scores.normalised_cosine_similarity_score}"
+                                f"\n\tDot Product: {scores.dot_product}"
+                                f"\n\tNormalised Dot Product: {scores.dot_product_norm}"
                                 f"\n\tCubic Reward Score: {scores.cubic_reward_score}"
                             )
                             shared_scores_logged = True
