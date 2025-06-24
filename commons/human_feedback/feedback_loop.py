@@ -500,9 +500,15 @@ class FeedbackLoop:
                 )
                 return
 
+            expire_from, expire_to = get_time_window_for_tasks(
+                hours_ago_start=2, hours_ago_end=0, buffer_minutes=10
+            )
+
             # Get tasks with TF_COMPLETED status in batches
             async for tf_tasks_batch, _ in ORM.get_TF_tasks_by_hfl_status(
                 status=HFLStatusEnum.TF_COMPLETED,
+                expire_from=expire_from,
+                expire_to=expire_to,
                 batch_size=10,
             ):
                 if not tf_tasks_batch:
