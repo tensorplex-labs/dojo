@@ -125,6 +125,19 @@ def add_args(parser):
         help="Set miner simluation to a bad one",
     )
 
+    parser.add_argument(
+        "--kami.port",
+        type=int,
+        help="Port for Kami connection",
+    )
+
+    parser.add_argument(
+        "--kami.host",
+        type=str,
+        help="Host for Kami connection",
+        default="localhost",
+    )
+
     epoch_length = 100
     known_args, _ = parser.parse_known_args()
     if known_args := vars(known_args):

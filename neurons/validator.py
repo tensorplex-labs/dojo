@@ -105,13 +105,11 @@ class Validator(aobject):
         self._last_block = None
         self._block_check_attempts = 0
         self._connection_lock = asyncio.Lock()
-
-        self.kami = KamiClient()
-
         self.loop = asyncio.get_event_loop()
         self.config = ObjectManager.get_config()
-
         logger.info(self.config)
+
+        self.kami = KamiClient(port=self.config.kami.port)
 
         logger.info("Setting up bittensor objects....")
         # The wallet holds the cryptographic key pairs for the miner.
@@ -710,7 +708,7 @@ class Validator(aobject):
             try:
                 # Get tasks that expired between 2 hours ago and 30 minutes ago
                 # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
-                now = datetime.now()
+                now = datetime.now(timezone.utc)
                 expire_from = datetime_as_utc(now - timedelta(hours=2))
                 expire_to = datetime_as_utc(now - timedelta(seconds=dojo.BUFFER_PERIOD))
 
@@ -1260,9 +1258,7 @@ class Validator(aobject):
             )
 
         # Calculate average scores
-        model_id_to_avg_score = self._calculate_averages(
-            task_results, obfuscated_to_real_model_id
-        )
+        model_id_to_avg_score = self._calculate_averages(task_results)
 
         # Check for completion responses
         if not miner_response.completion_responses:
@@ -1346,20 +1342,16 @@ class Validator(aobject):
             return []
 
     @staticmethod
-    def _calculate_averages(
-        task_results: list[TaskResult], obfuscated_to_real_model_id
-    ) -> dict[str, float]:
+    def _calculate_averages(task_results: list[TaskResult]) -> dict[str, float]:
         """Calculate average scores for each model from task results.
 
         Args:
             task_results: List of task results containing scores
-            obfuscated_to_real_model_id: Mapping of obfuscated to real model IDs
 
         Returns:
             Dictionary mapping model IDs to their average scores
         """
         model_id_to_total_score = defaultdict(float)
-        num_scores_by_workers = 0
 
         for result in task_results:
             for result_data in result.result_data:
@@ -1369,15 +1361,11 @@ class Validator(aobject):
                     # TODO refactor to handle multiple criteria, when we have more than one criterion
                     criterion = criteria[0]
                     if criterion.get("type") == CriteriaTypeEnum.SCORE:
-                        real_model_id = obfuscated_to_real_model_id.get(model, model)
-                        model_id_to_total_score[real_model_id] += criterion.get(
-                            "value", 0
-                        )
-                        num_scores_by_workers += 1
+                        model_id_to_total_score[model] += criterion.get("value", 0)
 
         # Calculate averages
         return {
-            model_id: (total_score / num_scores_by_workers)
+            model_id: (total_score / len(task_results))
             for model_id, total_score in model_id_to_total_score.items()
         }
 

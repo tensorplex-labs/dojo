@@ -19,6 +19,8 @@ class CriteriaTypeEnum(StrEnum):
 
 
 class Scores(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     raw_score: float | None = Field(description="Raw score of the miner", default=None)
     rank_id: int | None = Field(description="Rank of the miner", default=None)
     normalised_score: float | None = Field(
