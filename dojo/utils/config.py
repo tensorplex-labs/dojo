@@ -19,11 +19,11 @@ def check_config(config: bt.config):
 
     log_dir = str(base_path / "logs")
     full_path = os.path.expanduser(
-        f"{log_dir}/{config.wallet.name}/{config.wallet.hotkey}/netuid{config.netuid}/{config.neuron.name}"
+        f"{log_dir}/{config.wallet.name}/{config.wallet.hotkey}/netuid{config.netuid}/{config.neuron.name}"  # pyright: ignore[reportOptionalMemberAccess]
     )
-    config.neuron.full_path = os.path.expanduser(full_path)
-    if not os.path.exists(config.neuron.full_path):
-        os.makedirs(config.neuron.full_path, exist_ok=True)
+    config.neuron.full_path = os.path.expanduser(full_path)  # pyright: ignore[reportOptionalMemberAccess]
+    if not os.path.exists(config.neuron.full_path):  # pyright: ignore[reportOptionalMemberAccess]
+        os.makedirs(config.neuron.full_path, exist_ok=True)  # pyright: ignore[reportOptionalMemberAccess]
 
     # bt.logging.enable_third_party_loggers()
 
@@ -57,7 +57,7 @@ def configure_logging(config: bt.config):
         bt.logging.set_config(config)
 
 
-def add_args(parser):
+def add_args(parser: argparse.ArgumentParser):
     """
     Adds relevant arguments to the parser for operation.
     """

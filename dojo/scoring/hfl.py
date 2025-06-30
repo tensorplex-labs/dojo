@@ -7,10 +7,7 @@ import torch
 from loguru import logger
 from pydantic import ValidationError
 
-from commons.human_feedback import HFLConstants
-from commons.orm import ORM
-from commons.scoring.scoring import minmax_scale
-from commons.stats import calculate_icc
+from database.orm import ORM
 from database.prisma.enums import HFLStatusEnum
 from database.prisma.models import (
     HFLCompletionRelation,
@@ -19,7 +16,10 @@ from database.prisma.models import (
     MinerScore,
     ValidatorTask,
 )
+from dojo.human_feedback import HFLConstants
 from dojo.protocol import Score
+from dojo.scoring.scoring import minmax_scale
+from dojo.stats import calculate_icc
 
 TF_WEIGHT = HFLConstants.TF_WEIGHT.value
 SF_WEIGHT = HFLConstants.SF_WEIGHT.value

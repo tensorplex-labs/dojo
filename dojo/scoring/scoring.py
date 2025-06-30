@@ -5,7 +5,6 @@ import torch
 from loguru import logger
 from torch.nn import functional as F
 
-from commons.utils import _terminal_plot
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -13,6 +12,7 @@ from dojo.protocol import (
     ScoreCriteria,
     SyntheticTaskSynapse,
 )
+from dojo.utils.core import terminal_plot
 
 
 def _reward_cubic(
@@ -85,7 +85,7 @@ def _reward_cubic(
         f"scoring: cubic reward no nans shape: {points.shape}\n array: {points}"
     )
     if visualize:
-        _terminal_plot("scoring: cubic reward (raw)", points, sort=True)
+        terminal_plot("scoring: cubic reward (raw)", points, sort=True)
 
     # ensure all values are in the range [0, 1]
     points = minmax_scale(points)
@@ -94,7 +94,7 @@ def _reward_cubic(
     )
     points = points.numpy()
     if visualize:
-        _terminal_plot("scoring: cubic reward (minmax scaled)", points, sort=True)
+        terminal_plot("scoring: cubic reward (minmax scaled)", points, sort=True)
 
     assert isinstance(points, np.ndarray)
     return (

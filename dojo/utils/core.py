@@ -4,19 +4,13 @@ import traceback
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import bittensor as bt
 import numpy as np
 import plotext
-from kami import SubnetMetagraph
 from loguru import logger
 from openai import AsyncOpenAI
 
-from commons.api_settings import RedisSettings
-from commons.cache import RedisCache
-from commons.objects import ObjectManager
-
-ROOT_WEIGHT = 0.18
-ROOT_NETUID = 0
+from dojo.api_settings import RedisSettings
+from dojo.storage import RedisCache
 
 
 class aobject:
@@ -34,63 +28,7 @@ class aobject:
         pass
 
 
-def get_effective_stake(hotkey: str, subtensor: bt.subtensor) -> float:
-    if isinstance(subtensor, bt.AsyncSubtensor):
-        raise NotImplementedError("Async subtensor not supported")
-
-    root_stake = 0
-    try:
-        root_metagraph = subtensor.metagraph(ROOT_NETUID)
-        root_stake = root_metagraph.S[root_metagraph.hotkeys.index(hotkey)].item()
-    except (ValueError, IndexError):
-        logger.trace(
-            f"Hotkey {hotkey} not found in root metagraph, defaulting to 0 root_stake"
-        )
-
-    alpha_stake = 0
-    try:
-        config = ObjectManager.get_config()
-        subnet_metagraph = subtensor.metagraph(netuid=config.netuid)  # type:ignore
-        alpha_stake = subnet_metagraph.alpha_stake[
-            subnet_metagraph.hotkeys.index(hotkey)
-        ]
-    except (ValueError, IndexError):
-        logger.trace(
-            f"Hotkey {hotkey} not found in subnet metagraph for netuid: {subnet_metagraph.netuid}, defaulting to 0 alpha_stake"
-        )
-
-    effective_stake = (root_stake * ROOT_WEIGHT) + alpha_stake
-
-    return effective_stake
-
-
-# TODO: use this function everywhere instead of also having a second function
-def aget_effective_stake(hotkey: str, subnet_metagraph: SubnetMetagraph) -> float:
-    # With runtime api, you do not need to query root metagraph, you can just get it from the subnet itself.
-    idx = subnet_metagraph.hotkeys.index(hotkey)
-
-    root_stake = 0
-    try:
-        root_stake = subnet_metagraph.taoStake[idx]
-    except (ValueError, IndexError):
-        logger.trace(
-            f"Hotkey {hotkey} not found in root metagraph, defaulting to 0 root_stake"
-        )
-
-    alpha_stake = 0
-    try:
-        alpha_stake = subnet_metagraph.alphaStake[idx]
-    except (ValueError, IndexError):
-        logger.trace(
-            f"Hotkey {hotkey} not found in subnet metagraph for netuid: {subnet_metagraph.netuid}, defaulting to 0 alpha_stake"
-        )
-
-    effective_stake = (root_stake * ROOT_WEIGHT) + alpha_stake
-
-    return effective_stake
-
-
-def _terminal_plot(
+def terminal_plot(
     title: str, y: np.ndarray, x: np.ndarray | None = None, sort: bool = False
 ):
     """Plot a scatter plot on the terminal.
@@ -119,8 +57,8 @@ def _terminal_plot(
     plotext.ticks_style("bold")
     plotext.grid(horizontal=True, vertical=True)
     plotext.plotsize(
-        width=int(plotext.terminal_width() * 0.75),
-        height=int(plotext.terminal_height() * 0.75),
+        width=int((plotext.terminal_width() or 80) * 0.75),
+        height=int((plotext.terminal_height() or 24) * 0.75),
     )
     plotext.canvas_color(color=None)
     plotext.theme("clear")
@@ -182,39 +120,6 @@ def set_expire_time(expire_in_seconds: int) -> str:
     )
 
 
-def verify_hotkey_in_metagraph(metagraph: bt.metagraph, hotkey: str) -> bool:
-    """
-    returns true if input hotkey is in input metagraph, false otherwise.
-    """
-    return hotkey in metagraph.hotkeys
-
-
-def verify_signature(hotkey: str, signature: str, message: str) -> bool:
-    """
-    returns true if input signature was created by input hotkey for input message.
-    """
-    keypair = bt.Keypair(ss58_address=hotkey, ss58_format=42)
-    if not keypair.verify(data=message, signature=signature):
-        logger.error(f"Invalid signature for address={hotkey}")
-        return False
-
-    logger.success(f"Signature verified, signed by {hotkey}")
-    return True
-
-
-def check_stake(subtensor: bt.subtensor, hotkey: str) -> bool:
-    """
-    returns true if hotkey has enough stake to be a validator and false otherwise.
-    """
-    from dojo.constants import ValidatorConstant
-
-    stake = get_effective_stake(hotkey, subtensor)
-
-    if stake < ValidatorConstant.VALIDATOR_MIN_STAKE:
-        return False
-    return True
-
-
 async def validate_openai_config() -> bool:
     """
     Validate OpenAI configuration at startup.
@@ -231,7 +136,7 @@ async def validate_openai_config() -> bool:
             api_key=api_key,
         )
 
-        from commons.human_feedback.sanitize import MODERATION_LLM
+        from dojo.human_feedback.sanitize import MODERATION_LLM
 
         # Test API connection with a minimal request
         response = await client.chat.completions.create(

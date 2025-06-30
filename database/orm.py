@@ -6,16 +6,6 @@ from typing import AsyncGenerator, List
 
 from loguru import logger
 
-from commons.dataset.types import HumanFeedbackResponse
-from commons.exceptions import (
-    ExpiredFromMoreThanExpireTo,
-    InvalidMinerResponse,
-    NoNewExpiredTasksYet,
-    NoProcessedTasksYet,
-)
-from commons.hfl_helpers import HFLManager
-from commons.human_feedback.types import HFLInterval
-from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
 from database.mappers import (
     map_miner_response_to_task_synapse_object,
@@ -42,7 +32,16 @@ from database.prisma.types import (
     ValidatorTaskUpdateInput,
     ValidatorTaskWhereInput,
 )
+from dojo.api.synthetic_api import HumanFeedbackResponse
 from dojo.constants import ValidatorInterval
+from dojo.exceptions import (
+    ExpiredFromMoreThanExpireTo,
+    InvalidMinerResponse,
+    NoNewExpiredTasksYet,
+    NoProcessedTasksYet,
+)
+from dojo.human_feedback.hfl_helpers import HFLManager
+from dojo.human_feedback.types import HFLInterval
 from dojo.protocol import (
     DendriteQueryResponse,
     HFLEvent,
@@ -52,6 +51,7 @@ from dojo.protocol import (
     TaskResult,
     TextFeedbackEvent,
 )
+from dojo.utils.core import datetime_as_utc
 
 TASK_DEADLINE = ValidatorInterval.TASK_DEADLINE
 

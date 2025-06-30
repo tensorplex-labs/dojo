@@ -2,8 +2,8 @@ import asyncio
 
 from loguru import logger
 
-from commons.objects import ObjectManager
 from dojo.chain import get_async_subtensor
+from dojo.objects import ObjectManager
 from dojo.utils.config import source_dotenv
 
 source_dotenv()

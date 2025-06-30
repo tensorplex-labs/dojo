@@ -2,8 +2,8 @@ from typing import List
 
 from pydantic import BaseModel, Field, model_validator
 
-from commons.utils import get_new_uuid
 from dojo.protocol import CodeAnswer
+from dojo.utils.core import get_new_uuid
 
 
 class HumanFeedbackTask(BaseModel):

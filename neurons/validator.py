@@ -19,37 +19,27 @@ from loguru import logger
 from messaging import Client, StdResponse, get_client
 from torch.nn import functional as F
 
-from commons.dataset.synthetic import SyntheticAPI
-from commons.exceptions import (
-    EmptyScores,
-    FatalSyntheticGenerationError,
-    InvalidMinerResponse,
-    NoNewExpiredTasksYet,
-    SetWeightsFailed,
-    SyntheticGenerationError,
-)
-from commons.hfl_helpers import HFLManager
-from commons.human_feedback import HFLConstants, should_continue_hfl
-from commons.objects import ObjectManager
-from commons.orm import ORM
-from commons.score_storage import ScoreStorage
-from commons.scoring import Scoring, hfl
-from commons.utils import (
-    _terminal_plot,
-    aget_effective_stake,
-    aobject,
-    datetime_as_utc,
-    get_epoch_time,
-    get_new_uuid,
-    set_expire_time,
-)
 from database.client import connect_db
 from database.mappers import map_miner_response_to_completion_responses
+from database.orm import ORM
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
 from dojo import get_spec_version
+from dojo.api.synthetic_api import SyntheticAPI
+from dojo.api.synthetic_api.exceptions import (
+    FatalSyntheticGenerationError,
+    SyntheticGenerationError,
+)
 from dojo.constants import ValidatorConstant, ValidatorInterval
+from dojo.exceptions import (
+    EmptyScores,
+    InvalidMinerResponse,
+    NoNewExpiredTasksYet,
+    SetWeightsFailed,
+)
+from dojo.human_feedback import HFLConstants, HFLManager, should_continue_hfl
+from dojo.objects import ObjectManager
 from dojo.protocol import (
     CompletionResponse,
     CompletionScore,
@@ -65,7 +55,18 @@ from dojo.protocol import (
     TaskResultSynapse,
     TextFeedbackEvent,
 )
+from dojo.scoring import Scoring, hfl
+from dojo.storage.score_storage import ScoreStorage
+from dojo.utils.blockchain import aget_effective_stake
 from dojo.utils.config import get_config
+from dojo.utils.core import (
+    aobject,
+    datetime_as_utc,
+    get_epoch_time,
+    get_new_uuid,
+    set_expire_time,
+    terminal_plot,
+)
 from dojo.utils.weight_utils import (
     aprocess_weights_for_netuid,
     convert_weights_and_uids_for_emit,
@@ -118,6 +119,8 @@ class Validator(aobject):
         logger.info(self.config)
 
         logger.info("Setting up bittensor objects....")
+        if self.config.netuid is None:
+            raise ValueError("Netuid is not set")
         self.metagraph = await self.kami.get_metagraph(self.config.netuid)
         logger.info(f"Metagraph Loaded for {self.metagraph.netuid}")
 
@@ -276,7 +279,7 @@ class Validator(aobject):
         logger.info(f"weights:\n{safe_normalized_weights}")
         logger.info(f"uids:\n{uids}")
 
-        _terminal_plot(
+        terminal_plot(
             f"pre-processed weights, block: {self.block}",
             safe_normalized_weights.numpy(),
         )
@@ -284,7 +287,7 @@ class Validator(aobject):
         logger.info(f"Final weights:\n{final_weights}")
         logger.info(f"Final uids:\n{final_uids}")
 
-        _terminal_plot(
+        terminal_plot(
             f"final weights, block: {self.block}",
             final_weights.numpy(),
         )
@@ -506,7 +509,7 @@ class Validator(aobject):
 
         # Update scores with lock protection
         async with self._scores_alock:
-            _terminal_plot(
+            terminal_plot(
                 f"Scores before update, block: {self.block}",
                 current_scores.numpy(),
             )
@@ -519,7 +522,7 @@ class Validator(aobject):
             # ensure scores are non-negative
             updated_scores = torch.clamp(updated_scores, min=0.0)
 
-            _terminal_plot(
+            terminal_plot(
                 f"Scores after update, block: {self.block}",
                 updated_scores.numpy(),
             )
@@ -620,11 +623,11 @@ class Validator(aobject):
                 else:
                     self.hfl_scores = torch.clamp(hfl_scores, 0.0)
 
-                _terminal_plot(
+                terminal_plot(
                     f"synthetic scores on load, block: {self.block}",
                     self.synthetic_score.numpy(),
                 )
-                _terminal_plot(
+                terminal_plot(
                     f"HFL scores on load, block: {self.block}", self.hfl_scores.numpy()
                 )
 
