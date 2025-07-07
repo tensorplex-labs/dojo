@@ -1,3 +1,5 @@
+## [1.13.1](https://github.com/tensorplex-labs/dojo/compare/v1.13.0...v1.13.1) (2025-07-06)
+
 ## [1.13.0](https://github.com/tensorplex-labs/dojo/compare/v1.12.4...v1.13.0) (2025-06-15)
 
 ### Features
