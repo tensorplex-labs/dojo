@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from kami import AxonInfo, KamiClient, ServeAxonPayload, SubnetMetagraph
 from loguru import logger
 from messaging import HOTKEY_HEADER, PydanticModel, Request, Server
-from redis_om.model import Migrator
+from redis_om.model import Migrator, NotFoundError
 
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject
@@ -329,6 +329,12 @@ class Miner(aobject):
             synapse.task_results = [
                 TaskResult.model_validate(result) for result in task_results
             ]
+        except NotFoundError:
+            logger.error(
+                f"ServedRequest not found for {synapse.validator_task_id=}, and {caller_hotkey=}"
+            )
+            synapse.task_results = []
+            return synapse
         except Exception as e:
             logger.error(f"Error while handling {synapse_name}: {e}")
             traceback.print_exc()
