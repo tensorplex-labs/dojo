@@ -1,6 +1,3 @@
-import os
-from typing import Union
-
 import numpy as np
 import torch
 from kami import KamiClient, SubnetMetagraph
@@ -12,16 +9,13 @@ U16_MAX = 65535
 
 
 async def aprocess_weights_for_netuid(
-    uids: Union[NDArray[np.int64], "torch.Tensor"],
-    weights: Union[NDArray[np.float32], "torch.Tensor"],
+    uids: torch.Tensor,
+    weights: torch.Tensor,
     netuid: int,
     kami: KamiClient,
     metagraph: SubnetMetagraph,
     exclude_quantile: int = 0,
-) -> (
-    tuple["torch.Tensor", "torch.FloatTensor"]
-    | tuple[NDArray[np.int64], NDArray[np.float32]]
-):
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Processes weight tensors for a given subnet id using the provided weight and UID arrays, applying constraints
     and normalization based on the subtensor and metagraph data. This function can handle both NumPy arrays and PyTorch
@@ -50,20 +44,9 @@ async def aprocess_weights_for_netuid(
     hpams = await kami.get_subnet_hyperparameters(netuid=netuid)
     metagraph_size = metagraph.numUids
 
-    use_torch = True if os.getenv("USE_TORCH") == "1" else False
-
-    # Get latest metagraph from chain if metagraph is None.
-    if not metagraph:
-        metagraph = await kami.get_metagraph(netuid=netuid)
-
     # Cast weights to floats.
-    if use_torch:
-        if not isinstance(weights, torch.FloatTensor):
-            weights = weights.type(torch.float32)
-    else:
-        weights = weights.astype(
-            np.float32
-        )  # Cast type to float32 as we're trying to avoid bittensor package.
+    if not isinstance(weights, torch.FloatTensor):
+        weights = weights.type(torch.float32)
 
     # Network configuration parameters from an subtensor.
     # These parameters determine the range of acceptable weights for each neuron.
@@ -75,51 +58,30 @@ async def aprocess_weights_for_netuid(
     logger.debug(f"max_weight_limit: {max_weight_limit}")
 
     # Find all non zero weights.
-    non_zero_weight_idx = (
-        torch.argwhere(weights > 0).squeeze(dim=1)
-        if use_torch
-        else np.argwhere(weights > 0).squeeze(axis=1)
-    )
+    non_zero_weight_idx = torch.argwhere(weights > 0).squeeze(dim=1)
     non_zero_weight_uids = uids[non_zero_weight_idx]
     non_zero_weights = weights[non_zero_weight_idx]
-    nzw_size = non_zero_weights.numel() if use_torch else non_zero_weights.size
+    nzw_size = non_zero_weights.numel()
     if nzw_size == 0 or metagraph_size < min_allowed_weights:
         logger.warning("No non-zero weights returning all ones.")
-        final_weights = (
-            torch.ones(metagraph_size).to(metagraph_size) / metagraph_size
-            if use_torch
-            else np.ones((metagraph_size), dtype=np.int64) / metagraph_size
-        )
+        final_weights = torch.ones(metagraph_size).to(metagraph_size) / metagraph_size
         logger.debug(f"final_weights: {final_weights}")
-        final_weights_count = (
-            torch.tensor(list(range(len(final_weights))))
-            if use_torch
-            else np.arange(len(final_weights))
-        )
-        return (
-            (final_weights_count, final_weights)
-            if use_torch
-            else (final_weights_count, final_weights)
-        )
+        final_weights_count = torch.tensor(list(range(len(final_weights))))
+        return (final_weights_count, final_weights)
 
     elif nzw_size < min_allowed_weights:
         logger.warning(
             "No non-zero weights less then min allowed weight, returning all ones."
         )
         # ( const ): Should this be np.zeros( ( metagraph_size ) ) to reset everyone to build up weight?
-        weights = (
-            torch.ones(metagraph_size).to(metagraph_size) * 1e-5
-            if use_torch
-            else np.ones((metagraph_size), dtype=np.int64) * 1e-5
-        )  # creating minimum even non-zero weights
+        weights = torch.ones(metagraph_size).to(metagraph_size) * 1e-5
         weights[non_zero_weight_idx] += non_zero_weights
         logger.debug(f"final_weights: {weights}")
-        normalized_weights = normalize_max_weight(x=weights, limit=max_weight_limit)
-        nw_arange = (
-            torch.tensor(list(range(len(normalized_weights))))
-            if use_torch
-            else np.arange(len(normalized_weights))
+        normalized_weights = normalize_max_weight(
+            x=weights.numpy(), limit=max_weight_limit
         )
+        normalized_weights = torch.tensor(normalized_weights, dtype=torch.float32)
+        nw_arange = torch.tensor(list(range(len(normalized_weights))))
         return nw_arange, normalized_weights
 
     logger.debug(f"non_zero_weights: {non_zero_weights}")
@@ -128,14 +90,10 @@ async def aprocess_weights_for_netuid(
     max_exclude = max(0, len(non_zero_weights) - min_allowed_weights) / len(
         non_zero_weights
     )
-    exclude_quantile = min([quantile, max_exclude])
-    lowest_quantile = (
-        non_zero_weights.quantile(exclude_quantile)
-        if use_torch
-        else np.quantile(non_zero_weights, exclude_quantile)
-    )
+    exclude_quantile_computed = min([quantile, max_exclude])
+    lowest_quantile = non_zero_weights.quantile(exclude_quantile_computed)
     logger.debug(f"max_exclude: {max_exclude}")
-    logger.debug(f"exclude_quantile: {exclude_quantile}")
+    logger.debug(f"exclude_quantile_computed: {exclude_quantile_computed}")
     logger.debug(f"lowest_quantile: {lowest_quantile}")
 
     # Exclude all weights below the allowed quantile.
@@ -146,16 +104,17 @@ async def aprocess_weights_for_netuid(
 
     # Normalize weights and return.
     normalized_weights = normalize_max_weight(
-        x=non_zero_weights, limit=max_weight_limit
+        x=non_zero_weights.numpy(), limit=max_weight_limit
     )
+    normalized_weights = torch.tensor(normalized_weights, dtype=torch.float32)
     logger.debug(f"final_weights: {normalized_weights}")
 
     return non_zero_weight_uids, normalized_weights
 
 
 def normalize_max_weight(
-    x: Union[NDArray[np.float32], "torch.FloatTensor"], limit: float = 0.1
-) -> Union[NDArray[np.float32], "torch.FloatTensor"]:
+    x: NDArray[np.float32], limit: float = 0.1
+) -> NDArray[np.float32]:
     """Normalizes the tensor x so that sum(x) = 1 and the max value is not greater than the limit.
     Args:
         x (:obj:`np.float32`): Tensor to be max_value normalized.
@@ -201,8 +160,8 @@ def normalize_max_weight(
 
 
 def convert_weights_and_uids_for_emit(
-    uids: Union[NDArray[np.int64], "torch.LongTensor"],
-    weights: Union[NDArray[np.float32], "torch.FloatTensor"],
+    uids: torch.Tensor,
+    weights: torch.Tensor,
 ) -> tuple[list[int], list[int]]:
     """Converts weights into integer u32 representation that sum to MAX_INT_WEIGHT.
 
@@ -215,11 +174,9 @@ def convert_weights_and_uids_for_emit(
         weight_vals (list[int]): Weights as a list.
     """
     # Checks.
-    weights = weights.tolist()
-    uids = uids.tolist()
-    if min(weights) < 0:
+    if weights.min() < 0:
         raise ValueError(f"Passed weight is negative cannot exist on chain {weights}")
-    if min(uids) < 0:
+    if uids.min() < 0:
         raise ValueError(f"Passed uid is negative cannot exist on chain {uids}")
     if len(uids) != len(weights):
         raise ValueError(
@@ -228,14 +185,14 @@ def convert_weights_and_uids_for_emit(
     if sum(weights) == 0:
         return [], []  # Nothing to set on chain.
     else:
-        max_weight = float(max(weights))
-        weights = [
+        max_weight = float(weights.max())
+        weights_normalized = [
             float(value) / max_weight for value in weights
         ]  # max-upscale values (max_weight = 1).
 
     weight_vals = []
     weight_uids = []
-    for i, (weight_i, uid_i) in enumerate(list(zip(weights, uids))):
+    for i, (weight_i, uid_i) in enumerate(list(zip(weights_normalized, uids))):
         uint16_val = round(
             float(weight_i) * int(U16_MAX)
         )  # convert to int representation.

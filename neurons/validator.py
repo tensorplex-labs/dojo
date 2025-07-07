@@ -264,8 +264,8 @@ class Validator(aobject):
             final_uids,
             final_weights,
         ) = await aprocess_weights_for_netuid(  # type: ignore
-            uids=uids.numpy(),
-            weights=safe_normalized_weights.numpy(),
+            uids=uids,
+            weights=safe_normalized_weights,
             netuid=self.config.netuid,  # type: ignore
             kami=self.kami,
             metagraph=self.metagraph,
@@ -335,7 +335,7 @@ class Validator(aobject):
                     f"Set weights attempt {attempt + 1}/{max_attempts} at block: {self.block},time: {time.time()}"
                 )
 
-                uids, weights = convert_weights_and_uids_for_emit(
+                converted_uids, converted_weights = convert_weights_and_uids_for_emit(
                     uids=uids,
                     weights=weights,
                 )
@@ -345,8 +345,8 @@ class Validator(aobject):
 
                 payload = SetWeightsPayload(
                     netuid=self.config.netuid,  # type: ignore
-                    dests=uids,
-                    weights=weights,
+                    dests=converted_uids,
+                    weights=converted_weights,
                     version_key=self.spec_version,
                 )
 
