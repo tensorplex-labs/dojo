@@ -43,6 +43,8 @@ if [ "$1" = 'miner' ]; then
     --wallet.hotkey ${WALLET_HOTKEY} \
     --axon.port ${AXON_PORT} \
     --neuron.type miner \
+    --kami.port ${KAMI_PORT} \
+    --kami.host ${KAMI_HOST} \
     ${EXTRA_ARGS}
 fi
 
@@ -72,6 +74,8 @@ if [ "$1" = 'validator' ]; then
     --wallet.name ${WALLET_COLDKEY} \
     --wallet.hotkey ${WALLET_HOTKEY} \
     --neuron.type validator \
+    --kami.port ${KAMI_PORT} \
+    --kami.host ${KAMI_HOST} \
     ${EXTRA_ARGS}
 fi
 

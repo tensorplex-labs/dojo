@@ -34,7 +34,7 @@ class Miner(aobject):
         self.config = ObjectManager.get_config()
         logger.info(self.config)
 
-        self.kami = KamiClient()
+        self.kami: KamiClient = KamiClient(port=self.config.kami.port)
         logger.info(f"Connecting to kami: {self.kami.url}")
 
         logger.info("Setting up bittensor objects....")
@@ -42,7 +42,6 @@ class Miner(aobject):
         logger.info(f"Wallet: {self.wallet}")
         # The axon handles request processing, allowing validators to send this miner requests.
         self.axon = bittensor.axon(wallet=self.wallet, port=self.config.axon.port)
-        logger.info(f"Axon: {self.axon}")
 
         await self.init_metagraphs()
 
@@ -50,6 +49,8 @@ class Miner(aobject):
         self.uid: int = self.subnet_metagraph.hotkeys.index(
             self.wallet.hotkey.ss58_address
         )
+
+        logger.info(f"Axon: {self.axon.ip=} {self.axon.external_ip=} {self.axon.port=}")
 
         logger.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
@@ -232,8 +233,8 @@ class Miner(aobject):
                             logger.info(
                                 f"Task {synapse.task_id} shared scores:"
                                 f"\n\tGround Truth Score: {scores.ground_truth_score}"
-                                f"\n\tCosine Similarity: {scores.cosine_similarity_score}"
-                                f"\n\tNormalised Cosine Similarity: {scores.normalised_cosine_similarity_score}"
+                                f"\n\tDot Product: {scores.dot_product}"
+                                f"\n\tNormalised Dot Product: {scores.dot_product_norm}"
                                 f"\n\tCubic Reward Score: {scores.cubic_reward_score}"
                             )
                             shared_scores_logged = True

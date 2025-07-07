@@ -393,8 +393,8 @@ class ORM:
                                     # Initialize other scores as None - they'll be computed later
                                     normalised_score=None,
                                     ground_truth_score=None,
-                                    cosine_similarity_score=None,
-                                    normalised_cosine_similarity_score=None,
+                                    dot_product=None,
+                                    dot_product_norm=None,
                                     cubic_reward_score=None,
                                 )
 
