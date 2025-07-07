@@ -272,7 +272,7 @@ class FeedbackLoop:
 
             # Set time window for expired tasks
             expire_from, expire_to = get_time_window_for_tasks(
-                hours_ago_start=2, hours_ago_end=0, buffer_minutes=10
+                hours_ago_start=2, hours_ago_end=0
             )
 
             logger.info(
@@ -500,10 +500,16 @@ class FeedbackLoop:
                 )
                 return
 
+            expire_from, expire_to = get_time_window_for_tasks(
+                hours_ago_start=2, hours_ago_end=0
+            )
+
             # Get tasks with TF_COMPLETED status in batches
             async for tf_tasks_batch, _ in ORM.get_TF_tasks_by_hfl_status(
                 status=HFLStatusEnum.TF_COMPLETED,
                 batch_size=10,
+                expire_from=expire_from,
+                expire_to=expire_to,
             ):
                 if not tf_tasks_batch:
                     continue
