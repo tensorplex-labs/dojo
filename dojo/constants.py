@@ -11,7 +11,7 @@ class AnalyticsConstants(IntEnum):
 class NormalValidatorConstants(IntEnum):
     """Base constants for synthetic task execution and monitoring"""
 
-    TASK_DEADLINE = 6 * 60 * 60  # 6 hours
+    TASK_DEADLINE = 2 * 60 * 60  # 6 hours
     VALIDATOR_RUN = 900  # 15 minutes
     VALIDATOR_HEARTBEAT = 200
     VALIDATOR_UPDATE_TASK = 600  # 10 minutes

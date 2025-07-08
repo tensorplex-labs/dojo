@@ -197,28 +197,40 @@ class Miner(aobject):
                 logger.error(
                     f"Failed to serve axon for miner, exiting with error message: {serve_success.get('message')}"
                 )
-                exit()
+                exit(1)
         else:
             logger.info("Axon already served, no need to serve again.")
 
         logger.info(f"Miner starting at block: {str(self.block)}")
-
+        failure_count = 0
         # This loop maintains the miner's operations until intentionally stopped.
         try:
             while True:
-                # Sync metagraph and potentially set weights.
-                await self.sync()
-                await asyncio.sleep(12)
+                try:
+                    # Sync metagraph and potentially set weights.
+                    logger.info("Starting sync cycle...")
+                    await self.sync()
+                    failure_count = 0  # Reset on success
+                    logger.info("Sync completed successfully")
+                    await asyncio.sleep(12)
 
-        # If someone intentionally stops the miner, it'll safely terminate operations.
+                except Exception:
+                    failure_count += 1
+                    if failure_count > 5:
+                        logger.error(
+                            "Failed to sync metagraph 5 times consecutively, exiting..."
+                        )
+                        exit(1)
+                    logger.error(traceback.format_exc())
+                    logger.info("Waiting for 12 seconds before retrying...")
+                    await asyncio.sleep(12)
         except KeyboardInterrupt:
             logger.success("Miner killed by keyboard interrupt.")
             await self._cleanup()
-            exit()
-
-        # In case of unforeseen errors, the miner will log the error and continue operations.
+            exit(0)
         except Exception:
             logger.error(traceback.format_exc())
+            exit(1)
         finally:
             await self._cleanup()
 
