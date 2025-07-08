@@ -7,4 +7,4 @@ class ServedRequest(HashModel):
 
     validator_task_id: str = Field(index=True)
     hotkey: str = Field(index=True)
-    dojo_task_id: str
+    dojo_task_id: str = Field(index=True)
