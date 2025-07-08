@@ -125,61 +125,76 @@ class Miner(aobject):
         """
 
         # manually always register and always sync metagraph when application starts
-        await self.resync_metagraph()
-        await self.sync()
-
-        # Serve passes the axon information to the network + netuid we are hosting on.
-        # This will auto-update if the axon port of external ip have changed.
-        logger.info(f"Serving miner axon {self.axon} with netuid: {self.config.netuid}")
-
-        axon_payload = ServeAxonPayload(
-            netuid=self.config.netuid,
-            port=self.axon.external_port,
-            ip=ip_to_int(self.axon.external_ip),
-            ipType=ip_version(self.axon.external_ip),
-            protocol=ip_version(self.axon.external_ip),
-            version=1,
-        )
-
-        # serve_success = await serve_axon(self.subtensor, self.axon, self.config)
-
-        if not await self.check_if_axon_served(axon_payload):
-            serve_success = await self.kami.serve_axon(axon_payload)
-            if serve_success.get("statusCode", None) == 200:
-                logger.success("Successfully served axon for miner!")
-            else:
-                logger.error(
-                    f"Failed to serve axon for miner, exiting with error message: {serve_success.get('message')}"
-                )
-                exit()
-        else:
-            logger.info("Axon already served, no need to serve again.")
-
-        # Start  starts the miner's axon, making it active on the network.
-        self.axon.start()
-
-        logger.info(f"Miner starting at block: {str(self.block)}")
-
-        # This loop maintains the miner's operations until intentionally stopped.
         try:
-            while True:
-                # Check if we should exit.
-                if self.should_exit:
-                    break
+            await self.resync_metagraph()
+            await self.sync()
 
-                # Sync metagraph and potentially set weights.
-                await self.sync()
-                await asyncio.sleep(12)
+            # Serve passes the axon information to the network + netuid we are hosting on.
+            # This will auto-update if the axon port of external ip have changed.
+            logger.info(
+                f"Serving miner axon {self.axon} with netuid: {self.config.netuid}"
+            )
+
+            axon_payload = ServeAxonPayload(
+                netuid=self.config.netuid,
+                port=self.axon.external_port,
+                ip=ip_to_int(self.axon.external_ip),
+                ipType=ip_version(self.axon.external_ip),
+                protocol=ip_version(self.axon.external_ip),
+                version=1,
+            )
+
+            # serve_success = await serve_axon(self.subtensor, self.axon, self.config)
+
+            if not await self.check_if_axon_served(axon_payload):
+                serve_success = await self.kami.serve_axon(axon_payload)
+                if serve_success.get("statusCode", None) == 200:
+                    logger.success("Successfully served axon for miner!")
+                else:
+                    logger.error(
+                        f"Failed to serve axon for miner, exiting with error message: {serve_success.get('message')}"
+                    )
+                    exit(1)
+            else:
+                logger.info("Axon already served, no need to serve again.")
+
+            # Start  starts the miner's axon, making it active on the network.
+            self.axon.start()
+
+            logger.info(f"Miner starting at block: {str(self.block)}")
+
+            # This loop maintains the miner's operations until intentionally stopped.
+
+            failure_count = 0
+            while True:
+                try:
+                    # Check if we should exit.
+                    if self.should_exit:
+                        break
+                    # Sync metagraph and potentially set weights.
+                    await self.sync()
+                    failure_count = 0
+                    await asyncio.sleep(12)
+
+                except Exception:
+                    failure_count += 1
+                    logger.error(f"Sync failed ({failure_count} consecutive failures)")
+                    logger.error(traceback.format_exc())
+                    if failure_count > 5:
+                        logger.error("Too many failures, exiting miner")
+                        raise  # Let the outer loop handle the exit
+                    await asyncio.sleep(6)
 
         # If someone intentionally stops the miner, it'll safely terminate operations.
         except KeyboardInterrupt:
             logger.success("Miner killed by keyboard interrupt.")
             await self._cleanup()
-            exit()
+            exit(0)
 
         # In case of unforeseen errors, the miner will log the error and continue operations.
         except Exception:
             logger.error(traceback.format_exc())
+            exit(1)
         finally:
             await self._cleanup()
 

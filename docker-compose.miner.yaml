@@ -32,6 +32,7 @@ services:
 
   miner:
     container_name: miner
+    restart: on-failure
     image: ghcr.io/tensorplex-labs/dojo:main
     labels:
       com.centurylinklabs.watchtower.enable: "true"

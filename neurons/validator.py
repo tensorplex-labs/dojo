@@ -710,7 +710,7 @@ class Validator(aobject):
             try:
                 # Get tasks that expired between 2 hours ago and 30 minutes ago
                 # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
-                now = datetime.now()
+                now = datetime.now(timezone.utc)
                 expire_from = datetime_as_utc(now - timedelta(hours=2))
                 expire_to = datetime_as_utc(now - timedelta(seconds=dojo.BUFFER_PERIOD))
 
