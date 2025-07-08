@@ -1,3 +1,9 @@
+## [1.13.2](https://github.com/tensorplex-labs/dojo/compare/v1.13.1...v1.13.2) (2025-07-08)
+
+### Bug Fixes
+
+* added hotfixes for validator and miner ([2d91894](https://github.com/tensorplex-labs/dojo/commit/2d918946113e6a1aec47d4ae22ee0868b4be9f41))
+
 ## [1.13.1](https://github.com/tensorplex-labs/dojo/compare/v1.13.0...v1.13.1) (2025-07-06)
 
 ## [1.13.0](https://github.com/tensorplex-labs/dojo/compare/v1.12.4...v1.13.0) (2025-06-15)
