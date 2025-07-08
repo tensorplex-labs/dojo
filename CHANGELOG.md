@@ -1,3 +1,9 @@
+## [1.13.3](https://github.com/tensorplex-labs/dojo/compare/v1.13.2...v1.13.3) (2025-07-08)
+
+### Bug Fixes
+
+* recorrect task deadline ([2d83538](https://github.com/tensorplex-labs/dojo/commit/2d835380caa115ed37b89017be0865fb426fe6db))
+
 ## [1.13.2](https://github.com/tensorplex-labs/dojo/compare/v1.13.1...v1.13.2) (2025-07-08)
 
 ### Bug Fixes
