@@ -922,7 +922,6 @@ class Validator(aobject):
                                     hotkey_to_sf_score,
                                 ) = await hfl.score_hfl_tasks(sf_task)
 
-                                # TODO: remove this
                                 logger.info(
                                     f"Scored HFL task {sf_task.id}, hotkey to weighted score: {hotkey_to_weighted_score}"
                                 )
@@ -1282,8 +1281,6 @@ class Validator(aobject):
             return
 
         logger.debug("Attempting to saving dendrite response")
-        # TODO: remove this
-        logger.info(f"valid_miner_responses: {valid_miner_responses}")
         validator_task = await ORM.save_task(
             validator_task=synapse,
             miner_responses=valid_miner_responses,
@@ -1530,7 +1527,6 @@ class Validator(aobject):
                 return []
 
             url = f"http://{miner_axon.ip}:{miner_axon.port}"
-            # TODO: change to validator task id, it's not validator's job to know dojo task id
             model = TaskResultSynapse(validator_task_id=validator_task_id)
             response = await self.client.send(
                 url,
@@ -1839,7 +1835,6 @@ class Validator(aobject):
             f"HFL scores: {self.hfl_scores.shape=} {self.hfl_scores=} {len(self.hfl_scores.tolist())=}"
         )
         async with self._scores_alock:
-            # TODO: assignment of self.hfl_score
             assert (
                 self.synthetic_score.shape == self.hfl_scores.shape
             ), "Scores and HFL scores must be the same shape"

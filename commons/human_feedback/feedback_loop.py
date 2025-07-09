@@ -72,7 +72,9 @@ class FeedbackLoop:
             )
             return
 
-        result = await self.select_validator_task()
+        result: (
+            Tuple[SyntheticTaskSynapse, str] | None
+        ) = await self.select_validator_task()
         if result:
             selected_task, selected_completion_id = result
             text_criteria_task = await create_text_feedback_task(

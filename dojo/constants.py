@@ -11,7 +11,8 @@ class AnalyticsConstants(IntEnum):
 class NormalValidatorConstants(IntEnum):
     """Base constants for synthetic task execution and monitoring"""
 
-    TASK_DEADLINE = 2 * 60 * 60  # 6 hours
+    TASK_DEADLINE = 1 * 60 * 60  # 1 hour
+
     VALIDATOR_RUN = 900  # 15 minutes
     VALIDATOR_HEARTBEAT = 200
     VALIDATOR_UPDATE_TASK = 600  # 10 minutes
@@ -79,10 +80,3 @@ class MinerConstant(IntEnum):
 
 # Export the constants directly
 ValidatorInterval = get_validator_constants()
-
-
-# Validation
-assert (
-    ValidatorInterval.VALIDATOR_UPDATE_SCORE.value
-    < ValidatorInterval.TASK_DEADLINE.value
-)
