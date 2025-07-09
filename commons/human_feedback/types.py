@@ -1,20 +1,25 @@
 """Type definitions for Human Feedback Loop functionality."""
 
-from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import TypeAlias
 
 from loguru import logger
+from pydantic import BaseModel, Field
+
+from dojo.protocol import SanitizationFailureReason
 
 
-@dataclass
-class SanitizationResult:
+class SanitizationResult(BaseModel):
     """
     response from sanitize_miner_feedback
     """
 
     is_safe: bool
     sanitized_feedback: str
+    reason: SanitizationFailureReason = Field(
+        description="Reason for invalid feedback",
+        default=SanitizationFailureReason.VALID,
+    )
 
 
 # Constants as Types

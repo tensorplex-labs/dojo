@@ -1771,9 +1771,6 @@ class Validator(aobject):
                 )
                 continue
 
-            # FIXME: remove this
-            if int(uid) == 15:
-                continue
             miner_axons.append(axon)
 
         return miner_axons
