@@ -298,7 +298,7 @@ async def handle_synthetic_generation_failure(
         synthetic_req_id: Synthetic request ID that failed
     """
     try:
-        logger.error(f"Handling synthetic generation failure for task {tf_task_id}")
+        logger.debug(f"Handling synthetic generation failure for task {tf_task_id}")
         # Get current retry count
         current_retry_count = hfl_state.syn_retry_count or 0
         MAX_RETRY_ATTEMPTS = 5

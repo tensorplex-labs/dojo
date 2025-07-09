@@ -317,7 +317,7 @@ async def evaluate_miner_consensus(
                     )
             elif min_threshold is not None and percentage >= min_threshold:
                 threshold_met_completion = completion_id
-            elif max_threshold is not None and percentage < max_threshold:
+            elif max_threshold is not None and percentage <= max_threshold:
                 threshold_met_completion = completion_id
 
         # Return the results
