@@ -31,12 +31,9 @@ def _save_to_athena_format(data: dict):
         formatted_data = ""
         for task in data["tasks"]:
             # Format each item with proper indentation and save to file
-            unnested_obj = json.dumps(task, indent=2)
+            unnested_obj = json.dumps(task)
             formatted_data += unnested_obj + "\n"
         return formatted_data
-    except OSError as e:
-        logger.error(f"Error writing to athena_pp_output.json: {str(e)}")
-        raise
     except Exception as e:
         logger.error(f"Error processing data for Athena format: {str(e)}")
         raise

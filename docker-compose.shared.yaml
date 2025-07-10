@@ -30,12 +30,12 @@ services:
     command: >
       sh -c '
       if [ ! -z "$$REDIS_PASSWORD" ] && [ ! -z "$$REDIS_USERNAME" ]; then
-        redis-stack-server --requirepass $$REDIS_PASSWORD &
+        redis-stack-server --dir /data --requirepass $$REDIS_PASSWORD --save 60 1 --appendonly yes &
         sleep 2
         redis-cli -a $$REDIS_PASSWORD ACL SETUSER $$REDIS_USERNAME on \>$$REDIS_PASSWORD allcommands allkeys
         wait
       else
-        redis-stack-server;
+        redis-stack-server --dir /data --save 60 1 --appendonly yes;
       fi'
     healthcheck:
       test: >
@@ -89,7 +89,7 @@ services:
     networks:
       - subtensor
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://${KAMI_HOST}:${KAMI_PORT}/chain/latest-block"]
+      test: ["CMD", "curl", "-f", "http://${KAMI_HOST}:${KAMI_PORT}/substrate/health"]
       interval: 10s
       timeout: 10s
       retries: 5

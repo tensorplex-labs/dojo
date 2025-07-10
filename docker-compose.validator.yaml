@@ -99,6 +99,8 @@ services:
       com.centurylinklabs.watchtower.depends-on: "synthetic-api,postgres,kami"
     env_file:
       - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./.env:/app/.env
       - ./scores:/app/scores
@@ -189,21 +191,4 @@ services:
       - prisma-binary:/root/prisma-python
       - prisma-pip-cache:/root/.cache/pip
       - $BITTENSOR_DIR:/root/.bittensor
-    logging: *default-logging
-
-  fill-score-column:
-    container_name: fill-score-column
-    image: ghcr.io/tensorplex-labs/dojo:main
-    env_file:
-      - .env
-    command: ["fill-score-column"]
-    networks:
-      - dojo-validator
-    volumes:
-      - ./:/app
-      - ./.env:/app/.env
-      - prisma-binary:/root/prisma-python
-      - prisma-client:/app/database/prisma
-      - prisma-pip-cache:/root/.cache/pip
-      - $HOME/.bittensor:/root/.bittensor
     logging: *default-logging

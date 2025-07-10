@@ -1,24 +1,34 @@
-from datetime import datetime
-from typing import Dict, List
+from datetime import datetime, timezone
+from typing import List
 
-import bittensor as bt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from strenum import StrEnum
 
 from commons.utils import get_epoch_time, get_new_uuid
 
 
+class SanitizationFailureReason(StrEnum):
+    INVALID_LENGTH = "invalid_length"
+    BLACKLISTED_WORDS = "blacklisted_words"
+    BLACKLISTED_CHARS = "blacklisted_chars"
+    FLAGGED_BY_LLM = "flagged_by_llm"
+    VALID = "valid"
+
+
 class TaskTypeEnum(StrEnum):
     TEXT_TO_THREE_D = "TEXT_TO_THREE_D"
     TEXT_TO_IMAGE = "TEXT_TO_IMAGE"
     CODE_GENERATION = "CODE_GENERATION"
+    TEXT_FEEDBACK = "TEXT_FEEDBACK"
+    SCORE_FEEDBACK = "SCORE_FEEDBACK"
 
 
 class CriteriaTypeEnum(StrEnum):
     SCORE = "score"
+    TEXT = "text"
 
 
-class Scores(BaseModel):
+class Score(BaseModel):
     raw_score: float | None = Field(description="Raw score of the miner", default=None)
     rank_id: int | None = Field(description="Rank of the miner", default=None)
     normalised_score: float | None = Field(
@@ -36,6 +46,14 @@ class Scores(BaseModel):
     cubic_reward_score: float | None = Field(
         description="Cubic reward score of the miner", default=None
     )
+    icc_score: float | None = Field(description="ICC score of the miner", default=None)
+
+
+class TextFeedbackScore(BaseModel):
+    tf_score: float | None = Field(description="Score of the completion", default=None)
+    text_feedback: str | None = Field(
+        description="Text feedback of the completion", default=None
+    )
 
 
 class ScoreCriteria(BaseModel):
@@ -44,10 +62,19 @@ class ScoreCriteria(BaseModel):
     type: str = Field(default=CriteriaTypeEnum.SCORE.value, frozen=True)
     min: float = Field(description="Minimum score for the task", frozen=True)
     max: float = Field(description="Maximum score for the task", frozen=True)
-    scores: Scores | None = Field(description="Scores of the completion", default=None)
+    scores: Score | None = Field(description="Scores of the completion", default=None)
 
 
-CriteriaType = ScoreCriteria
+class TextCriteria(BaseModel):
+    type: str = Field(default=CriteriaTypeEnum.TEXT.value, frozen=True)
+    query: str = Field(description="Query for the task", frozen=True)
+    text_feedback: str = Field(description="Text feedback for the task", frozen=True)
+    scores: TextFeedbackScore | None = Field(
+        description="Text feedback score for the task", default=None
+    )
+
+
+CriteriaType = ScoreCriteria | TextCriteria
 
 
 class CodeFileObject(BaseModel):
@@ -59,23 +86,9 @@ class CodeAnswer(BaseModel):
     files: List[CodeFileObject] = Field(description="List of FileObjects")
 
 
-class MultimediaFileObject(BaseModel):
-    filename: str = Field(description="Name of the file")
-    content: bytes = Field(description="Binary content of the file")
-    mime_type: str = Field(
-        description="MIME type of the file (e.g., 'image/png', 'model/ply')"
-    )
-
-
-class MultimediaAnswer(BaseModel):
-    files: List[MultimediaFileObject] = Field(description="List of multimedia files")
-
-
 class CompletionResponse(BaseModel):
     model: str = Field(description="Model that generated the completion")
-    completion: CodeAnswer | MultimediaAnswer | str | None = Field(
-        description="Completion from the model"
-    )
+    completion: CodeAnswer | None = Field(description="Completion from the model")
     completion_id: str = Field(description="Unique identifier for the completion")
     # TODO: Check if rank_id is needed
     rank_id: int | None = Field(
@@ -116,39 +129,8 @@ class SyntheticQA(BaseModel):
         return self
 
 
-class FeedbackRequest(bt.Synapse):
-    epoch_timestamp: float = Field(
-        default_factory=get_epoch_time,
-        description="Epoch timestamp for the request",
-    )
-    request_id: str = Field(
-        default_factory=get_new_uuid,
-        description="Unique identifier for the request",
-    )
-    prompt: str = Field(
-        description="Prompt or query from the user sent the LLM",
-    )
-    completion_responses: List[CompletionResponse] = Field(
-        description="List of completions for the prompt",
-    )
-    task_type: str = Field(description="Type of task")
-    criteria_types: List[CriteriaType] = Field(
-        description="Types of criteria for the task",
-    )
-    # task id from miner
-    dojo_task_id: str | None = Field(
-        description="Dojo task ID for the request", default=None
-    )
-    expire_at: str = Field(
-        description="Expired time for Dojo task which will be used by miner to create task"
-    )
-    ground_truth: dict[str, int] = Field(
-        description="Mapping of unique identifiers to their ground truth values",
-        default_factory=dict,
-    )
-
-
-class TaskSynapseObject(bt.Synapse):
+class SyntheticTaskSynapse(BaseModel):
+    ack: bool = Field(description="Acknowledgement of the synapse", default=False)
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the task",
@@ -171,9 +153,6 @@ class TaskSynapseObject(bt.Synapse):
         description="List of completions for the task",
         default=None,
     )
-    dojo_task_id: str | None = Field(
-        description="Dojo task ID returned by miner", default=None
-    )
     ground_truth: dict[str, int] | None = Field(
         description="Mapping of unique identifiers to their ground truth values",
         default=None,
@@ -186,25 +165,29 @@ class TaskSynapseObject(bt.Synapse):
     )
 
 
-class ScoringResult(bt.Synapse):
-    task_id: str = Field(
+class CompletionScore(BaseModel):
+    completion_id: str = Field(description="ID of the completion")
+    score: Score | TextFeedbackScore = Field(description="Score of the completion")
+
+
+class ScoreResultSynapse(BaseModel):
+    validator_task_id: str = Field(
         description="Unique identifier for the request",
     )
-    hotkey_to_completion_responses: Dict[str, List[CompletionResponse]] = Field(
-        description="Hotkey to completion responses mapping",
-        default_factory=dict,
+    scores: list[CompletionScore] = Field(
+        description="List of CompletionScore objects for a miner for that task id"
     )
 
 
-class Heartbeat(bt.Synapse):
+class Heartbeat(BaseModel):
     ack: bool = Field(description="Acknowledgement of the heartbeat", default=False)
 
 
 # TODO rename this to be a Task or something
 class DendriteQueryResponse(BaseModel):
     model_config = ConfigDict(frozen=False)
-    validator_task: TaskSynapseObject
-    miner_responses: List[TaskSynapseObject]
+    validator_task: SyntheticTaskSynapse
+    miner_responses: List[SyntheticTaskSynapse]
 
 
 class Result(BaseModel):
@@ -213,23 +196,21 @@ class Result(BaseModel):
 
 
 class TaskResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: str = Field(description="Task ID")
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
     status: str = Field(description="Status of the task result")
     result_data: list[Result] = Field(description="List of Result data for the task")
-    dojo_task_id: str = Field(description="ID of the associated dojo task")
+    task_id: str = Field(description="ID of the associated dojo task")
     worker_id: str = Field(description="ID of the worker who completed the task")
-    # Below not in used at the moment
-    stake_amount: float | None = Field(description="Stake amount", default=None)
-    potential_reward: float | None = Field(description="Potential reward", default=None)
-    potential_loss: float | None = Field(description="Potential loss", default=None)
-    finalised_reward: float | None = Field(description="Finalised reward", default=None)
-    finalised_loss: float | None = Field(description="Finalised loss", default=None)
 
 
-class TaskResultRequest(bt.Synapse):
-    dojo_task_id: str = Field(description="The ID of the task to retrieve results for")
+class TaskResultSynapse(BaseModel):
+    validator_task_id: str = Field(
+        description="The ID of the task to retrieve results for"
+    )
     task_results: list[TaskResult] = Field(
         description="List of TaskResult objects", default=[]
     )
@@ -241,6 +222,11 @@ class AnalyticsData(BaseModel):
     """
 
     validator_task_id: str
+    task_type: str
+    previous_task_id: str | None = Field(
+        description="ID of the previous task", default=None
+    )
+    next_task_id: str | None = Field(description="ID of the next task", default=None)
     validator_hotkey: str
     prompt: str
     completions: List[dict]
@@ -255,3 +241,25 @@ class AnalyticsData(BaseModel):
 
 class AnalyticsPayload(BaseModel):
     tasks: List[AnalyticsData]
+
+
+class HFLEvent(BaseModel):
+    type: str = Field(description="Type of the event")
+    task_id: str = Field(description="ID of the task")
+    syn_req_id: str = Field(description="ID of the synthetic request", default="")
+    iteration: int = Field(description="Iteration of the event", default=0)
+    message: str = Field(description="Message of the event", default="")
+    timestamp: datetime = Field(
+        description="Timestamp of the event",
+        default_factory=lambda: datetime.now(timezone.utc),
+    )
+
+
+# TODO: Add more data as needed
+class TextFeedbackEvent(HFLEvent):
+    type: str = Field(description="Type of the event", default="TEXT_FEEDBACK")
+
+
+# TODO: Add more data as needed
+class ScoreFeedbackEvent(HFLEvent):
+    type: str = Field(description="Type of the event", default="SCORE_FEEDBACK")

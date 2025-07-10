@@ -8,6 +8,8 @@ import bittensor as bt
 from dotenv import find_dotenv, load_dotenv
 from loguru import logger
 
+from .types import Mode
+
 base_path = Path.cwd()
 
 
@@ -26,11 +28,7 @@ def check_config(config: bt.config):
     # bt.logging.enable_third_party_loggers()
 
 
-def configure_logging(config: bt.config):
-    """
-    Configures logging based on the provided configuration.
-    """
-
+def resolve_log_level(config: bt.config) -> str:
     level = "INFO"
     if config.logging.trace:  # pyright: ignore[reportOptionalMemberAccess]
         level = "TRACE"
@@ -38,9 +36,17 @@ def configure_logging(config: bt.config):
         level = "DEBUG"
     elif config.logging.info:  # pyright: ignore[reportOptionalMemberAccess]
         level = "INFO"
+    return level
+
+
+def configure_logging(config: bt.config):
+    """
+    Configures logging based on the provided configuration.
+    """
 
     logger.remove()
-    logger.add(sys.stdout, level=level)
+    level = resolve_log_level(config)
+    logger.add(sys.stdout, level=level, colorize=True)
 
     # Optionally enable file logging if `record_log` and `logging_dir` are provided
     if config.record_log and config.logging_dir:
@@ -109,8 +115,10 @@ def add_args(parser):
 
     parser.add_argument(
         "--fast_mode",
-        action="store_true",
+        type=str,
+        choices=["high", "medium", "normal"],
         help="Whether to run in fast mode, for developers to test locally.",
+        default="normal",
     )
 
     parser.add_argument(
@@ -123,6 +131,19 @@ def add_args(parser):
         "--simulation_bad_miner",
         action="store_true",
         help="Set miner simluation to a bad one",
+    )
+
+    parser.add_argument(
+        "--kami.port",
+        type=int,
+        help="Port for Kami connection",
+    )
+
+    parser.add_argument(
+        "--kami.host",
+        type=str,
+        help="Host for Kami connection",
+        default="localhost",
     )
 
     epoch_length = 100
@@ -148,6 +169,13 @@ def add_args(parser):
 
         parser.add_argument(
             "--neuron.moving_average_alpha",
+            type=float,
+            help="Moving average alpha parameter, how much to add of the new observation.",
+            default=0.3,
+        )
+
+        parser.add_argument(
+            "--weights.hfl_ema_alpha",
             type=float,
             help="Moving average alpha parameter, how much to add of the new observation.",
             default=0.3,
@@ -186,3 +214,12 @@ def source_dotenv():
         return
 
     load_dotenv()
+
+
+def get_mode() -> Mode:
+    """Get the current mode from environment or config"""
+
+    mode = get_config().fast_mode
+    if not mode:
+        return Mode.NORMAL
+    return Mode(mode.lower())

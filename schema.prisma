@@ -13,6 +13,8 @@ enum TaskTypeEnum {
     CODE_GENERATION
     TEXT_TO_IMAGE
     TEXT_TO_THREE_D
+    TEXT_FEEDBACK
+    SCORE_FEEDBACK
 }
 
 enum CriteriaTypeEnum {
@@ -20,11 +22,25 @@ enum CriteriaTypeEnum {
     MULTI_SCORE
     SCORE
     MULTI_SELECT
+    TEXT
+}
+
+enum HFLStatusEnum {
+    TF_PENDING // TF created, waiting for feedback, no TASK_RESULT yet
+    TF_COMPLETED // TF task completed, and TASK_RESULT are updated, waiting for synthetic request
+    TF_FAILED // TF task failed for some reason
+    TF_SCHEDULED // Ready for next HFL iteration
+    TF_NEXT_TASK_CREATED // Next TF task created
+    SF_PENDING // SF created, waiting for scores from miners
+    SF_COMPLETED // SF task results received from miners
+    SF_FAILED // SF task failed for some reason
+    HFL_COMPLETED // HFL loop finished
 }
 
 model ValidatorTask {
     id               String       @id @unique @default(uuid())
     previous_task_id String?
+    next_task_id     String?      @unique
     prompt           String
     task_type        TaskTypeEnum
     is_processed     Boolean      @default(false)
@@ -32,13 +48,18 @@ model ValidatorTask {
     created_at       DateTime     @default(now())
     updated_at       DateTime     @updatedAt
     metadata         Json?        @db.JsonB
+    hfl_state_id     String?
 
     // Relationships
-    parent_task     ValidatorTask?  @relation("PreviousTask", fields: [previous_task_id], references: [id])
-    child_tasks     ValidatorTask[] @relation("PreviousTask")
+    parent_task ValidatorTask?  @relation("PreviousTask", fields: [previous_task_id], references: [id])
+    child_tasks ValidatorTask[] @relation("PreviousTask")
+
+    next_task       ValidatorTask?  @relation("NextTask", fields: [next_task_id], references: [id])
+    prev_task       ValidatorTask?  @relation("NextTask")
     completions     Completion[]
     miner_responses MinerResponse[]
     ground_truth    GroundTruth[]
+    HFLState        HFLState?       @relation(fields: [hfl_state_id], references: [id])
 
     @@index([task_type, is_processed])
     @@index([expire_at])
@@ -48,7 +69,6 @@ model ValidatorTask {
 model MinerResponse {
     id                String   @id @unique @default(uuid())
     validator_task_id String
-    dojo_task_id      String
     hotkey            String
     coldkey           String
     task_result       Json     @db.JsonB
@@ -59,8 +79,7 @@ model MinerResponse {
     validator_task_relation ValidatorTask @relation(fields: [validator_task_id], references: [id])
     scores                  MinerScore[]
 
-    @@unique([validator_task_id, dojo_task_id, hotkey])
-    @@index([dojo_task_id])
+    @@unique([validator_task_id, hotkey])
     @@map("miner_response")
 }
 
@@ -198,4 +217,34 @@ model Score_Model {
     score      Json
     created_at DateTime @default(now())
     updated_at DateTime @updatedAt
+}
+
+model HFLState {
+    id                       String          @id @default(uuid())
+    original_task_id         String // original task that started HFL
+    current_task_id          String // current task in the process
+    current_iteration        Int             @default(1)
+    tf_retry_count           Int             @default(0)
+    syn_retry_count          Int             @default(0)
+    current_synthetic_req_id String? // Null when not in synthetic phase
+    selected_completion_id   String? // ID of the completion that was selected for feedback
+    status                   HFLStatusEnum // Current state of the HFL process (e.g., TF_PENDING, TF_COMPLETE, SF_PENDING)
+    events                   Json[]          @db.JsonB // Array of state transition events with metadata
+    created_at               DateTime        @default(now())
+    updated_at               DateTime        @updatedAt
+    ValidatorTask            ValidatorTask[]
+
+    @@unique([original_task_id, current_task_id])
+    @@map("hfl_state")
+}
+
+// relational table to decouple things needed for HFL from completion table
+model HFLCompletionRelation {
+    id                String   @id @default(uuid())
+    miner_response_id String
+    sf_completion_id  String
+    created_at        DateTime @default(now())
+    updated_at        DateTime @updatedAt
+
+    @@map("hfl_completion_relation")
 }

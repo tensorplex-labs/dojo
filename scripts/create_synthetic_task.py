@@ -4,11 +4,11 @@ import json
 from loguru import logger
 
 from commons.dataset.synthetic import SyntheticAPI
-from commons.human_feedback.dojo import DojoAPI
 from commons.utils import set_expire_time
+from commons.worker_api.dojo import DojoAPI
 from dojo.protocol import (
     ScoreCriteria,
-    TaskSynapseObject,
+    SyntheticTaskSynapse,
     TaskTypeEnum,
 )
 
@@ -44,7 +44,7 @@ async def main():
                 response.completion_id = f"{response.completion_id}_{index}"
 
     expire_at = set_expire_time(8 * 3600)
-    synapse = TaskSynapseObject(
+    synapse = SyntheticTaskSynapse(
         prompt=data.prompt,
         task_type=str(TaskTypeEnum.CODE_GENERATION),
         expire_at=expire_at,
