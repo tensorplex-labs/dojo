@@ -17,7 +17,6 @@ from database.prisma.types import ValidatorTaskInclude
 from dojo.protocol import (
     CriteriaType,
     CriteriaTypeEnum,
-    SanitizedResultEnum,
     SyntheticTaskSynapse,
     TaskResult,
     TextCriteria,
@@ -26,7 +25,11 @@ from dojo.protocol import (
 
 from .sanitize import sanitize_miner_feedback
 from .types import HFLInterval
-from .utils import create_initial_miner_scores, extract_text_feedback_from_results
+from .utils import (
+    create_initial_miner_scores,
+    extract_text_feedback_from_results,
+    is_valid_feedback,
+)
 
 if TYPE_CHECKING:
     from neurons.validator import Validator
@@ -123,11 +126,7 @@ async def fetch_miner_feedback_for_task(
     for resp in valid_miner_responses:
         # Extract feedback text directly from the task_result
         feedback_text, _ = extract_text_feedback_from_results(resp.task_result)
-        if (
-            feedback_text
-            and feedback_text != ""
-            and feedback_text != SanitizedResultEnum.INVALID.value
-        ):
+        if feedback_text and feedback_text != "" and is_valid_feedback(feedback_text):
             # Valid feedback already exists
             logger.info(f"Feedback text: {feedback_text} from miner {resp.hotkey}")
             miner_feedbacks.append(
@@ -430,9 +429,7 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                     )
                     # Replace with "invalid" if not valid
                     sanitized_criterion = criterion.copy()
-                    sanitized_criterion["text_feedback"] = (
-                        SanitizedResultEnum.INVALID.value
-                    )
+                    sanitized_criterion["text_feedback"] = sanitization_result.reason
 
                 sanitized_criteria.append(sanitized_criterion)
 

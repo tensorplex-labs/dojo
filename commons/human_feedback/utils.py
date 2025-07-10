@@ -21,7 +21,7 @@ from database.prisma.types import (
 from dojo.protocol import (
     CodeAnswer,
     CompletionResponse,
-    SanitizedResultEnum,
+    SanitizationFailureReason,
     ScoreCriteria,
     SyntheticTaskSynapse,
     TaskResult,
@@ -68,7 +68,8 @@ def extract_text_feedback_from_results(
                     for criterion, task_result in criteria_generator
                     if criterion.get("type") == "text"
                     and "text_feedback" in criterion
-                    and criterion["text_feedback"] != SanitizedResultEnum.INVALID.value
+                    and criterion["text_feedback"]
+                    != is_valid_feedback(criterion["text_feedback"])
                 ),
                 None,
             )
@@ -97,7 +98,7 @@ def extract_text_feedback_from_results(
                     if (
                         criterion.get("type") == "text"
                         and text_feedback
-                        and text_feedback != SanitizedResultEnum.INVALID.value
+                        and is_valid_feedback(text_feedback)
                     ):
                         # Convert JSON to TaskResult
                         task_result = TaskResult(
@@ -308,7 +309,7 @@ async def evaluate_miner_consensus(
 
             # Check for threshold criteria
             if min_threshold is not None and max_threshold is not None:
-                if min_threshold <= percentage < max_threshold:
+                if min_threshold <= percentage <= max_threshold:
                     threshold_met_completion = completion_id
                     logger.info(
                         f"Found eligible completion {completion_id} with {percentage:.1f}% "
@@ -316,7 +317,7 @@ async def evaluate_miner_consensus(
                     )
             elif min_threshold is not None and percentage >= min_threshold:
                 threshold_met_completion = completion_id
-            elif max_threshold is not None and percentage < max_threshold:
+            elif max_threshold is not None and percentage <= max_threshold:
                 threshold_met_completion = completion_id
 
         # Return the results
@@ -768,6 +769,19 @@ async def create_initial_miner_scores(
         )
         logger.error(traceback.format_exc())
         return False
+
+
+def is_valid_feedback(text_feedback: str) -> bool:
+    """
+    Check if the text feedback is valid.
+    """
+    failure_reasons = {
+        SanitizationFailureReason.BLACKLISTED_CHARS.value,
+        SanitizationFailureReason.BLACKLISTED_WORDS.value,
+        SanitizationFailureReason.FLAGGED_BY_LLM.value,
+        SanitizationFailureReason.INVALID_LENGTH.value,
+    }
+    return text_feedback not in failure_reasons
 
 
 if __name__ == "__main__":

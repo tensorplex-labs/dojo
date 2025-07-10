@@ -92,10 +92,9 @@ async def create_score_feedback_task(
 
         # Get active miners for SF task
         active_miners = await validator.get_active_miner_uids()
-        # FIXME enable this for mainnet
-        # if len(active_miners) <= HFLConstants.MIN_NUM_MINERS.value:
-        #     logger.error(f"No active miners found for SF task for {tf_task.id}")
-        #     return None
+        if len(active_miners) <= 0:
+            logger.error(f"No active miners found for SF task for {tf_task.id}")
+            return None
 
         # Send to miners
         miner_responses: list[SyntheticTaskSynapse] = await send_hfl_request(
@@ -299,6 +298,7 @@ async def handle_synthetic_generation_failure(
         synthetic_req_id: Synthetic request ID that failed
     """
     try:
+        logger.debug(f"Handling synthetic generation failure for task {tf_task_id}")
         # Get current retry count
         current_retry_count = hfl_state.syn_retry_count or 0
         MAX_RETRY_ATTEMPTS = 5
