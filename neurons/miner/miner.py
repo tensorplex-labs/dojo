@@ -13,6 +13,8 @@ from loguru import logger
 from messaging import HOTKEY_HEADER, PydanticModel, Request, Server
 from redis_om.model import Migrator, NotFoundError
 
+from commons.api_settings import RedisSettings
+from commons.cache import build_redis_url
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject
 from commons.worker_api.dojo import DojoAPI
@@ -27,6 +29,8 @@ from dojo.protocol import (
 from dojo.utils import get_config
 
 from .types import ServedRequest
+
+redis_url = build_redis_url(RedisSettings(), is_ssl=False)
 
 
 def optimize_payload_for_transport(
@@ -43,7 +47,8 @@ async def check_redis_connection():
     try:
         from redis_om import get_redis_connection
 
-        redis_conn = get_redis_connection()
+        logger.info(f"Connecting to redis: {redis_url}")
+        redis_conn = get_redis_connection(url=redis_url)
         connection_info = redis_conn.connection_pool.connection_kwargs
         port = connection_info.get("port", "unknown")
         result = redis_conn.ping()
@@ -57,23 +62,30 @@ async def check_redis_connection():
 
 class Miner(aobject):
     async def __init__(self):
-        self.config = ObjectManager.get_config()
-        logger.info(self.config)
+        try:
+            self.config = ObjectManager.get_config()
+            logger.info(self.config)
 
-        self.kami: KamiClient = KamiClient(port=self.config.kami.port)
-        logger.info(f"Connecting to kami: {self.kami.url}")
+            self.kami: KamiClient = KamiClient(port=self.config.kami.port)
+            logger.info(f"Connecting to kami: {self.kami.url}")
 
-        logger.info("Setting up bittensor objects....")
-        self.server = Server(kami=self.kami)
-        self.keyringpair = await self.kami.get_keyringpair()
-        await self.register_synapse_handlers()
-        await self.init_metagraphs()
-        logger.info(
-            f"Miner hotkey: {self.keyringpair.hotkey} uid: {self.subnet_metagraph.hotkeys.index(self.keyringpair.hotkey)}"
-        )
-        if not await check_redis_connection():
-            raise ConnectionError()
-        Migrator().run()
+            logger.info("Setting up bittensor objects....")
+            self.server = Server(kami=self.kami)
+            self.keyringpair = await self.kami.get_keyringpair()
+            await self.register_synapse_handlers()
+            await self.init_metagraphs()
+            logger.info(
+                f"Miner hotkey: {self.keyringpair.hotkey} uid: {self.subnet_metagraph.hotkeys.index(self.keyringpair.hotkey)}"
+            )
+            if not await check_redis_connection():
+                raise ConnectionError()
+            logger.info("Running redis migrations...")
+            Migrator().run()
+            logger.info("Redis migrations completed")
+        except Exception as e:
+            logger.error(f"Error initializing miner: {e}")
+            logger.error(traceback.format_exc())
+            raise
         # log all incoming requests
 
     async def register_synapse_handlers(self):

@@ -27,6 +27,8 @@ services:
       - .env
     expose:
       - 6379
+    ports:
+      - 6999:6379
     command: >
       sh -c '
       if [ ! -z "$$REDIS_PASSWORD" ] && [ ! -z "$$REDIS_USERNAME" ]; then
