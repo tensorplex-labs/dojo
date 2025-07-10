@@ -80,8 +80,15 @@ class Miner(aobject):
             if not await check_redis_connection():
                 raise ConnectionError()
             logger.info("Running redis migrations...")
+
+            from redis_om import get_redis_connection
+
+            ServedRequest.Meta.database = get_redis_connection(
+                url=redis_url, decode_responses=True
+            )
             Migrator().run()
             logger.info("Redis migrations completed")
+
         except Exception as e:
             logger.error(f"Error initializing miner: {e}")
             logger.error(traceback.format_exc())
