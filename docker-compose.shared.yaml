@@ -93,7 +93,7 @@ services:
     networks:
       - subtensor
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://${KAMI_HOST}:${KAMI_PORT}/chain/latest-block"]
+      test: ["CMD", "curl", "-f", "http://${KAMI_HOST}:${KAMI_PORT}/substrate/health"]
       interval: 10s
       timeout: 10s
       retries: 5
