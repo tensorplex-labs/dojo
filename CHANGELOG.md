@@ -1,3 +1,27 @@
+## [1.14.0](https://github.com/tensorplex-labs/dojo/compare/v1.13.3...v1.14.0) (2025-07-10)
+
+### Features
+
+* add custom messaging implementation ([#197](https://github.com/tensorplex-labs/dojo/issues/197)) ([a665a18](https://github.com/tensorplex-labs/dojo/commit/a665a1853f7ce0c0c07861e08b5b3f7aff496be6))
+* hfl integration ([#167](https://github.com/tensorplex-labs/dojo/issues/167)) ([eac3554](https://github.com/tensorplex-labs/dojo/commit/eac3554c76c4a2d084037aaf0fbed9a7f2a3e07f)), closes [#135](https://github.com/tensorplex-labs/dojo/issues/135) [#174](https://github.com/tensorplex-labs/dojo/issues/174)
+* remove language commit from main ([#200](https://github.com/tensorplex-labs/dojo/issues/200)) ([58422cf](https://github.com/tensorplex-labs/dojo/commit/58422cffb35332ccb3a7ee0b154518dbb91282ad)), closes [#185](https://github.com/tensorplex-labs/dojo/issues/185) [#185](https://github.com/tensorplex-labs/dojo/issues/185) [#198](https://github.com/tensorplex-labs/dojo/issues/198)
+
+### Bug Fixes
+
+* bittensor-drand tag from repo ([cbcf97b](https://github.com/tensorplex-labs/dojo/commit/cbcf97be41e90c25f1735bf9d79736258c6fb08d))
+* diable setting ttl ([45ba706](https://github.com/tensorplex-labs/dojo/commit/45ba706792c341f0790ac4e880b08cd651c13a98))
+* drand-package-miner-incentives ([#192](https://github.com/tensorplex-labs/dojo/issues/192)) ([065209b](https://github.com/tensorplex-labs/dojo/commit/065209be3a1f2c1461520c567c253b8198796e33)), closes [#185](https://github.com/tensorplex-labs/dojo/issues/185) [#185](https://github.com/tensorplex-labs/dojo/issues/185)
+* fixed for empty string before sanatization ([#214](https://github.com/tensorplex-labs/dojo/issues/214)) ([025403a](https://github.com/tensorplex-labs/dojo/commit/025403ac54105e704ef4dcd600d9450c66c5c323))
+* fixed on sending score result instead list of score result per completion ([#211](https://github.com/tensorplex-labs/dojo/issues/211)) ([c6a0a9f](https://github.com/tensorplex-labs/dojo/commit/c6a0a9fadb6aae8a1812941445cbbb3eca3ccaf9))
+* fixed redis data not persist after docker compose down ([e9c2658](https://github.com/tensorplex-labs/dojo/commit/e9c2658e0905199e6d32cedc905968fed30b6eb6))
+* fixed some logical error ([#213](https://github.com/tensorplex-labs/dojo/issues/213)) ([359d58d](https://github.com/tensorplex-labs/dojo/commit/359d58db49d50183800ad7a2f0968fb19cae5e7f))
+* handled edge cases in HFL scoring ([#204](https://github.com/tensorplex-labs/dojo/issues/204)) ([9308bc8](https://github.com/tensorplex-labs/dojo/commit/9308bc82d5cf422cd1cd2771c8431f8c155e810b))
+* index=True ([0c83b32](https://github.com/tensorplex-labs/dojo/commit/0c83b327c201d3b5ab6822646f10dcee6d3c59f8))
+* redis-om index ([dfc9669](https://github.com/tensorplex-labs/dojo/commit/dfc9669278685bb1fc0d2f9cd342df92761e8afe))
+* removed extra restart policy in kami ([655450f](https://github.com/tensorplex-labs/dojo/commit/655450f458c4213c36632552b9158312071f40b4))
+* store correct uids ([4087520](https://github.com/tensorplex-labs/dojo/commit/4087520adf357c195494b36a8b1c2227637dd603))
+* task creation failure ([#210](https://github.com/tensorplex-labs/dojo/issues/210)) ([3c904ff](https://github.com/tensorplex-labs/dojo/commit/3c904ff6c34adf2f076eba78e620159517fcdaf4))
+
 ## [1.13.3](https://github.com/tensorplex-labs/dojo/compare/v1.13.2...v1.13.3) (2025-07-08)
 
 ### Bug Fixes
