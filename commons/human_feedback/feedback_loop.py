@@ -75,57 +75,58 @@ class FeedbackLoop:
         result: (
             Tuple[SyntheticTaskSynapse, str] | None
         ) = await self.select_validator_task()
-        if result:
-            selected_task, selected_completion_id = result
-            text_criteria_task = await create_text_feedback_task(
-                selected_task, selected_completion_id
+        if not result:
+            logger.info("No validator task selected, skipping")
+            return
+
+        selected_task, selected_completion_id = result
+        text_criteria_task = await create_text_feedback_task(
+            selected_task, selected_completion_id
+        )
+        if not text_criteria_task:
+            logger.error(
+                f"Failed to generate text criteria task for task {selected_task.task_id}"
             )
-            if not text_criteria_task:
-                logger.error(
-                    f"Failed to generate text criteria task for task {selected_task.task_id}"
-                )
-                return
+            return
 
-            obfuscated_model_to_model, selected_task.completion_responses = (
-                validator.obfuscate_model_names(
-                    selected_task.completion_responses or []
-                )
+        obfuscated_model_to_model, selected_task.completion_responses = (
+            validator.obfuscate_model_names(selected_task.completion_responses or [])
+        )
+
+        miner_responses = await send_hfl_request(
+            synapse=text_criteria_task,
+            task_type=TaskTypeEnum.TEXT_FEEDBACK,
+            axons=validator._retrieve_axons(active_miner_uids),
+        )
+
+        if not miner_responses:
+            logger.error(
+                f"Failed to send HFL request for task {text_criteria_task.task_id}"
             )
+            return
 
-            miner_responses = await send_hfl_request(
-                synapse=text_criteria_task,
-                task_type=TaskTypeEnum.TEXT_FEEDBACK,
-                axons=validator._retrieve_axons(active_miner_uids),
+        # deobfuscate model names
+        text_criteria_task.completion_responses = validator.deobfuscate_model_names(
+            text_criteria_task.completion_responses or [],
+            obfuscated_model_to_model,
+        )
+
+        validator_task, hfl_state = await ORM.save_tf_task(
+            validator_task=text_criteria_task,
+            miner_responses=miner_responses,
+            previous_task_id=selected_task.task_id,
+            selected_completion_id=selected_completion_id,
+        )
+
+        if not validator_task:
+            logger.error(
+                f"Failed to save text criteria task for task {text_criteria_task.task_id}"
             )
+            return
 
-            if not miner_responses:
-                logger.error(
-                    f"Failed to send HFL request for task {text_criteria_task.task_id}"
-                )
-                return
-
-            # deobfuscate model names
-            text_criteria_task.completion_responses = validator.deobfuscate_model_names(
-                text_criteria_task.completion_responses or [],
-                obfuscated_model_to_model,
-            )
-
-            validator_task, hfl_state = await ORM.save_tf_task(
-                validator_task=text_criteria_task,
-                miner_responses=miner_responses,
-                previous_task_id=selected_task.task_id,
-                selected_completion_id=selected_completion_id,
-            )
-
-            if not validator_task:
-                logger.error(
-                    f"Failed to save text criteria task for task {text_criteria_task.task_id}"
-                )
-                return
-
-            logger.info(
-                f"Started HFL with state ID: {hfl_state.id}, original task: {selected_task.task_id}, TF task: {validator_task.id}"
-            )
+        logger.info(
+            f"Started HFL with state ID: {hfl_state.id}, original task: {selected_task.task_id}, TF task: {validator_task.id}"
+        )
 
     async def select_validator_task(self) -> Tuple[SyntheticTaskSynapse, str] | None:
         """
@@ -141,7 +142,7 @@ class FeedbackLoop:
             Tuple[SyntheticTaskSynapse, str] | None: A tuple of (validator task, completion_id) if criteria are met;
         """
         expire_from, expire_to = get_time_window_for_tasks(
-            hours_ago_start=1, hours_ago_end=0
+            hours_ago_start=3, hours_ago_end=0, buffer_minutes=10
         )
 
         eligible_tasks = []
@@ -155,6 +156,7 @@ class FeedbackLoop:
                 has_next_task=False,
                 task_types=[TaskTypeEnum.CODE_GENERATION],
             ):
+                logger.info(f"Processing tasks {len(tasks_batch)}")
                 for dendrite_response in tasks_batch:
                     eligible_task = await self._evaluate_task(dendrite_response)
                     if eligible_task:
