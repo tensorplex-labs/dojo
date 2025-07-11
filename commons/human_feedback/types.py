@@ -41,7 +41,7 @@ class HFLConstants(Enum):
 class BaseHFLInterval(IntEnum):
     """Base timing constants for Human Feedback Loop"""
 
-    TF_CREATE_INTERVAL = 3600  # 1 hour for initial TF task creation
+    TF_CREATE_INTERVAL = 1800  # 30 minutes for initial TF task creation
     TF_UPDATE_INTERVAL = 900  # 15 minutes for Text Feedback updates
     SF_CREATE_INTERVAL = 800  # 13 minutes for Score Feedback task creation
     SF_UPDATE_INTERVAL = 700  # 11 minutes for Score Feedback updates
