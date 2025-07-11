@@ -1,3 +1,9 @@
+## [1.14.1](https://github.com/tensorplex-labs/dojo/compare/v1.14.0...v1.14.1) (2025-07-11)
+
+### Bug Fixes
+
+* fixed time interval in selecting validator task in tf creation ([#222](https://github.com/tensorplex-labs/dojo/issues/222)) ([ac9f946](https://github.com/tensorplex-labs/dojo/commit/ac9f946a3d5c267ddfdd9306026413027f0ae9a2))
+
 ## [1.14.0](https://github.com/tensorplex-labs/dojo/compare/v1.13.3...v1.14.0) (2025-07-10)
 
 ### Features
