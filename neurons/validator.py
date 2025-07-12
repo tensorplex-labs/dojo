@@ -148,21 +148,32 @@ class Validator(aobject):
         scores: list[list[CompletionScore]],
     ):
         """Send scores that taostats, CLI, etc. cannot see for miners who participated."""
-        logger.debug(f"Input hotkeys order: {hotkeys}")
-        logger.debug(
-            f"Input scores count per hotkey: {[len(score_list) for score_list in scores]}"
-        )
+
         miners_uids = await self.get_active_miner_uids()
         metagraph_axons = self._retrieve_axons(miners_uids)
         logger.debug(f"Metagraph axons: {metagraph_axons=}")
 
-        axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]
+        # ✅ FIX: Create hotkey-to-axon mapping to preserve order
+        hotkey_to_axon = {axon.hotkey: axon for axon in metagraph_axons}
+
+        # ✅ FIX: Build axons array in the same order as hotkeys
+        axons = []
+        for hotkey in hotkeys:
+            if hotkey in hotkey_to_axon:
+                axons.append(hotkey_to_axon[hotkey])
+            else:
+                logger.warning(f"Axon not found for hotkey {hotkey}")
+
         if not axons:
             logger.warning("No axons to send scores back to... skipping")
             return
         logger.info(f"Sending back scores to miners for task id: {validator_task_id}")
+        logger.info(f"Input hotkeys order: {hotkeys}")
+        logger.info(
+            f"Input scores count per hotkey: {[len(score_list) for score_list in scores]}"
+        )
 
-        # DEBUG
+        # DEBUG: Verify the fix worked
         filtered_axon_hotkeys = [axon.hotkey for axon in axons]
         logger.info(f"🔍 Filtered axons order: {filtered_axon_hotkeys}")
 
@@ -171,7 +182,7 @@ class Validator(aobject):
         logger.info(f"🔍 Hotkeys order matches axons order: {hotkeys_match_axons}")
 
         if not hotkeys_match_axons:
-            logger.error("❌ ORDER MISMATCH DETECTED!")
+            logger.error("❌ ORDER MISMATCH STILL EXISTS!")
             logger.error(f"❌ Expected axons order: {hotkeys}")
             logger.error(f"❌ Actual axons order:   {filtered_axon_hotkeys}")
 
@@ -180,6 +191,14 @@ class Validator(aobject):
                 logger.error(
                     f"❌ Position {i}: Expected {expected_hotkey}, but sending to {actual_axon.hotkey}"
                 )
+        else:
+            logger.success("✅ ORDER MATCH CONFIRMED - Fix working correctly!")
+
+        # ✅ FIX: Add verification logging
+        for i, (axon, score_array) in enumerate(zip(axons, scores)):
+            logger.debug(
+                f"✅ Sending to miner {i}: {axon.hotkey} with {len(score_array)} scores"
+            )
 
         urls = [f"http://{axon.ip}:{axon.port}" for axon in axons]
         models = [
