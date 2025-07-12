@@ -153,64 +153,94 @@ class Validator(aobject):
         metagraph_axons = self._retrieve_axons(miners_uids)
         logger.debug(f"Metagraph axons: {metagraph_axons=}")
 
-        # ✅ FIX: Create hotkey-to-axon mapping to preserve order
-        hotkey_to_axon = {axon.hotkey: axon for axon in metagraph_axons}
+        # FIX: Create hotkey-to-axon mapping to preserve order
+        hotkey_to_axon = {
+            axon.hotkey: axon for axon in metagraph_axons if axon.hotkey in hotkeys
+        }
 
-        # ✅ FIX: Build axons array in the same order as hotkeys
-        axons = []
-        for hotkey in hotkeys:
+        # TODO: remove this
+        original_hotkey_to_scores = {hotkeys[i]: scores[i] for i in range(len(hotkeys))}
+
+        # FIX: Filter both axons and scores together to maintain 1:1 correspondence
+        filtered_axons = []
+        filtered_scores = []
+
+        for i, hotkey in enumerate(hotkeys):
             if hotkey in hotkey_to_axon:
-                axons.append(hotkey_to_axon[hotkey])
+                filtered_axons.append(hotkey_to_axon[hotkey])
+                filtered_scores.append(scores[i])
             else:
                 logger.warning(f"Axon not found for hotkey {hotkey}")
 
-        if not axons:
+        if not filtered_axons:
             logger.warning("No axons to send scores back to... skipping")
             return
+
+        # TODO: remove this
         logger.info(f"Sending back scores to miners for task id: {validator_task_id}")
         logger.info(f"Input hotkeys order: {hotkeys}")
         logger.info(
-            f"Input scores count per hotkey: {[len(score_list) for score_list in scores]}"
+            f"Filtered {len(filtered_axons)} miners from {len(hotkeys)} participants"
         )
 
-        # DEBUG: Verify the fix worked
-        filtered_axon_hotkeys = [axon.hotkey for axon in axons]
-        logger.info(f"🔍 Filtered axons order: {filtered_axon_hotkeys}")
+        # Verify the arrays have matching lengths
+        if len(filtered_axons) != len(filtered_scores):
+            logger.error(
+                f"❌ CRITICAL ERROR: Axons ({len(filtered_axons)}) and scores ({len(filtered_scores)}) arrays have mismatched lengths!"
+            )
+            logger.error(
+                "This would cause miners to receive wrong scores. Aborting score sending."
+            )
+            return
 
-        # DEBUG: Check if order matches
-        hotkeys_match_axons = hotkeys == filtered_axon_hotkeys
-        logger.info(f"🔍 Hotkeys order matches axons order: {hotkeys_match_axons}")
+        # TODO: remove this
+        final_hotkey_to_scores = {
+            filtered_axons[i].hotkey: filtered_scores[i]
+            for i in range(len(filtered_axons))
+        }
 
-        if not hotkeys_match_axons:
-            logger.error("❌ ORDER MISMATCH STILL EXISTS!")
-            logger.error(f"❌ Expected axons order: {hotkeys}")
-            logger.error(f"❌ Actual axons order:   {filtered_axon_hotkeys}")
+        # TODO: remove this
+        mapping_errors = []
+        for hotkey, final_scores in final_hotkey_to_scores.items():
+            if hotkey in original_hotkey_to_scores:
+                original_scores = original_hotkey_to_scores[hotkey]
+                if final_scores != original_scores:
+                    mapping_errors.append(
+                        f"Hotkey {hotkey}: expected {len(original_scores)} scores, got {len(final_scores)}"
+                    )
+            else:
+                mapping_errors.append(f"Hotkey {hotkey} not found in original mapping")
 
-            # Show exactly what each miner will receive
-            for i, (expected_hotkey, actual_axon) in enumerate(zip(hotkeys, axons)):
-                logger.error(
-                    f"❌ Position {i}: Expected {expected_hotkey}, but sending to {actual_axon.hotkey}"
-                )
+        if mapping_errors:
+            logger.error(
+                "❌ CRITICAL ERROR: Hotkey-to-score mapping corruption detected!"
+            )
+            for error in mapping_errors:
+                logger.error(f"  - {error}")
+            logger.error(
+                "This would cause miners to receive wrong scores. Aborting score sending."
+            )
+            return
         else:
-            logger.success("✅ ORDER MATCH CONFIRMED - Fix working correctly!")
+            logger.debug("✅ Hotkey-to-score mapping verification passed")
 
-        # ✅ FIX: Add verification logging
-        for i, (axon, score_array) in enumerate(zip(axons, scores)):
+        # Log what we're sending to each miner
+        for i, (axon, score_array) in enumerate(zip(filtered_axons, filtered_scores)):
             logger.debug(
                 f"✅ Sending to miner {i}: {axon.hotkey} with {len(score_array)} scores"
             )
 
-        urls = [f"http://{axon.ip}:{axon.port}" for axon in axons]
+        urls = [f"http://{axon.ip}:{axon.port}" for axon in filtered_axons]
         models = [
             ScoreResultSynapse(validator_task_id=validator_task_id, scores=miner_scores)
-            for miner_scores in scores
+            for miner_scores in filtered_scores
         ]
 
         responses = await self.client.batch_send(
             urls=urls, models=models, semaphore=self._semaphore_scores, timeout_sec=30
         )
 
-        for response, axon in zip(responses, axons):
+        for response, axon in zip(responses, filtered_axons):
             if (
                 response.client_response
                 and response.client_response.status == HTTPStatus.OK
