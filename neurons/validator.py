@@ -1851,8 +1851,8 @@ class Validator(aobject):
             torch.FloatTensor: Combined score tensor
         """
         # TODO: shift these to a config
-        synthetic_score_weight = 0.98
-        hfl_score_weight = 0.02
+        synthetic_score_weight = 0.95
+        hfl_score_weight = 0.05
         logger.info(
             f"Synthetic score: {self.synthetic_score.shape=} {self.synthetic_score=} {len(self.synthetic_score.tolist())=}"
         )

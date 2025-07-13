@@ -45,6 +45,18 @@ def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
     # Dictionary to store ICC scores - initialize all raters to 0.0
     hotkey_to_icc2 = {rater: 0.0 for rater in raters}
 
+    # Pre-compute all mean columns at once to avoid fragmentation
+    mean_columns = {}
+    for rater in valid_raters:
+        other_raters = [r for r in valid_raters if r != rater]
+        mean_key = f"Mean_excluding_{rater}"
+        mean_columns[mean_key] = df[other_raters].mean(axis=1)
+
+    # Add all mean columns at once using pd.concat
+    if mean_columns:
+        mean_df = pd.DataFrame(mean_columns)
+        df = pd.concat([df, mean_df], axis=1)
+
     # Loop through each valid rater only
     rater_key = "Rater"
     subject_key = "Subject"
@@ -52,13 +64,8 @@ def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
     for rater in valid_raters:
         # No need to check validity - we know they're valid!
 
-        # Calculate mean of all other raters (excluding the current rater)
-        # we do this to ensure that the current rater is not compared to itself
-        # NOTE: we only use valid raters to calculate the mean
-        other_raters = [r for r in valid_raters if r != rater]
-
+        # Mean column already computed above
         mean_key = f"Mean_excluding_{rater}"
-        df[mean_key] = df[other_raters].mean(axis=1)
 
         # Subset data for the current rater and the mean of others
         pair_df = df[[rater, mean_key]]
