@@ -181,7 +181,7 @@ async def fetch_miner_feedback_for_task(
 
         logger.info(f"original result from miners........ {results}")
 
-        sanitized_result = await sanitize_text_feedback(results, task.prompt)
+        sanitized_result = await sanitize_text_feedback(results)
         # Update the database with fresh results
         success = await ORM.update_miner_task_results(
             miner_hotkey=miner_response.hotkey,
@@ -361,9 +361,7 @@ async def get_task_synapse_for_retry(task_id: str) -> SyntheticTaskSynapse | Non
         return None
 
 
-async def sanitize_text_feedback(
-    results: list[TaskResult], question_prompt: str
-) -> list[TaskResult]:
+async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
     """
     Sanitize text feedback for each TaskResult.
     Replace invalid text feedback with "invalid" instead of removing.
@@ -418,9 +416,7 @@ async def sanitize_text_feedback(
                     continue
 
                 # Apply sanitization checks
-                sanitization_result = await sanitize_miner_feedback(
-                    text_feedback, question_prompt
-                )
+                sanitization_result = await sanitize_miner_feedback(text_feedback)
                 if sanitization_result.is_safe:
                     # Keep original text feedback if valid
                     sanitized_criterion = criterion.copy()
