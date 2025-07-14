@@ -415,8 +415,20 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
                     sanitized_criteria.append(sanitized_criterion)
                     continue
 
+                # retrieve question prompt
+                # @dev - this is a terribly inefficient way to get the question prompt.
+                original_task = await ORM.get_validator_task_by_id(task_result.id)
+                if not original_task:
+                    logger.warning(
+                        f"Could not find original task for task {task_result.task_id}"
+                    )
+                    continue
+                question_prompt = original_task.prompt
+
                 # Apply sanitization checks
-                sanitization_result = await sanitize_miner_feedback(text_feedback)
+                sanitization_result = await sanitize_miner_feedback(
+                    text_feedback, question_prompt
+                )
                 if sanitization_result.is_safe:
                     # Keep original text feedback if valid
                     sanitized_criterion = criterion.copy()

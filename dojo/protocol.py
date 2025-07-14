@@ -13,6 +13,7 @@ class SanitizationFailureReason(StrEnum):
     BLACKLISTED_CHARS = "blacklisted_chars"
     FLAGGED_BY_LLM = "flagged_by_llm"
     VALID = "valid"
+    LOW_QUALITY = "low_quality"
 
 
 class TaskTypeEnum(StrEnum):
