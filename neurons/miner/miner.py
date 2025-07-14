@@ -11,8 +11,10 @@ from fastapi import HTTPException
 from kami import AxonInfo, KamiClient, ServeAxonPayload, SubnetMetagraph
 from loguru import logger
 from messaging import HOTKEY_HEADER, PydanticModel, Request, Server
-from redis_om.model import Migrator
+from redis_om.model import Migrator, NotFoundError
 
+from commons.api_settings import RedisSettings
+from commons.cache import build_redis_url
 from commons.objects import ObjectManager
 from commons.utils import aget_effective_stake, aobject
 from commons.worker_api.dojo import DojoAPI
@@ -27,6 +29,8 @@ from dojo.protocol import (
 from dojo.utils import get_config
 
 from .types import ServedRequest
+
+redis_url = build_redis_url(RedisSettings(), is_ssl=False)
 
 
 def optimize_payload_for_transport(
@@ -43,7 +47,7 @@ async def check_redis_connection():
     try:
         from redis_om import get_redis_connection
 
-        redis_conn = get_redis_connection()
+        redis_conn = get_redis_connection(url=redis_url)
         connection_info = redis_conn.connection_pool.connection_kwargs
         port = connection_info.get("port", "unknown")
         result = redis_conn.ping()
@@ -57,23 +61,37 @@ async def check_redis_connection():
 
 class Miner(aobject):
     async def __init__(self):
-        self.config = ObjectManager.get_config()
-        logger.info(self.config)
+        try:
+            self.config = ObjectManager.get_config()
+            logger.info(self.config)
 
-        self.kami: KamiClient = KamiClient(port=self.config.kami.port)
-        logger.info(f"Connecting to kami: {self.kami.url}")
+            self.kami: KamiClient = KamiClient(port=self.config.kami.port)
+            logger.info(f"Connecting to kami: {self.kami.url}")
 
-        logger.info("Setting up bittensor objects....")
-        self.server = Server(kami=self.kami)
-        self.keyringpair = await self.kami.get_keyringpair()
-        await self.register_synapse_handlers()
-        await self.init_metagraphs()
-        logger.info(
-            f"Miner hotkey: {self.keyringpair.hotkey} uid: {self.subnet_metagraph.hotkeys.index(self.keyringpair.hotkey)}"
-        )
-        if not await check_redis_connection():
-            raise ConnectionError()
-        Migrator().run()
+            logger.info("Setting up bittensor objects....")
+            self.server = Server(kami=self.kami)
+            self.keyringpair = await self.kami.get_keyringpair()
+            await self.register_synapse_handlers()
+            await self.init_metagraphs()
+            logger.info(
+                f"Miner hotkey: {self.keyringpair.hotkey} uid: {self.subnet_metagraph.hotkeys.index(self.keyringpair.hotkey)}"
+            )
+            if not await check_redis_connection():
+                raise ConnectionError()
+            logger.info("Running redis migrations...")
+
+            from redis_om import get_redis_connection
+
+            ServedRequest.Meta.database = get_redis_connection(
+                url=redis_url, decode_responses=True
+            )
+            Migrator().run()
+            logger.info("Redis migrations completed")
+
+        except Exception as e:
+            logger.error(f"Error initializing miner: {e}")
+            logger.error(traceback.format_exc())
+            raise
         # log all incoming requests
 
     async def register_synapse_handlers(self):
@@ -197,28 +215,40 @@ class Miner(aobject):
                 logger.error(
                     f"Failed to serve axon for miner, exiting with error message: {serve_success.get('message')}"
                 )
-                exit()
+                exit(1)
         else:
             logger.info("Axon already served, no need to serve again.")
 
         logger.info(f"Miner starting at block: {str(self.block)}")
-
+        failure_count = 0
         # This loop maintains the miner's operations until intentionally stopped.
         try:
             while True:
-                # Sync metagraph and potentially set weights.
-                await self.sync()
-                await asyncio.sleep(12)
+                try:
+                    # Sync metagraph and potentially set weights.
+                    logger.info("Starting sync cycle...")
+                    await self.sync()
+                    failure_count = 0  # Reset on success
+                    logger.info("Sync completed successfully")
+                    await asyncio.sleep(12)
 
-        # If someone intentionally stops the miner, it'll safely terminate operations.
+                except Exception:
+                    failure_count += 1
+                    if failure_count > 5:
+                        logger.error(
+                            "Failed to sync metagraph 5 times consecutively, exiting..."
+                        )
+                        exit(1)
+                    logger.error(traceback.format_exc())
+                    logger.info("Waiting for 12 seconds before retrying...")
+                    await asyncio.sleep(12)
         except KeyboardInterrupt:
             logger.success("Miner killed by keyboard interrupt.")
             await self._cleanup()
-            exit()
-
-        # In case of unforeseen errors, the miner will log the error and continue operations.
+            exit(0)
         except Exception:
             logger.error(traceback.format_exc())
+            exit(1)
         finally:
             await self._cleanup()
 
@@ -329,6 +359,12 @@ class Miner(aobject):
             synapse.task_results = [
                 TaskResult.model_validate(result) for result in task_results
             ]
+        except NotFoundError:
+            logger.error(
+                f"ServedRequest not found for {synapse.validator_task_id=}, and {caller_hotkey=}"
+            )
+            synapse.task_results = []
+            return synapse
         except Exception as e:
             logger.error(f"Error while handling {synapse_name}: {e}")
             traceback.print_exc()

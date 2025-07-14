@@ -148,25 +148,53 @@ class Validator(aobject):
         scores: list[list[CompletionScore]],
     ):
         """Send scores that taostats, CLI, etc. cannot see for miners who participated."""
+
         miners_uids = await self.get_active_miner_uids()
         metagraph_axons = self._retrieve_axons(miners_uids)
-        axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]
-        if not axons:
+        # Create hotkey-to-axon mapping to preserve order
+        hotkey_to_axon = {
+            axon.hotkey: axon for axon in metagraph_axons if axon.hotkey in hotkeys
+        }
+
+        # Filter both axons and scores together to maintain 1:1 correspondence
+        filtered_axons = []
+        filtered_scores = []
+
+        # NOTE: we do this to preserve the order of the scores and axons, since metagraph can change
+        for i, hotkey in enumerate(hotkeys):
+            if hotkey in hotkey_to_axon:
+                filtered_axons.append(hotkey_to_axon[hotkey])
+                filtered_scores.append(scores[i])
+            else:
+                logger.warning(f"Axon not found for hotkey {hotkey}")
+
+        if not filtered_axons:
             logger.warning("No axons to send scores back to... skipping")
             return
+
         logger.info(f"Sending back scores to miners for task id: {validator_task_id}")
 
-        urls = [f"http://{axon.ip}:{axon.port}" for axon in axons]
+        # Verify the arrays have matching lengths
+        if len(filtered_axons) != len(filtered_scores):
+            logger.error(
+                f"Axons ({len(filtered_axons)}) and scores ({len(filtered_scores)}) arrays have mismatched lengths!"
+            )
+            logger.error(
+                "This would cause miners to receive wrong scores. Aborting score sending."
+            )
+            return
+
+        urls = [f"http://{axon.ip}:{axon.port}" for axon in filtered_axons]
         models = [
             ScoreResultSynapse(validator_task_id=validator_task_id, scores=miner_scores)
-            for miner_scores in scores
+            for miner_scores in filtered_scores
         ]
 
         responses = await self.client.batch_send(
             urls=urls, models=models, semaphore=self._semaphore_scores, timeout_sec=30
         )
 
-        for response, axon in zip(responses, axons):
+        for response, axon in zip(responses, filtered_axons):
             if (
                 response.client_response
                 and response.client_response.status == HTTPStatus.OK
@@ -922,7 +950,6 @@ class Validator(aobject):
                                     hotkey_to_sf_score,
                                 ) = await hfl.score_hfl_tasks(sf_task)
 
-                                # TODO: remove this
                                 logger.info(
                                     f"Scored HFL task {sf_task.id}, hotkey to weighted score: {hotkey_to_weighted_score}"
                                 )
@@ -1216,8 +1243,6 @@ class Validator(aobject):
             subset_size: Optional size to limit number of miners queried
         """
 
-        # TODO: remove this
-        logger.info(f"ground_truth: {ground_truth}")
         if not synapse.completion_responses:
             logger.error("No completion responses to send")
             return
@@ -1234,8 +1259,7 @@ class Validator(aobject):
         )
 
         miner_responses = await self.send_synthetic_task(synapse, axons)
-        # TODO: remove this
-        logger.info(f"miner_responses: {miner_responses}")
+
         self._log_request_failures(miner_responses, axons)
 
         valid_miner_responses: List[SyntheticTaskSynapse] = []
@@ -1285,8 +1309,6 @@ class Validator(aobject):
             return
 
         logger.debug("Attempting to saving dendrite response")
-        # TODO: remove this
-        logger.info(f"valid_miner_responses: {valid_miner_responses}")
         validator_task = await ORM.save_task(
             validator_task=synapse,
             miner_responses=valid_miner_responses,
@@ -1460,7 +1482,6 @@ class Validator(aobject):
         If no task results, return None. Else append it to miner completion response.
         """
         # Validate miner response
-        # TODO please come this againnnnnnn
         if not miner_response.miner_hotkey:
             raise InvalidMinerResponse(
                 f"""Missing hotkey, task_id:
@@ -1534,7 +1555,6 @@ class Validator(aobject):
                 return []
 
             url = f"http://{miner_axon.ip}:{miner_axon.port}"
-            # TODO: change to validator task id, it's not validator's job to know dojo task id
             model = TaskResultSynapse(validator_task_id=validator_task_id)
             response = await self.client.send(
                 url,
@@ -1779,9 +1799,6 @@ class Validator(aobject):
                 )
                 continue
 
-            # FIXME: remove this
-            if int(uid) == 15:
-                continue
             miner_axons.append(axon)
 
         return miner_axons
@@ -1834,8 +1851,8 @@ class Validator(aobject):
             torch.FloatTensor: Combined score tensor
         """
         # TODO: shift these to a config
-        synthetic_score_weight = 0.5
-        hfl_score_weight = 0.5
+        synthetic_score_weight = 0.95
+        hfl_score_weight = 0.05
         logger.info(
             f"Synthetic score: {self.synthetic_score.shape=} {self.synthetic_score=} {len(self.synthetic_score.tolist())=}"
         )
@@ -1843,7 +1860,6 @@ class Validator(aobject):
             f"HFL scores: {self.hfl_scores.shape=} {self.hfl_scores=} {len(self.hfl_scores.tolist())=}"
         )
         async with self._scores_alock:
-            # TODO: assignment of self.hfl_score
             assert (
                 self.synthetic_score.shape == self.hfl_scores.shape
             ), "Scores and HFL scores must be the same shape"

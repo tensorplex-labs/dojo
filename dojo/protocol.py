@@ -7,8 +7,11 @@ from strenum import StrEnum
 from commons.utils import get_epoch_time, get_new_uuid
 
 
-class SanitizedResultEnum(StrEnum):
-    INVALID = "invalid"
+class SanitizationFailureReason(StrEnum):
+    INVALID_LENGTH = "invalid_length"
+    BLACKLISTED_WORDS = "blacklisted_words"
+    BLACKLISTED_CHARS = "blacklisted_chars"
+    FLAGGED_BY_LLM = "flagged_by_llm"
     VALID = "valid"
 
 

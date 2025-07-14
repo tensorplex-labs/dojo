@@ -12,6 +12,8 @@ from langfuse.decorators import langfuse_context, observe
 from loguru import logger
 from openai import AsyncOpenAI
 
+from dojo.protocol import SanitizationFailureReason
+
 from .types import SanitizationResult
 
 # CONSTANT VARS
@@ -34,7 +36,11 @@ async def sanitize_miner_feedback(miner_feedback: str) -> SanitizationResult:
     # 1. check for length
     if len(miner_feedback) > MAX_FEEDBACK_LENGTH:
         logger.error(f"miner feedback is too long: {len(miner_feedback)}")
-        return SanitizationResult(is_safe=False, sanitized_feedback="")
+        return SanitizationResult(
+            is_safe=False,
+            sanitized_feedback="",
+            reason=SanitizationFailureReason.INVALID_LENGTH,
+        )
 
     # 2. screen for blacklisted terms
     BLACKLISTED_WORDS = (
@@ -42,7 +48,11 @@ async def sanitize_miner_feedback(miner_feedback: str) -> SanitizationResult:
     )
     if re.search(BLACKLISTED_WORDS, miner_feedback, re.IGNORECASE):
         logger.error("miner feedback contains blacklisted words")
-        return SanitizationResult(is_safe=False, sanitized_feedback="")
+        return SanitizationResult(
+            is_safe=False,
+            sanitized_feedback="",
+            reason=SanitizationFailureReason.BLACKLISTED_WORDS,
+        )
 
     # 3. remove blacklisted punctuation
     BLACKLISTED_CHARS = r"[<>=/;`\'\"{}()#\[\]]"
@@ -52,7 +62,11 @@ async def sanitize_miner_feedback(miner_feedback: str) -> SanitizationResult:
     if await _moderate_with_llm(sanitized_feedback):
         return SanitizationResult(is_safe=True, sanitized_feedback=sanitized_feedback)
     else:
-        return SanitizationResult(is_safe=False, sanitized_feedback="")
+        return SanitizationResult(
+            is_safe=False,
+            sanitized_feedback="",
+            reason=SanitizationFailureReason.FLAGGED_BY_LLM,
+        )
 
 
 @observe(as_type="generation", capture_input=True, capture_output=True)

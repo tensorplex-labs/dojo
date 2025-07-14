@@ -34,15 +34,6 @@ if [ "$1" = 'miner' ]; then
         EXTRA_ARGS="${EXTRA_ARGS} --simulation_bad_miner"
     fi
 
-    # FIXME: remove ignore_min_stake flag before release
-    # FIXME: remove ignore_min_stake flag before release
-    # FIXME: remove ignore_min_stake flag before release
-    # FIXME: remove ignore_min_stake flag before release
-    # FIXME: remove ignore_min_stake flag before release
-    # FIXME: remove ignore_min_stake flag before release
-    # FIXME: remove ignore_min_stake flag before release
-    # FIXME: remove ignore_min_stake flag before release
-    # FIXME: remove ignore_min_stake flag before release
     python main_miner.py \
         --netuid ${NETUID} \
         --subtensor.network ${SUBTENSOR_NETWORK} \
@@ -54,7 +45,6 @@ if [ "$1" = 'miner' ]; then
         --neuron.type miner \
         --kami.host ${KAMI_HOST} \
         --kami.port ${KAMI_PORT} \
-        --ignore_min_stake
     ${EXTRA_ARGS}
 fi
 

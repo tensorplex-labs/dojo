@@ -66,65 +66,67 @@ class FeedbackLoop:
         active_miner_uids = await validator.get_active_miner_uids(
             subset_size=HFLConstants.TARGET_NUM_MINERS.value
         )
-        # FIXME enable this for mainnet
-        # if len(active_miner_uids) <= HFLConstants.TARGET_NUM_MINERS.value:
-        #     logger.warning(
-        #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-        #     )
-        #     return
-
-        result = await self.select_validator_task()
-        if result:
-            selected_task, selected_completion_id = result
-            text_criteria_task = await create_text_feedback_task(
-                selected_task, selected_completion_id
+        if len(active_miner_uids) <= 0:
+            logger.warning(
+                f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
             )
-            if not text_criteria_task:
-                logger.error(
-                    f"Failed to generate text criteria task for task {selected_task.task_id}"
-                )
-                return
+            return
 
-            obfuscated_model_to_model, selected_task.completion_responses = (
-                validator.obfuscate_model_names(
-                    selected_task.completion_responses or []
-                )
+        result: (
+            Tuple[SyntheticTaskSynapse, str] | None
+        ) = await self.select_validator_task()
+        if not result:
+            logger.info("No validator task selected, skipping")
+            return
+
+        selected_task, selected_completion_id = result
+        text_criteria_task = await create_text_feedback_task(
+            selected_task, selected_completion_id
+        )
+        if not text_criteria_task:
+            logger.error(
+                f"Failed to generate text criteria task for task {selected_task.task_id}"
             )
+            return
 
-            miner_responses = await send_hfl_request(
-                synapse=text_criteria_task,
-                task_type=TaskTypeEnum.TEXT_FEEDBACK,
-                axons=validator._retrieve_axons(active_miner_uids),
+        obfuscated_model_to_model, selected_task.completion_responses = (
+            validator.obfuscate_model_names(selected_task.completion_responses or [])
+        )
+
+        miner_responses = await send_hfl_request(
+            synapse=text_criteria_task,
+            task_type=TaskTypeEnum.TEXT_FEEDBACK,
+            axons=validator._retrieve_axons(active_miner_uids),
+        )
+
+        if not miner_responses:
+            logger.error(
+                f"Failed to send HFL request for task {text_criteria_task.task_id}"
             )
+            return
 
-            if not miner_responses:
-                logger.error(
-                    f"Failed to send HFL request for task {text_criteria_task.task_id}"
-                )
-                return
+        # deobfuscate model names
+        text_criteria_task.completion_responses = validator.deobfuscate_model_names(
+            text_criteria_task.completion_responses or [],
+            obfuscated_model_to_model,
+        )
 
-            # deobfuscate model names
-            text_criteria_task.completion_responses = validator.deobfuscate_model_names(
-                text_criteria_task.completion_responses or [],
-                obfuscated_model_to_model,
+        validator_task, hfl_state = await ORM.save_tf_task(
+            validator_task=text_criteria_task,
+            miner_responses=miner_responses,
+            previous_task_id=selected_task.task_id,
+            selected_completion_id=selected_completion_id,
+        )
+
+        if not validator_task:
+            logger.error(
+                f"Failed to save text criteria task for task {text_criteria_task.task_id}"
             )
+            return
 
-            validator_task, hfl_state = await ORM.save_tf_task(
-                validator_task=text_criteria_task,
-                miner_responses=miner_responses,
-                previous_task_id=selected_task.task_id,
-                selected_completion_id=selected_completion_id,
-            )
-
-            if not validator_task:
-                logger.error(
-                    f"Failed to save text criteria task for task {text_criteria_task.task_id}"
-                )
-                return
-
-            logger.info(
-                f"Started HFL with state ID: {hfl_state.id}, original task: {selected_task.task_id}, TF task: {validator_task.id}"
-            )
+        logger.info(
+            f"Started HFL with state ID: {hfl_state.id}, original task: {selected_task.task_id}, TF task: {validator_task.id}"
+        )
 
     async def select_validator_task(self) -> Tuple[SyntheticTaskSynapse, str] | None:
         """
@@ -140,7 +142,7 @@ class FeedbackLoop:
             Tuple[SyntheticTaskSynapse, str] | None: A tuple of (validator task, completion_id) if criteria are met;
         """
         expire_from, expire_to = get_time_window_for_tasks(
-            hours_ago_start=1, hours_ago_end=0
+            hours_ago_start=3, hours_ago_end=0, buffer_minutes=10
         )
 
         eligible_tasks = []
@@ -154,6 +156,7 @@ class FeedbackLoop:
                 has_next_task=False,
                 task_types=[TaskTypeEnum.CODE_GENERATION],
             ):
+                logger.info(f"Processing tasks {len(tasks_batch)}")
                 for dendrite_response in tasks_batch:
                     eligible_task = await self._evaluate_task(dendrite_response)
                     if eligible_task:
@@ -272,7 +275,7 @@ class FeedbackLoop:
 
             # Set time window for expired tasks
             expire_from, expire_to = get_time_window_for_tasks(
-                hours_ago_start=2, hours_ago_end=0, buffer_minutes=10
+                hours_ago_start=2, hours_ago_end=0
             )
 
             logger.info(
@@ -500,10 +503,16 @@ class FeedbackLoop:
                 )
                 return
 
+            expire_from, expire_to = get_time_window_for_tasks(
+                hours_ago_start=2, hours_ago_end=0
+            )
+
             # Get tasks with TF_COMPLETED status in batches
             async for tf_tasks_batch, _ in ORM.get_TF_tasks_by_hfl_status(
                 status=HFLStatusEnum.TF_COMPLETED,
                 batch_size=10,
+                expire_from=expire_from,
+                expire_to=expire_to,
             ):
                 if not tf_tasks_batch:
                     continue
@@ -717,12 +726,11 @@ class FeedbackLoop:
                     active_miners = await validator.get_active_miner_uids(
                         subset_size=HFLConstants.TARGET_NUM_MINERS.value
                     )
-                    # FIXME enable this for mainnet
-                    # if len(active_miners) <= HFLConstants.TARGET_NUM_MINERS.value:
-                    #     logger.warning(
-                    #         f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
-                    #     )
-                    #     continue
+                    if len(active_miners) <= 0:
+                        logger.warning(
+                            f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
+                        )
+                        continue
 
                     (
                         obfuscated_model_to_model,
