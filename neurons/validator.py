@@ -148,25 +148,53 @@ class Validator(aobject):
         scores: list[list[CompletionScore]],
     ):
         """Send scores that taostats, CLI, etc. cannot see for miners who participated."""
+
         miners_uids = await self.get_active_miner_uids()
         metagraph_axons = self._retrieve_axons(miners_uids)
-        axons = [axon for axon in metagraph_axons if axon.hotkey in hotkeys]
-        if not axons:
+        # Create hotkey-to-axon mapping to preserve order
+        hotkey_to_axon = {
+            axon.hotkey: axon for axon in metagraph_axons if axon.hotkey in hotkeys
+        }
+
+        # Filter both axons and scores together to maintain 1:1 correspondence
+        filtered_axons = []
+        filtered_scores = []
+
+        # NOTE: we do this to preserve the order of the scores and axons, since metagraph can change
+        for i, hotkey in enumerate(hotkeys):
+            if hotkey in hotkey_to_axon:
+                filtered_axons.append(hotkey_to_axon[hotkey])
+                filtered_scores.append(scores[i])
+            else:
+                logger.warning(f"Axon not found for hotkey {hotkey}")
+
+        if not filtered_axons:
             logger.warning("No axons to send scores back to... skipping")
             return
+
         logger.info(f"Sending back scores to miners for task id: {validator_task_id}")
 
-        urls = [f"http://{axon.ip}:{axon.port}" for axon in axons]
+        # Verify the arrays have matching lengths
+        if len(filtered_axons) != len(filtered_scores):
+            logger.error(
+                f"Axons ({len(filtered_axons)}) and scores ({len(filtered_scores)}) arrays have mismatched lengths!"
+            )
+            logger.error(
+                "This would cause miners to receive wrong scores. Aborting score sending."
+            )
+            return
+
+        urls = [f"http://{axon.ip}:{axon.port}" for axon in filtered_axons]
         models = [
             ScoreResultSynapse(validator_task_id=validator_task_id, scores=miner_scores)
-            for miner_scores in scores
+            for miner_scores in filtered_scores
         ]
 
         responses = await self.client.batch_send(
             urls=urls, models=models, semaphore=self._semaphore_scores, timeout_sec=30
         )
 
-        for response, axon in zip(responses, axons):
+        for response, axon in zip(responses, filtered_axons):
             if (
                 response.client_response
                 and response.client_response.status == HTTPStatus.OK
@@ -1823,8 +1851,8 @@ class Validator(aobject):
             torch.FloatTensor: Combined score tensor
         """
         # TODO: shift these to a config
-        synthetic_score_weight = 0.98
-        hfl_score_weight = 0.02
+        synthetic_score_weight = 0.95
+        hfl_score_weight = 0.05
         logger.info(
             f"Synthetic score: {self.synthetic_score.shape=} {self.synthetic_score=} {len(self.synthetic_score.tolist())=}"
         )

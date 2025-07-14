@@ -1,3 +1,13 @@
+## [1.14.2](https://github.com/tensorplex-labs/dojo/compare/v1.14.1...v1.14.2) (2025-07-14)
+
+### Bug Fixes
+
+* fixed score result misalignment with miners hotkeys ([#224](https://github.com/tensorplex-labs/dojo/issues/224)) ([d862ed2](https://github.com/tensorplex-labs/dojo/commit/d862ed2493ee38d688493bb86318d29fa48a3e0f))
+
+### Performance Improvements
+
+* optimized icc scoring calculation for fragment warning ([969ba32](https://github.com/tensorplex-labs/dojo/commit/969ba32f089d9597f9ed3436a234fd3fceb5bee0))
+
 ## [1.14.1](https://github.com/tensorplex-labs/dojo/compare/v1.14.0...v1.14.1) (2025-07-11)
 
 ### Bug Fixes
