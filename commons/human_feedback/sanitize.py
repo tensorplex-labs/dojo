@@ -139,7 +139,6 @@ async def _check_feedback_quality(question: str, miner_feedback: str) -> bool:
             logger.warning("LLM response for quality check was empty.")
             return False
         result = FeedbackQuality.model_validate_json(content)
-        logger.info(f"@@@ Quality check response: {result.is_good}")
         return result.is_good
     except Exception as e:
         logger.error(f"Unexpected error checking feedback quality: {e}")
