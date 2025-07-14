@@ -1,3 +1,9 @@
+## [1.14.3](https://github.com/tensorplex-labs/dojo/compare/v1.14.2...v1.14.3) (2025-07-14)
+
+### Bug Fixes
+
+* use prompt from validator_task instead of task_result ([3eea514](https://github.com/tensorplex-labs/dojo/commit/3eea514fbf2d0064f1fe4475fbdfbf22c3189e89))
+
 ## [1.14.2](https://github.com/tensorplex-labs/dojo/compare/v1.14.1...v1.14.2) (2025-07-14)
 
 ### Bug Fixes
