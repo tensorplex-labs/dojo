@@ -181,7 +181,7 @@ async def fetch_miner_feedback_for_task(
 
         logger.info(f"original result from miners........ {results}")
 
-        sanitized_result = await sanitize_text_feedback(results)
+        sanitized_result = await sanitize_text_feedback(results, task.prompt)
         # Update the database with fresh results
         success = await ORM.update_miner_task_results(
             miner_hotkey=miner_response.hotkey,
@@ -361,7 +361,9 @@ async def get_task_synapse_for_retry(task_id: str) -> SyntheticTaskSynapse | Non
         return None
 
 
-async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
+async def sanitize_text_feedback(
+    results: list[TaskResult], question_prompt: str
+) -> list[TaskResult]:
     """
     Sanitize text feedback for each TaskResult.
     Replace invalid text feedback with "invalid" instead of removing.
@@ -417,13 +419,13 @@ async def sanitize_text_feedback(results: list[TaskResult]) -> list[TaskResult]:
 
                 # retrieve question prompt
                 # @dev - this is a terribly inefficient way to get the question prompt.
-                original_task = await ORM.get_validator_task_by_id(task_result.id)
-                if not original_task:
-                    logger.warning(
-                        f"Could not find original task for task {task_result.task_id}"
-                    )
-                    continue
-                question_prompt = original_task.prompt
+                # original_task = await ORM.get_validator_task_by_id(task_result.id)
+                # if not original_task:
+                #     logger.warning(
+                #         f"Could not find original task for task {task_result.task_id}"
+                #     )
+                #     continue
+                # question_prompt = original_task.prompt
 
                 # Apply sanitization checks
                 sanitization_result = await sanitize_miner_feedback(
