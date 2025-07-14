@@ -107,7 +107,7 @@ async def _check_feedback_quality(question: str, miner_feedback: str) -> bool:
             Retrun true for useful and relevant feedbacks.
             Question: {question}
             Miner Feedback: {miner_feedback}
-            
+
             Your response must follow the <response_format> schema.
         </system>
     """
