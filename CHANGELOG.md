@@ -1,3 +1,9 @@
+## [1.14.4](https://github.com/tensorplex-labs/dojo/compare/v1.14.3...v1.14.4) (2025-07-15)
+
+### Bug Fixes
+
+* scoring bugfixes, and fair distribution for tf task ([#230](https://github.com/tensorplex-labs/dojo/issues/230)) ([f217814](https://github.com/tensorplex-labs/dojo/commit/f217814646b2781625b058754f9592dc22afef8a))
+
 ## [1.14.3](https://github.com/tensorplex-labs/dojo/compare/v1.14.2...v1.14.3) (2025-07-14)
 
 ### Bug Fixes
