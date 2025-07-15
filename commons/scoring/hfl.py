@@ -55,10 +55,11 @@ async def score_hfl_tasks(
 
         hotkey_to_sf_score = await _calc_sf_score(task)
 
-        for hotkey, tf_score in hotkey_to_tf_score.items():
-            hotkey_to_score[hotkey] = (
-                TF_WEIGHT * tf_score + SF_WEIGHT * hotkey_to_sf_score.get(hotkey, 0.0)
-            )
+        all_hotkeys = set(hotkey_to_tf_score.keys()) | set(hotkey_to_sf_score.keys())
+        for hotkey in all_hotkeys:
+            tf_score = hotkey_to_tf_score.get(hotkey, 0.0)
+            sf_score = hotkey_to_sf_score.get(hotkey, 0.0)
+            hotkey_to_score[hotkey] = TF_WEIGHT * tf_score + SF_WEIGHT * sf_score
 
         return hotkey_to_score, hotkey_to_tf_score, hotkey_to_sf_score
     except Exception as e:
@@ -104,7 +105,8 @@ async def _calc_sf_score(task: ValidatorTask) -> dict[str, float]:
 
     logger.info(f"hotkey to raw scores: {hotkey_to_raw_scores}")
     hotkey_to_icc = calculate_icc(hotkey_to_scores=hotkey_to_raw_scores)
-    return hotkey_to_icc
+    normalized_sf_score = _normalize_sf_scores(hotkey_to_icc)
+    return normalized_sf_score
 
 
 def _validate_task(task: ValidatorTask, hfl_state: HFLState) -> None:
@@ -149,6 +151,7 @@ async def _calc_tf_score(sf_task: ValidatorTask) -> dict[str, float]:
             return {}
 
         _validate_task(sf_task, hfl_state)
+
     except Exception as e:
         logger.error(f"Error validating task: {e}")
         return {}
@@ -516,3 +519,24 @@ def _normalize_tf_scores(hotkey_to_tf_score: dict[str, float]) -> dict[str, floa
     normalized_tensor = minmax_scale(clamped_tensor)
 
     return dict(zip(hotkey_to_tf_score.keys(), normalized_tensor.tolist()))
+
+
+def _normalize_sf_scores(hotkey_to_sf_score: dict[str, float]) -> dict[str, float]:
+    """Normalize SF scores (ICC values) to [0, 1] range using minmax scaling."""
+    if not hotkey_to_sf_score:
+        return {}
+
+    invalid_hotkeys = [k for k, v in hotkey_to_sf_score.items() if v == 0.0]
+    valid_scores = {k: v for k, v in hotkey_to_sf_score.items() if v != 0.0}
+
+    # Normalize only valid scores
+    if valid_scores:
+        scores_tensor = torch.tensor(list(valid_scores.values()))
+        normalized_tensor = minmax_scale(scores_tensor)
+        result = dict(zip(valid_scores.keys(), normalized_tensor.tolist()))
+    else:
+        result = {}
+
+    # Invalid raters always get 0.0
+    result.update({k: 0.0 for k in invalid_hotkeys})
+    return result

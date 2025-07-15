@@ -2,9 +2,11 @@
 
 import asyncio
 import json
+import random
 import traceback
 from datetime import datetime, timedelta, timezone
 
+from kami import AxonInfo
 from loguru import logger
 
 from commons.dataset.types import HumanFeedbackResponse
@@ -782,6 +784,44 @@ def is_valid_feedback(text_feedback: str) -> bool:
         SanitizationFailureReason.INVALID_LENGTH.value,
     }
     return text_feedback not in failure_reasons
+
+
+# @dev: if this function used across the codebase, move to root level
+def select_axons_by_coldkey(axons: list[AxonInfo], subset_size: int) -> list[AxonInfo]:
+    """Select axons with fair distribution by coldkey using round-robin."""
+    if not axons or subset_size >= len(axons):
+        return axons.copy() if axons else []
+
+    # Group by coldkey
+    coldkey_to_axons: dict[str, list[AxonInfo]] = {}
+    for axon in axons:
+        coldkey_to_axons.setdefault(axon.coldkey, []).append(axon)
+
+    selected_axons = []
+    coldkeys = list(coldkey_to_axons.keys())
+
+    # Round-robin selection until we have enough
+    while len(selected_axons) < subset_size:
+        added_axons_count = 0  # Track if we found any available axons this cycle
+        random.shuffle(coldkeys)  # Fair ordering each round
+
+        for coldkey in coldkeys:
+            if len(selected_axons) >= subset_size:
+                break
+
+            # Find unused axons from this coldkey
+            available = [
+                axon for axon in coldkey_to_axons[coldkey] if axon not in selected_axons
+            ]
+            if available:
+                selected_axons.append(random.choice(available))
+                added_axons_count += 1
+
+        # Prevent infinite loop if no more axons available
+        if added_axons_count == 0:
+            break
+
+    return selected_axons[:subset_size]
 
 
 if __name__ == "__main__":

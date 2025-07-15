@@ -29,7 +29,11 @@ from .text_feedback import (
     send_text_feedback_to_synthetic_api,
 )
 from .types import HFLConstants, HFLInterval
-from .utils import evaluate_miner_consensus, get_time_window_for_tasks
+from .utils import (
+    evaluate_miner_consensus,
+    get_time_window_for_tasks,
+    select_axons_by_coldkey,
+)
 
 if TYPE_CHECKING:
     from neurons.validator import Validator
@@ -63,9 +67,7 @@ class FeedbackLoop:
         Core implementation of the feedback loop logic.
         Selects a validator task, creates a text criteria task, and sends it to miners.
         """
-        active_miner_uids = await validator.get_active_miner_uids(
-            subset_size=HFLConstants.TARGET_NUM_MINERS.value
-        )
+        active_miner_uids = await validator.get_active_miner_uids()
         if len(active_miner_uids) <= 0:
             logger.warning(
                 f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
@@ -93,10 +95,15 @@ class FeedbackLoop:
             validator.obfuscate_model_names(selected_task.completion_responses or [])
         )
 
+        current_axons = validator._retrieve_axons(active_miner_uids)
+        selected_axons = select_axons_by_coldkey(
+            current_axons, HFLConstants.TARGET_NUM_MINERS.value
+        )
+
         miner_responses = await send_hfl_request(
             synapse=text_criteria_task,
             task_type=TaskTypeEnum.TEXT_FEEDBACK,
-            axons=validator._retrieve_axons(active_miner_uids),
+            axons=selected_axons,
         )
 
         if not miner_responses:
@@ -390,11 +397,14 @@ class FeedbackLoop:
                         axons = [
                             axon for axon in axons if axon.hotkey not in used_hotkeys
                         ]
+                        selected_axons = select_axons_by_coldkey(
+                            axons, HFLConstants.TARGET_NUM_MINERS.value
+                        )
 
                         miner_responses = await send_hfl_request(
                             synapse=task_synapse,
                             task_type=TaskTypeEnum.TEXT_FEEDBACK,
-                            axons=axons,
+                            axons=selected_axons,
                         )
 
                         # deobfuscate model names
@@ -723,9 +733,7 @@ class FeedbackLoop:
                         continue
 
                     # Get active miners for the new TF task
-                    active_miners = await validator.get_active_miner_uids(
-                        subset_size=HFLConstants.TARGET_NUM_MINERS.value
-                    )
+                    active_miners = await validator.get_active_miner_uids()
                     if len(active_miners) <= 0:
                         logger.warning(
                             f"Not enough active miners found for {TaskTypeEnum.TEXT_FEEDBACK} task... skipping"
@@ -739,11 +747,16 @@ class FeedbackLoop:
                         text_criteria_task.completion_responses or []
                     )
 
+                    current_axons = validator._retrieve_axons(active_miners)
+                    selected_axons = select_axons_by_coldkey(
+                        current_axons, HFLConstants.TARGET_NUM_MINERS.value
+                    )
+
                     # Send the task to miners
                     miner_responses = await send_hfl_request(
                         synapse=text_criteria_task,
                         task_type=TaskTypeEnum.TEXT_FEEDBACK,
-                        axons=validator._retrieve_axons(active_miners),
+                        axons=selected_axons,
                     )
 
                     if not miner_responses:
