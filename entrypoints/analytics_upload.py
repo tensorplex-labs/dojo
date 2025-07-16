@@ -20,7 +20,7 @@ from commons.exceptions import NoProcessedTasksYet
 from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.utils import aget_effective_stake, datetime_to_iso8601_str
-from database.client import connect_db
+from database.client import connect_db, disconnect_db
 from database.prisma.enums import TaskTypeEnum
 from database.prisma.models import ValidatorTask
 from database.prisma.types import ValidatorTaskInclude
@@ -117,6 +117,8 @@ async def _get_task_data(
     except Exception as e:
         logger.error(f"Error when _get_task_data(): {e}")
         raise
+    finally:
+        await disconnect_db()
 
 
 async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response | None:
@@ -195,8 +197,10 @@ async def run_analytics_upload(
         config = ObjectManager.get_config()
         wallet = bt.wallet(config=config)
         validator_hotkey = wallet.hotkey.ss58_address
+        logger.info(f"Got validator hotkey: {validator_hotkey}")
 
         subnet_metagraph = await kami.get_metagraph(config.netuid)  # type: ignore
+        logger.info(f"Got subnet metagraph for netuid {config.netuid}")
         all_miners = await _get_all_miner_hotkeys(subnet_metagraph)
 
         # 1. collect processed tasks from db
