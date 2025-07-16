@@ -19,7 +19,7 @@ from .types import SanitizationResult
 
 # CONSTANT VARS
 MODERATION_LLM = "meta-llama/llama-guard-4-12b"
-QUALITY_CHECK_LLM = "google/gemini-2.5-flash-preview-05-20"
+QUALITY_CHECK_LLM = "google/gemini-2.5-flash"
 MAX_FEEDBACK_LENGTH = 300
 MODERATION_TIMEOUT = 12  # 12 seconds
 
