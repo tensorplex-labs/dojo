@@ -200,8 +200,12 @@ async def run_analytics_upload(
         all_miners = await _get_all_miner_hotkeys(subnet_metagraph)
 
         # 1. collect processed tasks from db
+        logger.info(f"Getting task data for {validator_hotkey}")
         anal_data: AnalyticsPayload = await _get_task_data(
             validator_hotkey, all_miners, expire_from, expire_to
+        )
+        logger.info(
+            f"Got analytics data for {[ (analytics_data.validator_task_id, analytics_data.task_type) for analytics_data in anal_data.tasks]}"
         )
 
         # 2. upload data to analytics API
@@ -211,6 +215,7 @@ async def run_analytics_upload(
         if not signature.startswith("0x"):
             signature = f"0x{signature}"
 
+        logger.info(f"Uploading analytics data for {validator_hotkey}")
         try:
             res = await _post_task_data(
                 payload=anal_data,
