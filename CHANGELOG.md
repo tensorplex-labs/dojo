@@ -1,3 +1,10 @@
+## [1.14.5](https://github.com/tensorplex-labs/dojo/compare/v1.14.4...v1.14.5) (2025-07-16)
+
+### Bug Fixes
+
+* replace broken gemini flash endpoint ([01a27e0](https://github.com/tensorplex-labs/dojo/commit/01a27e03e1742b99a1309d8d54473bc5b3def295))
+* replace quality check llm ([#232](https://github.com/tensorplex-labs/dojo/issues/232)) ([6c334d0](https://github.com/tensorplex-labs/dojo/commit/6c334d0f283d1527a4194a589aaac1f32c45a358))
+
 ## [1.14.4](https://github.com/tensorplex-labs/dojo/compare/v1.14.3...v1.14.4) (2025-07-15)
 
 ### Bug Fixes
