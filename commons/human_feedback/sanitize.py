@@ -105,7 +105,7 @@ async def _check_feedback_quality(question: str, miner_feedback: str) -> bool:
             Evaluate how relevant and useful the feedback is to this coding question.
             Return false for feedbacks which are empty, irrelevant or request for no changes.
             Return false for feedbacks which request new features. Effective feedback should improve existing features.
-            Retrun true for useful and relevant feedbacks.
+            Return true for useful and relevant feedbacks.
             Question: {question}
             Miner Feedback: {miner_feedback}
 
