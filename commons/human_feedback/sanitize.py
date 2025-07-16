@@ -20,7 +20,7 @@ from .types import SanitizationResult
 # CONSTANT VARS
 MODERATION_LLM = "meta-llama/llama-guard-4-12b"
 QUALITY_CHECK_LLM = "google/gemini-2.5-flash"
-MAX_FEEDBACK_LENGTH = 300
+MAX_FEEDBACK_LENGTH = 350
 MODERATION_TIMEOUT = 12  # 12 seconds
 
 
@@ -104,6 +104,7 @@ async def _check_feedback_quality(question: str, miner_feedback: str) -> bool:
         <system>
             Evaluate how relevant and useful the feedback is to this coding question.
             Return false for feedbacks which are empty, irrelevant or request for no changes.
+            Return false for feedbacks which request new features. Effective feedback should improve existing features.
             Retrun true for useful and relevant feedbacks.
             Question: {question}
             Miner Feedback: {miner_feedback}
