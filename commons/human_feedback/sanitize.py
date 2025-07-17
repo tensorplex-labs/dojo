@@ -69,7 +69,9 @@ async def sanitize_miner_feedback(
     sanitized_feedback = re.sub(BLACKLISTED_CHARS, "", miner_feedback)
 
     # 4 check miner feedback is useful + relevant
-    if not await _check_feedback_quality(question, miner_feedback):
+    if not await _check_feedback_quality_positive(
+        question, miner_feedback
+    ) or await _check_feedback_quality_negative(question, miner_feedback):
         return SanitizationResult(
             is_safe=False,
             sanitized_feedback="",
@@ -88,9 +90,10 @@ async def sanitize_miner_feedback(
 
 
 @observe(as_type="generation", capture_input=True, capture_output=True)
-async def _check_feedback_quality(question: str, miner_feedback: str) -> bool:
+async def _check_feedback_quality_positive(question: str, miner_feedback: str) -> bool:
     """
     ask LLM to evaluate if miner feedback is relevant and useful.
+    returns true if feedback is good, otherwise return false
     """
     client = AsyncOpenAI(
         base_url="https://openrouter.ai/api/v1",
@@ -105,7 +108,70 @@ async def _check_feedback_quality(question: str, miner_feedback: str) -> bool:
             Evaluate how relevant and useful the feedback is to this coding question.
             Return false for feedbacks which are empty, irrelevant or request for no changes.
             Return false for feedbacks which request new features. Effective feedback should improve existing features.
+            Return false for feedbacks which request test features.
             Return true for useful and relevant feedbacks.
+            Question: {question}
+            Miner Feedback: {miner_feedback}
+
+            Your response must follow the <response_format> schema.
+        </system>
+    """
+    try:
+        response = await client.chat.completions.create(
+            model=QUALITY_CHECK_LLM,
+            messages=[
+                {
+                    "role": "system",
+                    "content": prompt,
+                },
+            ],
+            response_format={  # type: ignore
+                "type": "json_object",
+                "json_schema": FeedbackQuality.model_json_schema(),
+                "enforce_validation": True,
+            },
+        )
+
+        # log to langfuse
+        langfuse_context.update_current_observation(
+            input={"question": question, "miner_feedback": miner_feedback},
+            model=QUALITY_CHECK_LLM,
+            output=response.choices[0].message.content,
+            usage=response.usage,
+        )
+        content = response.choices[0].message.content
+        if not content:
+            logger.warning("LLM response for quality check was empty.")
+            return False
+        result = FeedbackQuality.model_validate_json(content)
+        return result.is_good
+    except Exception as e:
+        logger.error(f"Unexpected error checking feedback quality: {e}")
+        logger.debug(f"Traceback: {traceback.format_exc()}")
+        return False
+
+
+@observe(as_type="generation", capture_input=True, capture_output=True)
+async def _check_feedback_quality_negative(question: str, miner_feedback: str) -> bool:
+    """
+    ask LLM to evaluate if miner feedback is not relevant and useful.
+    returns true if feedback is bad, otherwise return false.
+    """
+    client = AsyncOpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    )
+
+    prompt = f"""
+        <response_format>
+            {FeedbackQuality.model_json_schema()}
+        </response_format>
+        <system>
+            Evaluate how irrelevant and ineffective the feedback is to this coding question.
+            Return true for feedbacks which are empty, irrelevant or request for no changes.
+            Return true for feedbacks which request new features.
+            Return true for feedbacks which request test features.
+            Return false for useful and relevant feedbacks that will improve existing elements from the question.
             Question: {question}
             Miner Feedback: {miner_feedback}
 
