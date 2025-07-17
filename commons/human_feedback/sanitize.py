@@ -22,6 +22,8 @@ MODERATION_LLM = "meta-llama/llama-guard-4-12b"
 QUALITY_CHECK_LLM = "google/gemini-2.5-flash"
 MAX_FEEDBACK_LENGTH = 350
 MODERATION_TIMEOUT = 12  # 12 seconds
+QUALITY_CHECK_TEMPERATURE = 0.0
+QUALITY_CHECK_TOP_P = 1.0
 
 
 class FeedbackQuality(BaseModel):
@@ -130,6 +132,8 @@ async def _check_feedback_quality_positive(question: str, miner_feedback: str) -
                 "json_schema": FeedbackQuality.model_json_schema(),
                 "enforce_validation": True,
             },
+            temperature=QUALITY_CHECK_TEMPERATURE,
+            top_p=QUALITY_CHECK_TOP_P,
         )
 
         # log to langfuse
@@ -192,6 +196,8 @@ async def _check_feedback_quality_negative(question: str, miner_feedback: str) -
                 "json_schema": FeedbackQuality.model_json_schema(),
                 "enforce_validation": True,
             },
+            temperature=QUALITY_CHECK_TEMPERATURE,
+            top_p=QUALITY_CHECK_TOP_P,
         )
 
         # log to langfuse
@@ -280,7 +286,7 @@ async def test_sanitize_human_feedback():
     punctuation = " <hello>[goodbye]"
     # logger.info("XSS encoded: " + xss_encoded)
     logger.info(
-        "Result: "
+        "multiplication Result: "
         + str(
             await sanitize_miner_feedback(
                 add_multiplication,
@@ -289,7 +295,8 @@ async def test_sanitize_human_feedback():
         )
     )
     logger.info(
-        "Result: " + str(await sanitize_miner_feedback(punctuation, "question"))
+        "punctuation Result: "
+        + str(await sanitize_miner_feedback(punctuation, "question"))
     )
 
 
