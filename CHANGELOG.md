@@ -1,3 +1,10 @@
+## [1.14.6](https://github.com/tensorplex-labs/dojo/compare/v1.14.5...v1.14.6) (2025-07-17)
+
+### Bug Fixes
+
+* adjust weight on hfl task ([4408e4f](https://github.com/tensorplex-labs/dojo/commit/4408e4fe3085d4b9456a324a9215af362f89cbe8))
+* replace broken gemini flash endpoint ([e337fc9](https://github.com/tensorplex-labs/dojo/commit/e337fc96a7363a504ddbcb15162b72e12ba6c874))
+
 ## [1.14.5](https://github.com/tensorplex-labs/dojo/compare/v1.14.4...v1.14.5) (2025-07-16)
 
 ### Bug Fixes
