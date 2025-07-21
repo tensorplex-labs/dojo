@@ -133,7 +133,7 @@ async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response
     """
     _http_client = httpx.AsyncClient(timeout=300)
     try:
-        logger.debug("POST-ing analytics data to validator API")
+        logger.info("POST-ing analytics data to validator API")
         response = await _http_client.post(
             url=f"{VALIDATOR_API_BASE_URL}/api/v1/analytics/validators/{hotkey}/tasks",
             json=payload.model_dump(mode="json"),
@@ -181,7 +181,7 @@ async def run_analytics_upload(
     """
     async with scores_alock:
         last_analytics_upload_time = expire_from
-        logger.debug(f"Last analytics upload time: {expire_from}")
+        logger.info(f"Last analytics upload time: {expire_from}")
         # if there is no last analytics upload time, get tasks from 65 minutes ago.
         if expire_from is None:
             expire_from = datetime.now(timezone.utc) - timedelta(
@@ -202,6 +202,10 @@ async def run_analytics_upload(
         # 1. collect processed tasks from db
         anal_data: AnalyticsPayload = await _get_task_data(
             validator_hotkey, all_miners, expire_from, expire_to
+        )
+
+        logger.info(
+            f"Analytics data: {[(task.validator_task_id, task.task_type) for task in anal_data.tasks]}"
         )
 
         # 2. upload data to analytics API
