@@ -21,7 +21,7 @@ class NormalValidatorConstants(IntEnum):
     MINER_STATUS = 60
     TASK_MONITORING = 300  # 5 minutes
     DOJO_TASK_MONITORING = 300  # 5 minutes
-    QUERY_WINDOW = 2 * TASK_DEADLINE
+    QUERY_WINDOW = 2 * 60 * 60  # 2 hour
 
 
 class MediumValidatorConstants(IntEnum):
@@ -36,7 +36,7 @@ class MediumValidatorConstants(IntEnum):
     MINER_STATUS = 600  # 10 minutes
     TASK_MONITORING = 60  # 1 minute
     DOJO_TASK_MONITORING = 60  # 1 minute
-    QUERY_WINDOW = 2 * TASK_DEADLINE
+    QUERY_WINDOW = 2 * 60 * 60  # 2 hour
 
 
 class HighValidatorConstants(IntEnum):
@@ -50,7 +50,7 @@ class HighValidatorConstants(IntEnum):
     BUFFER_PERIOD = 90
     TASK_MONITORING = 15
     DOJO_TASK_MONITORING = 15
-    QUERY_WINDOW = 2 * TASK_DEADLINE
+    QUERY_WINDOW = 2 * 60 * 60  # 2 hour
 
 
 def get_validator_constants() -> (
