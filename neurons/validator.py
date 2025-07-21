@@ -819,9 +819,9 @@ class Validator(aobject):
         while True:
             await asyncio.sleep(ValidatorInterval.VALIDATOR_UPDATE_TASK)  # 15 minutes
             try:
-                # Grab tasks that were expired TASK_DEADLINE duration ago
+                # Grab tasks that were expired QUERY_WINDOW duration ago
                 expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
-                    seconds=ValidatorInterval.TASK_DEADLINE
+                    seconds=ValidatorInterval.QUERY_WINDOW
                 )
                 expire_to = datetime_as_utc(datetime.now(timezone.utc))
                 logger.info(
@@ -854,7 +854,7 @@ class Validator(aobject):
             try:
                 now = datetime.now(timezone.utc)
                 expire_from = datetime_as_utc(
-                    now - timedelta(seconds=ValidatorInterval.TASK_DEADLINE)
+                    now - timedelta(seconds=ValidatorInterval.QUERY_WINDOW)
                 )
                 expire_to = datetime_as_utc(
                     now - timedelta(seconds=ValidatorInterval.BUFFER_PERIOD)
