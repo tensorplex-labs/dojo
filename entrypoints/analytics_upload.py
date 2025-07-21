@@ -71,12 +71,13 @@ async def _get_task_data(
             expire_to=expire_to,
             task_types=[
                 TaskTypeEnum.SCORE_FEEDBACK,
-                TaskTypeEnum.CODE_GENERATION,
+                # TaskTypeEnum.CODE_GENERATION,
             ],
         ):
             if task_batch is None:
                 continue
             for task in task_batch:
+                logger.info(f"@@@ Processing task: {task.id}")  # delete in prod
                 formatted_task = await _parse_task_to_analytics_data(
                     task, all_miner_hotkeys, validator_hotkey
                 )
@@ -203,7 +204,7 @@ async def run_analytics_upload(
         anal_data: AnalyticsPayload = await _get_task_data(
             validator_hotkey, all_miners, expire_from, expire_to
         )
-
+        logger.info(f"@@@ Analytics data: {anal_data}")  # delete in prod
         # 2. upload data to analytics API
         message = f"Uploading analytics data for validator hotkey: {validator_hotkey}"
         signature = wallet.hotkey.sign(message).hex()
