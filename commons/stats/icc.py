@@ -25,22 +25,21 @@ def calculate_icc(hotkey_to_scores: dict[str, list[float]]) -> dict[str, float]:
     # Convert to DataFrame
     df = pd.DataFrame(hotkey_to_scores)
 
-    # Add tiny noise to prevent division by zero
-    np.random.seed(42)
-    # NOTE: starting from 1e-7 we get division by zero warnings
-    noise = np.random.normal(0, 1e-6, size=df.shape)
-    df = df + noise
-
-    # List of all raters, this would be hotkeys of miners
     raters = list(hotkey_to_scores.keys())
     valid_raters = [r for r in raters if is_valid_rater(df[r], rater_name=r)]
 
     logger.info(f"valid raters: {valid_raters}")
+
     if len(valid_raters) < 2:
         logger.warning(
             f"Not enough valid raters to calculate ICC, only {len(valid_raters)} raters found"
         )
         return {rater: 0.0 for rater in raters}
+
+    # Add noise only after validation
+    np.random.seed(42)
+    noise = np.random.normal(0, 1e-6, size=df.shape)
+    df = df + noise
 
     # Dictionary to store ICC scores - initialize all raters to 0.0
     hotkey_to_icc2 = {rater: 0.0 for rater in raters}
@@ -143,8 +142,8 @@ if __name__ == "__main__":
         "Rater8": [34.0, 45.0, 45.0, 45.0],
         "Rater9": [34.0, 45.0, 45.0, 45.0],
         "Rater10": [34.0, 45.0, 45.0, 45.0],
+        "Rater11": [34.0, 23.0, 12.0, 45.0],
     }
-
     # icc_scores = calculate_icc(data)
     # # Display the results
     # print("Inter-Rater Reliability (ICC) Scores:")
