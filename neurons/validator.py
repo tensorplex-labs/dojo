@@ -821,7 +821,7 @@ class Validator(aobject):
             try:
                 # Grab tasks that were expired TASK_DEADLINE duration ago
                 expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
-                    hours=2
+                    seconds=ValidatorInterval.TASK_DEADLINE
                 )
                 expire_to = datetime_as_utc(datetime.now(timezone.utc))
                 logger.info(
@@ -855,7 +855,9 @@ class Validator(aobject):
                 # Get tasks that expired between 2 hours ago and 30 minutes ago
                 # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
                 now = datetime.now(timezone.utc)
-                expire_from = datetime_as_utc(now - timedelta(hours=2))
+                expire_from = datetime_as_utc(
+                    now - timedelta(seconds=ValidatorInterval.TASK_DEADLINE)
+                )
                 expire_to = datetime_as_utc(
                     now - timedelta(seconds=ValidatorInterval.BUFFER_PERIOD)
                 )
