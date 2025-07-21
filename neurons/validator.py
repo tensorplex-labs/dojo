@@ -861,7 +861,7 @@ class Validator(aobject):
                 )
 
                 # delete in prod
-                target = "2025-07-09 19:21:12.245"
+                target = "2025-07-09 13:24:11.187"
                 target_dt = datetime.strptime(target, "%Y-%m-%d %H:%M:%S.%f").replace(
                     tzinfo=timezone.utc
                 )
@@ -2056,7 +2056,8 @@ class Validator(aobject):
 
 
 async def main():
-    target = "2025-07-09 19:21:12.245"
+    target = "2025-07-09 13:24:11.187"
+
     target_dt = datetime.strptime(target, "%Y-%m-%d %H:%M:%S.%f").replace(
         tzinfo=timezone.utc
     )
