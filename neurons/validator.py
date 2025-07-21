@@ -860,6 +860,18 @@ class Validator(aobject):
                     now - timedelta(seconds=ValidatorInterval.BUFFER_PERIOD)
                 )
 
+                # delete in prod
+                target = "2025-07-09 19:21:12.245"
+                target_dt = datetime.strptime(target, "%Y-%m-%d %H:%M:%S.%f").replace(
+                    tzinfo=timezone.utc
+                )
+
+                expire_from = datetime_as_utc(target_dt - timedelta(minutes=1))
+                expire_to = datetime_as_utc(target_dt + timedelta(minutes=1))
+                logger.info(f"@@@ target_dt: {target_dt}")  # delete in prod
+                logger.info(f"@@@ expire_from: {expire_from}")  # delete in prod
+                logger.info(f"@@@ expire_to: {expire_to}")  # delete in prod
+
                 logger.info(f" Current time: {now}")
                 logger.info(
                     f"📝 performing scoring, context: {expire_from}, {expire_to}"
@@ -1053,8 +1065,13 @@ class Validator(aobject):
 
                 # upload scores to analytics API after updating.
                 # record last successful upload time.
+                # self.last_anal_upload_time = await run_analytics_upload(
+                #     self._scores_alock, self.last_anal_upload_time, expire_to, self.kami
+                # )
+
+                # delete in prod
                 self.last_anal_upload_time = await run_analytics_upload(
-                    self._scores_alock, self.last_anal_upload_time, expire_to, self.kami
+                    self._scores_alock, expire_from, expire_to, self.kami
                 )
             except Exception:
                 logger.error("Error in score_and_send_feedback")
@@ -2036,3 +2053,20 @@ class Validator(aobject):
         min_size = min(len(current_tensor), len(self.metagraph.hotkeys))
         new_tensor[:min_size] = current_tensor[:min_size]
         return new_tensor
+
+
+async def main():
+    target = "2025-07-09 19:21:12.245"
+    target_dt = datetime.strptime(target, "%Y-%m-%d %H:%M:%S.%f").replace(
+        tzinfo=timezone.utc
+    )
+
+    expire_from = datetime_as_utc(target_dt - timedelta(minutes=1))
+    expire_to = datetime_as_utc(target_dt + timedelta(minutes=1))
+    logger.info(f"@@@ target_dt: {target_dt}")  # delete in prod
+    logger.info(f"@@@ expire_from: {expire_from}")  # delete in prod
+    logger.info(f"@@@ expire_to: {expire_to}")  # delete in prod
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
