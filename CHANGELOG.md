@@ -1,3 +1,5 @@
+## [1.14.7](https://github.com/tensorplex-labs/dojo/compare/v1.14.6...v1.14.7) (2025-07-22)
+
 ## [1.14.6](https://github.com/tensorplex-labs/dojo/compare/v1.14.5...v1.14.6) (2025-07-17)
 
 ### Bug Fixes
