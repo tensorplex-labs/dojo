@@ -819,9 +819,9 @@ class Validator(aobject):
         while True:
             await asyncio.sleep(ValidatorInterval.VALIDATOR_UPDATE_TASK)  # 15 minutes
             try:
-                # Grab tasks that were expired TASK_DEADLINE duration ago
+                # Grab tasks that were expired QUERY_WINDOW duration ago
                 expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
-                    hours=2
+                    seconds=ValidatorInterval.QUERY_WINDOW
                 )
                 expire_to = datetime_as_utc(datetime.now(timezone.utc))
                 logger.info(
@@ -852,10 +852,10 @@ class Validator(aobject):
             hotkey_to_synthetic_scores = defaultdict(list)
             hotkey_to_hfl_scores = defaultdict(list)
             try:
-                # Get tasks that expired between 2 hours ago and 30 minutes ago
-                # This creates a 30-minute buffer to ensure tasks have been updated sufficiently
                 now = datetime.now(timezone.utc)
-                expire_from = datetime_as_utc(now - timedelta(hours=2))
+                expire_from = datetime_as_utc(
+                    now - timedelta(seconds=ValidatorInterval.QUERY_WINDOW)
+                )
                 expire_to = datetime_as_utc(
                     now - timedelta(seconds=ValidatorInterval.BUFFER_PERIOD)
                 )
