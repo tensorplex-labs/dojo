@@ -1,6 +1,7 @@
-from commons.dataset.types import HumanFeedbackResponse, HumanFeedbackTask
-from commons.utils import get_new_uuid
 from dojo.protocol import CodeAnswer, SyntheticQA
+from dojo.utils import get_new_uuid
+
+from .types import HumanFeedbackResponse, HumanFeedbackTask
 
 
 def map_synthetic_response(response: dict) -> SyntheticQA:

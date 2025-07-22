@@ -7,6 +7,7 @@ from .exceptions import (
     NoNewExpiredTasksYet,
 )
 from .feedback_loop import FeedbackLoop
+from .hfl_helpers import HFLManager
 from .types import HFLConstants, HFLInterval, SanitizationResult
 from .utils import should_continue_hfl
 
@@ -18,6 +19,7 @@ __all__ = [
     "InsufficientResponsesError",
     "HFLConstants",
     "HFLInterval",
+    "HFLManager",
     "should_continue_hfl",
     "SanitizationResult",
 ]

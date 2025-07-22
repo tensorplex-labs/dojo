@@ -1,7 +1,5 @@
 from loguru import logger
 
-from dojo.utils import get_config
-
 
 class ObjectManager:
     _miner = None
@@ -35,6 +33,8 @@ class ObjectManager:
 
     @classmethod
     def get_config(cls):
+        from dojo.utils import get_config
+
         if cls._config is None:
             cls._config = get_config()
         return cls._config

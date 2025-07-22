@@ -6,16 +6,6 @@ from typing import AsyncGenerator, List
 
 from loguru import logger
 
-from commons.dataset.types import HumanFeedbackResponse
-from commons.exceptions import (
-    ExpiredFromMoreThanExpireTo,
-    InvalidMinerResponse,
-    NoNewExpiredTasksYet,
-    NoProcessedTasksYet,
-)
-from commons.hfl_helpers import HFLManager
-from commons.human_feedback.types import HFLInterval
-from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
 from database.mappers import (
     map_miner_response_to_task_synapse_object,
@@ -42,7 +32,14 @@ from database.prisma.types import (
     ValidatorTaskUpdateInput,
     ValidatorTaskWhereInput,
 )
+from dojo.api.synthetic_api import HumanFeedbackResponse
 from dojo.constants import ValidatorInterval
+from dojo.exceptions import (
+    ExpiredFromMoreThanExpireTo,
+    InvalidMinerResponse,
+    NoNewExpiredTasksYet,
+    NoProcessedTasksYet,
+)
 from dojo.protocol import (
     DendriteQueryResponse,
     HFLEvent,
@@ -52,6 +49,7 @@ from dojo.protocol import (
     TaskResult,
     TextFeedbackEvent,
 )
+from dojo.utils import datetime_as_utc
 
 TASK_DEADLINE = ValidatorInterval.TASK_DEADLINE
 
@@ -792,7 +790,7 @@ class ORM:
                     "lt": expire_to,
                 },
                 "is_processed": True,
-                "task_type": {
+                "task_type": {  # type: ignore[reportUnknownMemberType]
                     "in": task_types,
                 },
             }
@@ -1008,6 +1006,8 @@ class ORM:
         Returns:
             Tuple of (created task, created HFL state)
         """
+        from dojo.human_feedback.hfl_helpers import HFLManager
+
         async with prisma.tx() as tx:
             hfl_state = await HFLManager.create_state(
                 current_task_id=validator_task.task_id,
@@ -1149,6 +1149,8 @@ class ORM:
                 )
 
             # Update HFL state with current task id and status
+            from dojo.human_feedback.hfl_helpers import HFLManager
+
             updated_hfl_state = await HFLManager.update_state(
                 hfl_state_id=hfl_state.id,
                 updates=HFLStateUpdateInput(
@@ -1279,6 +1281,8 @@ class ORM:
                         )
                         continue
 
+                from dojo.human_feedback import HFLInterval
+
                 extend_expire_at = datetime.now(timezone.utc) + timedelta(
                     seconds=int(HFLInterval.TASK_DEADLINE)
                 )
@@ -1289,6 +1293,8 @@ class ORM:
                         "expire_at": extend_expire_at,
                     },
                 )
+
+                from dojo.human_feedback import HFLManager
 
                 updated_hfl_state = await HFLManager.update_state(
                     hfl_state_id=hfl_state.id,
@@ -1604,6 +1610,8 @@ class ORM:
         Returns:
             Updated HFL state
         """
+        from dojo.human_feedback import HFLManager
+
         async with prisma.tx() as tx:
             # Update HFL state using HFLManager (which handles events and state transitions)
             updated_state = await HFLManager.update_state(

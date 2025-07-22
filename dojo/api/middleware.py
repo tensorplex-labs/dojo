@@ -56,6 +56,8 @@ class AWSIPFilterMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
 
     async def dispatch(self, request: Request, call_next):
+        if request.client is None:
+            return Response("Forbidden", status_code=403)
         client_ip = ip_address(request.client.host)
         allowed_networks = [
             ip_network(ip_range) for ip_range in await self._get_allowed_networks()

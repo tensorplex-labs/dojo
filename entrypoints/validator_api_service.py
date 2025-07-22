@@ -19,14 +19,10 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from commons.api_settings import ValidatorAPISettings, get_settings
-from commons.cache import RedisCache
-from commons.objects import ObjectManager
-from commons.utils import (
-    check_stake,
-    verify_hotkey_in_metagraph,
-    verify_signature,
-)
+from dojo.api_settings import ValidatorAPISettings, get_settings
+from dojo.objects import ObjectManager
+from dojo.storage.cache import RedisCache
+from dojo.utils import check_stake, verify_hotkey_in_metagraph, verify_signature
 from dojo.utils.config import source_dotenv
 from entrypoints.analytics_endpoint import analytics_router
 
