@@ -14,7 +14,13 @@ from typing import AsyncGenerator, Dict, List, TypeAlias
 import aiohttp
 import numpy as np
 import torch
-from kami import AxonInfo, KamiClient, SetWeightsPayload, SubnetMetagraph
+from kami import (
+    AxonInfo,
+    KamiClient,
+    SetWeightsPayload,
+    SubnetMetagraph,
+    ServeAxonPayload,
+)
 from loguru import logger
 from messaging import Client, StdResponse, get_client
 from torch.nn import functional as F
@@ -464,9 +470,9 @@ class Validator(aobject):
                 logger.warning("Old hotkey found from previous metagraph")
                 continue
 
-        assert (
-            existing_incentives.shape == new_incentives.shape
-        ), "Existing incentives and new incentives must have same shape for consistency"
+        assert existing_incentives.shape == new_incentives.shape, (
+            "Existing incentives and new incentives must have same shape for consistency"
+        )
         return existing_incentives, new_incentives
 
     async def update_scores_tensor(
@@ -1860,9 +1866,9 @@ class Validator(aobject):
             f"HFL scores: {self.hfl_scores.shape=} {self.hfl_scores=} {len(self.hfl_scores.tolist())=}"
         )
         async with self._scores_alock:
-            assert (
-                self.synthetic_score.shape == self.hfl_scores.shape
-            ), "Scores and HFL scores must be the same shape"
+            assert self.synthetic_score.shape == self.hfl_scores.shape, (
+                "Scores and HFL scores must be the same shape"
+            )
             combined_score = (
                 synthetic_score_weight * self.synthetic_score
                 + hfl_score_weight * self.hfl_scores
@@ -2036,3 +2042,32 @@ class Validator(aobject):
         min_size = min(len(current_tensor), len(self.metagraph.hotkeys))
         new_tensor[:min_size] = current_tensor[:min_size]
         return new_tensor
+
+    async def _serve_external_tasks_port(self) -> None:
+        """
+        Serve the external tasks port for receiving task requests.
+        This is a placeholder for the actual implementation.
+        """
+        from dojo.utils.netip import get_int_ip_address, get_public_ip
+
+        public_ip = await get_public_ip()
+
+        print(f"Public IP: {public_ip}")
+        import sys
+
+        sys.exit()
+
+        logger.info("Serving external tasks port...")
+        if not self.kami:
+            logger.error("Kami client is not initialized, cannot serve axon")
+            return
+        # netuid: int
+        # version: int = 1
+        # ip: int
+        # port: int
+        # ipType: int = Field(default=4, description="4 for IPv4 or 6 for IPv6")
+        # protocol: int = Field(default=4, description="Should be the same for ipType")
+        # placeholder1: int = 0
+        # placeholder2: int = 0
+        ip_int = await get_int_ip_address(self.config)
+        payload = ServeAxonPayload()
