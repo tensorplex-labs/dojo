@@ -31,7 +31,7 @@ from dojo.api.synthetic_api import (
     SyntheticAPI,
     SyntheticGenerationError,
 )
-from dojo.constants import ValidatorConstant, ValidatorInterval
+from dojo.constants import ValidatorConstant, ValidatorInterval, WeightSettings
 from dojo.exceptions import (
     EmptyScores,
     InvalidMinerResponse,
@@ -1853,8 +1853,8 @@ class Validator(aobject):
             torch.FloatTensor: Combined score tensor
         """
         # TODO: shift these to a config
-        synthetic_score_weight = 0.98
-        hfl_score_weight = 0.02
+        synthetic_score_weight = WeightSettings.SYNTHETIC_SCORE_WEIGHT.value
+        hfl_score_weight = WeightSettings.HFL_SCORE_WEIGHT.value
         logger.info(
             f"Synthetic score: {self.synthetic_score.shape=} {self.synthetic_score=} {len(self.synthetic_score.tolist())=}"
         )

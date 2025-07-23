@@ -1,5 +1,5 @@
 import os
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 
 class AnalyticsConstants(IntEnum):
@@ -79,6 +79,13 @@ class MinerConstant(IntEnum):
     MINER_STATUS = 60
     # using redis as a form of persistence, expire after X seconds
     REDIS_OM_TTL = 48 * 3600  # 48 hours
+
+
+class WeightSettings(Enum):
+    """Weight settings"""
+
+    SYNTHETIC_SCORE_WEIGHT = 1.0
+    HFL_SCORE_WEIGHT = 0.0
 
 
 # Export the constants directly
