@@ -7,10 +7,7 @@ import torch
 from loguru import logger
 from pydantic import ValidationError
 
-from commons.human_feedback import HFLConstants
-from commons.orm import ORM
-from commons.scoring.scoring import minmax_scale
-from commons.stats import calculate_icc
+from database.orm import ORM
 from database.prisma.enums import HFLStatusEnum
 from database.prisma.models import (
     HFLCompletionRelation,
@@ -19,7 +16,11 @@ from database.prisma.models import (
     MinerScore,
     ValidatorTask,
 )
+from dojo.human_feedback import HFLConstants
 from dojo.protocol import Score
+
+from .icc import calculate_icc
+from .utils import minmax_scale
 
 TF_WEIGHT = HFLConstants.TF_WEIGHT.value
 SF_WEIGHT = HFLConstants.SF_WEIGHT.value
@@ -405,7 +406,9 @@ async def _calc_avg_score_by_completion_id(task: ValidatorTask) -> dict[str, flo
                     )
                     continue
 
-                stats_by_completion_id[completion_id]["sum"] += scores.raw_score
+                # Clamp to acceptable bounds (e.g., 1-100)
+                clamped_score = max(1.0, min(100.0, scores.raw_score))
+                stats_by_completion_id[completion_id]["sum"] += clamped_score
                 stats_by_completion_id[completion_id]["count"] += 1
 
         except ValidationError as e:

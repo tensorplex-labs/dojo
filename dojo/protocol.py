@@ -4,7 +4,7 @@ from typing import List
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from strenum import StrEnum
 
-from commons.utils import get_epoch_time, get_new_uuid
+from dojo.utils import get_epoch_time, get_new_uuid
 
 
 class SanitizationFailureReason(StrEnum):
