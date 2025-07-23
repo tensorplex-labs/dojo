@@ -19,37 +19,28 @@ from loguru import logger
 from messaging import Client, StdResponse, get_client
 from torch.nn import functional as F
 
-from commons.dataset.synthetic import SyntheticAPI
-from commons.exceptions import (
-    EmptyScores,
-    FatalSyntheticGenerationError,
-    InvalidMinerResponse,
-    NoNewExpiredTasksYet,
-    SetWeightsFailed,
-    SyntheticGenerationError,
-)
-from commons.hfl_helpers import HFLManager
-from commons.human_feedback import HFLConstants, should_continue_hfl
-from commons.objects import ObjectManager
-from commons.orm import ORM
-from commons.score_storage import ScoreStorage
-from commons.scoring import Scoring, hfl
-from commons.utils import (
-    _terminal_plot,
-    aget_effective_stake,
-    aobject,
-    datetime_as_utc,
-    get_epoch_time,
-    get_new_uuid,
-    set_expire_time,
-)
 from database.client import connect_db
 from database.mappers import map_miner_response_to_completion_responses
+from database.orm import ORM
 from database.prisma.enums import HFLStatusEnum, TaskTypeEnum
 from database.prisma.models import HFLState, ValidatorTask
 from database.prisma.types import HFLStateUpdateInput
 from dojo import get_spec_version
+from dojo.api.synthetic_api import (
+    FatalSyntheticGenerationError,
+    SyntheticAPI,
+    SyntheticGenerationError,
+)
 from dojo.constants import ValidatorConstant, ValidatorInterval
+from dojo.exceptions import (
+    EmptyScores,
+    InvalidMinerResponse,
+    NoNewExpiredTasksYet,
+    SetWeightsFailed,
+)
+from dojo.human_feedback import HFLConstants, should_continue_hfl
+from dojo.human_feedback.hfl_helpers import HFLManager
+from dojo.objects import ObjectManager
 from dojo.protocol import (
     CompletionResponse,
     CompletionScore,
@@ -64,6 +55,17 @@ from dojo.protocol import (
     TaskResult,
     TaskResultSynapse,
     TextFeedbackEvent,
+)
+from dojo.scoring import Scoring, hfl
+from dojo.storage.score_storage import ScoreStorage
+from dojo.utils import (
+    _terminal_plot,
+    aget_effective_stake,
+    aobject,
+    datetime_as_utc,
+    get_epoch_time,
+    get_new_uuid,
+    set_expire_time,
 )
 from dojo.utils.config import get_config
 from dojo.utils.weight_utils import (

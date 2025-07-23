@@ -5,7 +5,6 @@ import torch
 from loguru import logger
 from torch.nn import functional as F
 
-from commons.utils import _terminal_plot
 from dojo.protocol import (
     CompletionResponse,
     CriteriaType,
@@ -13,6 +12,9 @@ from dojo.protocol import (
     ScoreCriteria,
     SyntheticTaskSynapse,
 )
+from dojo.utils import _terminal_plot
+
+from .utils import minmax_scale
 
 
 def _reward_cubic(
@@ -108,19 +110,6 @@ def _reward_cubic(
 def _get_miner_response_by_criteria(criteria, response: CompletionResponse):
     if isinstance(criteria, ScoreCriteria):
         return response.score
-
-
-def minmax_scale(tensor: torch.Tensor | np.ndarray) -> torch.Tensor:
-    if isinstance(tensor, np.ndarray):
-        tensor = torch.from_numpy(tensor)
-    min = tensor.min()
-    max = tensor.max()
-
-    # If max == min, return a tensor of ones
-    if max == min:
-        return torch.ones_like(tensor)
-
-    return (tensor - min) / (max - min)
 
 
 class Scoring:

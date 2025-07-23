@@ -16,16 +16,16 @@ import httpx
 from kami import KamiClient, SubnetMetagraph
 from loguru import logger
 
-from commons.exceptions import NoProcessedTasksYet
-from commons.objects import ObjectManager
-from commons.orm import ORM
-from commons.utils import aget_effective_stake, datetime_to_iso8601_str
 from database.client import connect_db
+from database.orm import ORM
 from database.prisma.enums import TaskTypeEnum
 from database.prisma.models import ValidatorTask
 from database.prisma.types import ValidatorTaskInclude
 from dojo.constants import AnalyticsConstants, ValidatorConstant
+from dojo.exceptions import NoProcessedTasksYet
+from dojo.objects import ObjectManager
 from dojo.protocol import AnalyticsData, AnalyticsPayload
+from dojo.utils import aget_effective_stake, datetime_to_iso8601_str
 
 VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
 

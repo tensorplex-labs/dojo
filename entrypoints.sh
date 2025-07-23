@@ -82,18 +82,6 @@ if [ "$1" = 'validator' ]; then
         ${EXTRA_ARGS}
 fi
 
-if [ "$1" = 'extract-dataset' ]; then
-    echo "Environment variables:"
-    echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"
-    echo "DATABASE_URL: ${DATABASE_URL}"
-    echo "VALIDATOR_API_BASE_URL: ${VALIDATOR_API_BASE_URL}"
-    echo "WALLET_COLDKEY: ${WALLET_COLDKEY}"
-    echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"
-    python scripts/extract_dataset.py \
-        --wallet.name ${WALLET_COLDKEY} \
-        --wallet.hotkey ${WALLET_HOTKEY}
-fi
-
 if [ "$1" = 'validator-api-service' ]; then
     echo "Environment variables:"
     echo "VALIDATOR_API_BASE_URL: ${VALIDATOR_API_BASE_URL}"
@@ -103,25 +91,4 @@ if [ "$1" = 'validator-api-service' ]; then
         --netuid ${NETUID} \
         --subtensor.network ${SUBTENSOR_NETWORK} \
         --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT}
-fi
-
-if [ "$1" = 'migration' ]; then
-    echo "Environment variables:"
-    echo "DATABASE_URL: ${DATABASE_URL}"
-
-    echo "Running Prisma setup..."
-    prisma generate
-    prisma migrate deploy
-
-    echo "Starting migration..."
-    python migration.py --subtensor.network finney
-fi
-
-if [ "$1" = 'validate-migration' ]; then
-    echo "Environment variables:"
-    echo "DATABASE_URL: ${DATABASE_URL}"
-    prisma generate
-
-    echo "Starting migration validation..."
-    python scripts/validate_migration.py
 fi

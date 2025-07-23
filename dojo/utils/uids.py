@@ -1,6 +1,6 @@
 import bittensor as bt
 
-from commons.utils import get_effective_stake
+from dojo.utils import get_effective_stake
 
 
 def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
@@ -11,6 +11,7 @@ def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
     return True
 
 
+# TODO: refactor to use kami
 def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
     """Check if uid is a validator."""
     from dojo import ValidatorConstant
