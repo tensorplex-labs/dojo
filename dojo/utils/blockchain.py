@@ -1,8 +1,10 @@
 import bittensor as bt
-from kami import SubnetMetagraph
 from loguru import logger
 
 from dojo.objects import ObjectManager
+from dojo.utils.netip import get_int_ip_address
+
+from kami import AxonInfo, ServeAxonPayload, SubnetMetagraph
 
 ROOT_WEIGHT = 0.18
 ROOT_NETUID = 0
@@ -95,3 +97,29 @@ def check_stake(subtensor: bt.subtensor, hotkey: str) -> bool:
     if stake < ValidatorConstant.VALIDATOR_MIN_STAKE:
         return False
     return True
+
+
+async def check_if_axon_served(
+    hotkey: str,
+    uid: int,
+    current_axons: AxonInfo,
+    axon_payload: ServeAxonPayload,
+    netuid: int,
+) -> bool:
+    """
+    Check if the axon is served successfully.
+    """
+    current_axon: AxonInfo = current_axons[uid]
+    current_axon_ip: str = current_axon.ip
+    current_axon_port = current_axon.port
+
+    if not current_axon_ip:
+        logger.info(f"Axon not served for hotkey {hotkey} on netuid {netuid}")
+        return False
+
+    if (
+        await get_int_ip_address(current_axon_ip) == axon_payload.ip
+        and axon_payload.port == current_axon_port
+    ):
+        return True
+    return False

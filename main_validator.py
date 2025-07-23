@@ -15,10 +15,14 @@ from dojo.chain import get_async_subtensor
 from dojo.human_feedback import FeedbackLoop
 from dojo.objects import ObjectManager
 from dojo.utils import source_dotenv, validate_services
+from dojo.external_tasks_pool import ExternalTaskPool
 
 source_dotenv()
 
 ENABLE_HFL = os.getenv("ENABLE_HFL", "true").lower() == "true"
+ENABLE_EXTERNAL_TASK_POOL = (
+    os.getenv("ENABLE_EXTERNAL_TASK_POOL", "true").lower() == "true"
+)
 
 
 @asynccontextmanager
@@ -77,6 +81,7 @@ async def main():
         raise RuntimeError("Validator not found")
 
     feedback_loop = FeedbackLoop()
+    external_task_pool = ExternalTaskPool()
 
     config = uvicorn.Config(
         app=app,
@@ -100,18 +105,26 @@ async def main():
         # ),
         asyncio.create_task(validator.block_updater()),
     ]
-    if ENABLE_HFL:
-        running_tasks.extend(
-            [
-                asyncio.create_task(feedback_loop.start_feedback_loop(validator)),
-                asyncio.create_task(feedback_loop.update_tf_task_results(validator)),
-                asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
-                asyncio.create_task(feedback_loop.update_sf_task_results(validator)),
-                asyncio.create_task(feedback_loop.create_next_tf_tasks(validator)),
-            ]
+
+    # if ENABLE_HFL:
+    #     running_tasks.extend(
+    #         [
+    #             asyncio.create_task(feedback_loop.start_feedback_loop(validator)),
+    #             asyncio.create_task(feedback_loop.update_tf_task_results(validator)),
+    #             asyncio.create_task(feedback_loop.create_sf_tasks(validator)),
+    #             asyncio.create_task(feedback_loop.update_sf_task_results(validator)),
+    #             asyncio.create_task(feedback_loop.create_next_tf_tasks(validator)),
+    #         ]
+    #     )
+    # else:
+    #     logger.info("HFL is disabled, skipping HFL tasks")
+
+    if ENABLE_EXTERNAL_TASK_POOL:
+        running_tasks.append(
+            asyncio.create_task(external_task_pool.forward_task(validator))
         )
     else:
-        logger.info("HFL is disabled, skipping HFL tasks")
+        logger.info("External Task Pool is disabled, skipping related tasks")
 
     # set a callback on validator.run() to check for fatal errors.
     running_tasks[1].add_done_callback(_check_fatal_errors)

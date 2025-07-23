@@ -25,7 +25,7 @@ from dojo.protocol import (
     TaskResultSynapse,
 )
 from dojo.storage.cache import build_redis_url
-from dojo.utils import aget_effective_stake, aobject, get_config
+from dojo.utils import aget_effective_stake, aobject, get_config, check_if_axon_served
 
 from .types import ServedRequest
 
@@ -205,8 +205,12 @@ class Miner(aobject):
             ipType=ip_version(external_ip),
             protocol=ip_version(external_ip),
         )
-
-        if not await self.check_if_axon_served(axon_payload):
+        hotkey = self.keyringpair.hotkey
+        uid = self.subnet_metagraph.hotkeys.index(hotkey)
+        current_axon: AxonInfo = self.subnet_metagraph.axons[uid]
+        if not await check_if_axon_served(
+            hotkey, uid, current_axon, axon_payload, self.config.netuid
+        ):
             serve_success = await self.kami.serve_axon(axon_payload)
             if serve_success.get("statusCode", None) == 200:
                 logger.success("Successfully served axon for miner!")
@@ -464,28 +468,28 @@ class Miner(aobject):
         # sync every 5 blocks
         return self.block % 5 == 0
 
-    async def check_if_axon_served(self, axon_payload: ServeAxonPayload) -> bool:
-        """
-        Check if the axon is served successfully.
-        """
-        hotkey = self.keyringpair.hotkey
-        uid = self.subnet_metagraph.hotkeys.index(hotkey)
-        current_axon: AxonInfo = self.subnet_metagraph.axons[uid]
-        current_axon_ip: str = current_axon.ip
-        current_axon_port = current_axon.port
+    # async def check_if_axon_served(self, axon_payload: ServeAxonPayload) -> bool:
+    #     """
+    #     Check if the axon is served successfully.
+    #     """
+    #     hotkey = self.keyringpair.hotkey
+    #     uid = self.subnet_metagraph.hotkeys.index(hotkey)
+    #     current_axon: AxonInfo = self.subnet_metagraph.axons[uid]
+    #     current_axon_ip: str = current_axon.ip
+    #     current_axon_port = current_axon.port
 
-        if not current_axon_ip:
-            logger.info(
-                f"Axon not served for hotkey {hotkey} on netuid {self.config.netuid}"
-            )
-            return False
+    #     if not current_axon_ip:
+    #         logger.info(
+    #             f"Axon not served for hotkey {hotkey} on netuid {self.config.netuid}"
+    #         )
+    #         return False
 
-        if (
-            ip_to_int(current_axon_ip) == axon_payload.ip
-            and axon_payload.port == current_axon_port
-        ):
-            return True
-        return False
+    #     if (
+    #         ip_to_int(current_axon_ip) == axon_payload.ip
+    #         and axon_payload.port == current_axon_port
+    #     ):
+    #         return True
+    #     return False
 
     @property
     def block(self):

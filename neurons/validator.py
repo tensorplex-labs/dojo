@@ -72,6 +72,7 @@ from dojo.utils import (
     get_epoch_time,
     get_new_uuid,
     set_expire_time,
+    check_if_axon_served,
 )
 from dojo.utils.config import get_config
 from dojo.utils.weight_utils import (
@@ -82,18 +83,6 @@ from entrypoints.analytics_upload import run_analytics_upload
 
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
 SyntheticMetadata: TypeAlias = dict[str, str]
-
-# latest_local = get_latest_git_tag()
-# latest_remote = get_latest_remote_tag()
-# if (
-#     latest_local
-#     and latest_remote
-#     and latest_local.strip("v") != latest_remote.strip("v")
-# ):
-#     logger.warning("Your repository is not up to date, and may fail to set weights.")
-#     logger.warning(
-#         f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
-#     )
 
 
 class Validator(aobject):
@@ -148,6 +137,7 @@ class Validator(aobject):
 
         await self.check_registered()
         await self.load_state()
+        await self._serve_external_tasks_port()
 
     async def _send_scores(
         self,
@@ -2054,22 +2044,39 @@ class Validator(aobject):
 
         public_ip = await get_public_ip()
 
-        print(f"Public IP: {public_ip}")
-        import sys
-
-        sys.exit()
-
         logger.info("Serving external tasks port...")
         if not self.kami:
             logger.error("Kami client is not initialized, cannot serve axon")
             return
-        # netuid: int
-        # version: int = 1
-        # ip: int
-        # port: int
-        # ipType: int = Field(default=4, description="4 for IPv4 or 6 for IPv6")
-        # protocol: int = Field(default=4, description="Should be the same for ipType")
-        # placeholder1: int = 0
-        # placeholder2: int = 0
-        ip_int = await get_int_ip_address(self.config)
-        payload = ServeAxonPayload()
+
+        ip_int = await get_int_ip_address(public_ip)
+        payload = ServeAxonPayload(
+            netuid=self.config.netuid,  # type: ignore
+            version=4,
+            ip=ip_int,
+            port=int(os.getenv("EXTERNAL_TASK_PORT")),  # type: ignore
+            ipType=4,
+            protocol=4,
+            placeholder1=0,
+            placeholder2=0,
+        )
+
+        if not await check_if_axon_served(
+            hotkey=self.keyringpair.hotkey,
+            uid=self.uid,
+            current_axons=self.metagraph.axons,
+            axon_payload=payload,
+            netuid=self.config.netuid,  # type: ignore
+        ):
+            logger.info("Axon not served, proceeding to serve axon")
+            serve_axon = await self.kami.serve_axon(payload=payload)
+
+            if not serve_axon["success"]:
+                logger.error("Failed to serve axon on external tasks port")
+                return
+
+            logger.info(
+                f"Successfully served axon on external tasks port {payload.port} with IP {public_ip}"
+            )
+
+        logger.info("External Task Port axon already served! Skipping..")

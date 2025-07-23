@@ -4,6 +4,7 @@ from .blockchain import (
     get_effective_stake,
     verify_hotkey_in_metagraph,
     verify_signature,
+    check_if_axon_served,
 )
 from .config import get_config, resolve_log_level, source_dotenv
 from .core import (
@@ -47,4 +48,5 @@ __all__ = [
     "validate_services",
     "log_retry_info",
     "aobject",
+    "check_if_axon_served",
 ]

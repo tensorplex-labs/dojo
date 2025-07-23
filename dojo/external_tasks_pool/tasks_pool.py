@@ -1,25 +1,40 @@
+import asyncio
 import aiohttp
+import os
 
-from typing import Optional, Dict, Any
+from typing import List, Dict, Any
+
+from neurons.validator import Validator
+from dojo.objects import ObjectManager
+
+from dojo.utils import source_dotenv
+from dojo.external_tasks_pool.types import Task
+
+source_dotenv()
 
 
 class ExternalTaskPool:
-    def __init__(self, config, max_workers: int = 10):
+    def __init__(self, max_workers: int = 10):
+        self.config = ObjectManager.get_config()
         self.max_workers = max_workers
-        self.url = f"{EXTERNAL_TASK_POOL_HOST}/api/v1"
+        self.url = f"{os.getenv('EXTERNAL_TASK_POOL_HOST')}/api/v1"
         self.session = aiohttp.ClientSession()
 
-    async def close(self):
+    async def _close(self):
         if self.session is not None:
             await self.session.close()
 
-    async def reconnect(self):
+    async def _reconnect(self):
         if self.session is not None:
             await self.session.close()
         self.session = aiohttp.ClientSession()
 
-    async def fetch_task(self, params: dict = None) -> Dict[str, Any]:
+    async def _fetch_task(self, params: dict = None) -> Dict[str, Any]:
         try:
+            if not self.session or self.session.closed:
+                await self._reconnect()
+            if params is None:
+                params = {}
             async with self.session.get(f"{self.url}/tasks", params=params) as response:
                 if response.status != 200:
                     raise Exception(
@@ -31,9 +46,13 @@ class ExternalTaskPool:
         except Exception as e:
             raise Exception(f"Error while fetching task: {e}")
 
-    async def health(self) -> Dict[str, Any]:
+    async def _health(self) -> Dict[str, Any]:
         try:
-            async with self.session.get(f"{self.url}/health") as response:
+            if not self.session or self.session.closed:
+                await self._reconnect()
+            async with self.session.get(
+                f"{os.getenv('EXTERNAL_TASK_POOL_HOST')}/health"
+            ) as response:
                 if response.status != 200:
                     return {}
                 return await response.json()
@@ -41,3 +60,28 @@ class ExternalTaskPool:
             raise Exception(f"HTTP error while checking health: {e}")
         except Exception as e:
             raise Exception(f"Error while checking health: {e}")
+
+    async def get_task(self) -> List[Task]:
+        while True:
+            try:
+                health = await self._health()
+                if not health.get("success", False):
+                    raise Exception("External Task Pool is not healthy")
+
+                params = {"unscored": "true"}
+                task = await self._fetch_task(params=params)
+                if not task:
+                    print("No tasks available")
+                    return []
+
+            except Exception as e:
+                print(f"Error in ExternalTaskPool run: {e}")
+            finally:
+                await self._close()
+
+    async def run(self, validator: Validator) -> None:
+        # Process the task here
+        active_miners = validator._active_miner_uids
+        if not active_miners:
+            print("No active miners found")
+            return
