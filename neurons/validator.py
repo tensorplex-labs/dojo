@@ -793,6 +793,12 @@ class Validator(aobject):
                             synthetic_metadata,
                         ) = await self._generate_synthetic_request()
 
+                        if not synthetic_task and not ground_truth:
+                            logger.error(
+                                f"No synthetic task or ground truth found for {uids} {synthetic_task=} {ground_truth=}"
+                            )
+                            continue
+
                         if synthetic_task and ground_truth:
                             await self.send_request(
                                 synapse=synthetic_task,
