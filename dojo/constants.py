@@ -1,5 +1,5 @@
 import os
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 
 class AnalyticsConstants(IntEnum):
@@ -79,6 +79,12 @@ class MinerConstant(IntEnum):
     MINER_STATUS = 60
     # using redis as a form of persistence, expire after X seconds
     REDIS_OM_TTL = 48 * 3600  # 48 hours
+
+
+class BucketConfig(Enum):
+    """Bucket configuration"""
+
+    BUCKET_SIZE = 4
 
 
 # Export the constants directly
