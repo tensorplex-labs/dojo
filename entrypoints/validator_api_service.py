@@ -161,8 +161,8 @@ async def upload_dataset(
 
 
 async def server():
-    # host endpoint with .env VALIDATOR_API_BASE_URL var; default to localhost:9999
-    api_url = os.getenv("VALIDATOR_API_BASE_URL", "http://0.0.0.0:9999")
+    # host endpoint with .env DOJO_API_BASE_URL var; default to localhost:9999
+    api_url = os.getenv("DOJO_API_BASE_URL", "http://0.0.0.0:9999")
     parsed_url = urlparse(api_url)
     # Extract host and port
     host = parsed_url.hostname or "0.0.0.0"
