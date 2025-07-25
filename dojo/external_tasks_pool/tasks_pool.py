@@ -3,6 +3,7 @@ import aiohttp
 import os
 
 from typing import List, Dict, Any
+from loguru import logger
 
 from neurons.validator import Validator
 from dojo.objects import ObjectManager
@@ -57,31 +58,51 @@ class ExternalTaskPool:
                     return {}
                 return await response.json()
         except aiohttp.ClientError as e:
-            raise Exception(f"HTTP error while checking health: {e}")
+            logger.error(f"HTTP error while checking health: {e}")
         except Exception as e:
-            raise Exception(f"Error while checking health: {e}")
+            logger.error(f"Error while checking health: {e}")
 
     async def get_task(self) -> List[Task]:
-        while True:
-            try:
-                health = await self._health()
-                if not health.get("success", False):
-                    raise Exception("External Task Pool is not healthy")
+        try:
+            health = await self._health()
+            if not health.get("success", False):
+                raise Exception("External Task Pool is not healthy")
 
-                params = {"unscored": "true"}
-                task = await self._fetch_task(params=params)
-                if not task:
-                    print("No tasks available")
-                    return []
+            params = {"unscored": "true"}
+            tasks = await self._fetch_task(params=params)
+            if not tasks.get("success", False):
+                print("No tasks available")
+                return []
+            result = []
+            for task in tasks:
+                task_data = task.get("data", {})
 
-            except Exception as e:
-                print(f"Error in ExternalTaskPool run: {e}")
-            finally:
-                await self._close()
+                if not task_data:
+                    print("No task data found")
+                    continue
+                task_obj = Task(**task_data)
+                result.append(task_obj)
+            return result
+        except Exception as e:
+            logger.error(f"Error in ExternalTaskPool run: {e}")
+        finally:
+            await self._close()
 
     async def run(self, validator: Validator) -> None:
-        # Process the task here
-        active_miners = validator._active_miner_uids
-        if not active_miners:
-            print("No active miners found")
-            return
+        while True:
+            try:
+                # Process the task here
+                active_miners = validator._active_miner_uids
+                if not active_miners:
+                    logger.info("No active miners found")
+                    return
+                tasks = await self.get_task()
+                if not tasks:
+                    logger.info("No tasks available")
+                    await asyncio.sleep(60)  # Wait before retrying
+                    continue
+                logger.info(f"Fetched {len(tasks)} tasks from the external task pool")
+                await asyncio.sleep(60)  # wait before polling
+            except Exception as e:
+                logger.error(f"Error in ExternalTaskPool run: {e}")
+                await asyncio.sleep(60)

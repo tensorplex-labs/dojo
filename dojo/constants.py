@@ -53,9 +53,9 @@ class HighValidatorConstants(IntEnum):
     QUERY_WINDOW = 2 * 60 * 60  # 2 hour
 
 
-def get_validator_constants() -> (
-    type[NormalValidatorConstants | MediumValidatorConstants | HighValidatorConstants]
-):
+def get_validator_constants() -> type[
+    NormalValidatorConstants | MediumValidatorConstants | HighValidatorConstants
+]:
     from dojo.utils.config import Mode, get_mode
 
     mode = get_mode()

@@ -120,9 +120,7 @@ async def main():
     #     logger.info("HFL is disabled, skipping HFL tasks")
 
     if ENABLE_EXTERNAL_TASK_POOL:
-        running_tasks.append(
-            asyncio.create_task(external_task_pool.forward_task(validator))
-        )
+        running_tasks.append(asyncio.create_task(external_task_pool.run(validator)))
     else:
         logger.info("External Task Pool is disabled, skipping related tasks")
 
