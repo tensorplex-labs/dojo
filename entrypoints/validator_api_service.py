@@ -19,14 +19,10 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from commons.api_settings import ValidatorAPISettings, get_settings
-from commons.cache import RedisCache
-from commons.objects import ObjectManager
-from commons.utils import (
-    check_stake,
-    verify_hotkey_in_metagraph,
-    verify_signature,
-)
+from dojo.api_settings import ValidatorAPISettings, get_settings
+from dojo.objects import ObjectManager
+from dojo.storage.cache import RedisCache
+from dojo.utils import check_stake, verify_hotkey_in_metagraph, verify_signature
 from dojo.utils.config import source_dotenv
 from entrypoints.analytics_endpoint import analytics_router
 
@@ -165,8 +161,8 @@ async def upload_dataset(
 
 
 async def server():
-    # host endpoint with .env VALIDATOR_API_BASE_URL var; default to localhost:9999
-    api_url = os.getenv("VALIDATOR_API_BASE_URL", "http://0.0.0.0:9999")
+    # host endpoint with .env DOJO_API_BASE_URL var; default to localhost:9999
+    api_url = os.getenv("DOJO_API_BASE_URL", "http://0.0.0.0:9999")
     parsed_url = urlparse(api_url)
     # Extract host and port
     host = parsed_url.hostname or "0.0.0.0"

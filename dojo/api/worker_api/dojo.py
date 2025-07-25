@@ -7,14 +7,10 @@ from typing import Dict, List
 import httpx
 from loguru import logger
 
-from commons.exceptions import CreateTaskFailed
-from commons.utils import loaddotenv
 from dojo import get_dojo_api_base_url
-from dojo.protocol import (
-    CodeAnswer,
-    SyntheticTaskSynapse,
-    TaskTypeEnum,
-)
+from dojo.exceptions import CreateTaskFailed
+from dojo.protocol import CodeAnswer, SyntheticTaskSynapse, TaskTypeEnum
+from dojo.utils import loaddotenv
 from dojo.utils.retry_utils import async_retry
 
 DOJO_API_BASE_URL = get_dojo_api_base_url()
@@ -174,7 +170,7 @@ class DojoAPI:
                 last_error = e
 
         raise CreateTaskFailed(
-            f"Failed to create task after {cls.MAX_RETRIES} retries due to {error_msg}: {last_error}, "
+            f"Failed to create task after {cls.MAX_RETRIES} retries due to {error_msg}: {last_error}, "  # type: ignore
             f"response_text: {response_data['text']}, "
             f"response_json: {response_data['json']}"
         )
