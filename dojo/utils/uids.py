@@ -1,5 +1,4 @@
 import random
-from ast import main
 
 import bittensor as bt
 

@@ -105,7 +105,6 @@ class Validator(aobject):
 
     async def __init__(self):
         await connect_db()
-        self.QUALITY_WEIGHT = 0.8
         self._connection_lock = asyncio.Lock()
         # considering the payload of heartbeats we can afford higher concurrency
         # NOTE: the parameter essentially determines the batch size of batch sending requests
@@ -1051,19 +1050,20 @@ class Validator(aobject):
                 # so miners moving average decay is lower
                 # we incentivise both quality and quantity, but quality has higher weight than quantity
                 final_hotkey_to_synthetic_score = {
-                    hotkey: sum(scores) / len(scores) * self.QUALITY_WEIGHT
+                    hotkey: sum(scores)
+                    / len(scores)
+                    * WeightSettings.QUALITY_WEIGHT.value
                     + sum(scores)
                     / len(processed_request_ids)
-                    * (1 - self.QUALITY_WEIGHT)
+                    * WeightSettings.QUANTITY_WEIGHT.value
                     for hotkey, scores in hotkey_to_synthetic_scores.items()
                     if scores
                 }
 
                 final_hotkey_to_hfl_score = {
-                    hotkey: sum(scores) / len(scores) * self.QUALITY_WEIGHT
-                    + sum(scores)
-                    / len(processed_request_ids)
-                    * (1 - self.QUALITY_WEIGHT)
+                    hotkey: sum(scores)
+                    / len(scores)
+                    * WeightSettings.QUALITY_WEIGHT.value
                     for hotkey, scores in hotkey_to_hfl_scores.items()
                     if scores
                 }

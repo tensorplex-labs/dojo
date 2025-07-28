@@ -92,6 +92,15 @@ class WeightSettings(Enum):
 
     SYNTHETIC_SCORE_WEIGHT = 1.0
     HFL_SCORE_WEIGHT = 0.0
+    QUALITY_WEIGHT = 1.0
+    QUANTITY_WEIGHT = 0.0
+
+
+assert WeightSettings.QUALITY_WEIGHT.value + WeightSettings.QUANTITY_WEIGHT.value == 1.0
+assert (
+    WeightSettings.SYNTHETIC_SCORE_WEIGHT.value + WeightSettings.HFL_SCORE_WEIGHT.value
+    == 1.0
+)
 
 
 # Export the constants directly
