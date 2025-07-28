@@ -12,8 +12,8 @@ from dojo.protocol import (
     SyntheticTaskSynapse,
     CompletionResponse,
     ScoreCriteria,
-    CriteriaType,
     TaskTypeEnum,
+    ThreeDAssets,
 )
 from dojo.utils import source_dotenv, get_new_uuid
 from dojo.external_tasks_pool.types import Task, ThreeDTaskMetadata
@@ -108,8 +108,7 @@ class ExternalTaskPool:
             await self._close()
 
     def _convert_task_to_synapse(self, task: Task) -> SyntheticTaskSynapse:
-        """
-        Convert an external Task to SyntheticTaskSynapse format.
+        """Convert an external Task to SyntheticTaskSynapse format.
 
         Args:
             task: Task from external pool
@@ -124,12 +123,12 @@ class ExternalTaskPool:
         # Create a completion response for each model in ground truth
         for model_id, score in task.task_metadata.ground_truth.items():
             # Extract a meaningful model name from the ID
-            model_name = model_id.split(".")[0] if "." in model_id else model_id
-
             completion = CompletionResponse(
-                model=model_name,
-                completion=None,  # 3D tasks don't have code completions
-                completion_id=model_id,  # Use the original ID as completion_id
+                model=model_id,
+                completion=ThreeDAssets(
+                    url=f"{os.getenv('B2_ENDPOINT')}/{'B2_BUCKET_NAME'}/{task.id}/{model_id}.spz"
+                ),
+                completion_id=get_new_uuid(),  # Use the original ID as completion_id
                 score=None,  # Miners will provide the score
                 criteria_types=[
                     ScoreCriteria(
@@ -158,17 +157,17 @@ class ExternalTaskPool:
     async def _update_task_sent_status(self, task_id: str) -> bool:
         """
         Update the task's sent status in the external task pool API.
-        
+
         Args:
             task_id: The ID of the task to mark as sent
-            
+
         Returns:
             bool: True if successfully updated, False otherwise
         """
         try:
             if not self.session or self.session.closed:
                 await self._reconnect()
-                
+
             url = f"{self.url}/tasks/{task_id}/sent"
             async with self.session.put(url) as response:
                 if response.status == 200:
@@ -185,7 +184,6 @@ class ExternalTaskPool:
         except Exception as e:
             logger.error(f"Error updating task sent status: {e}")
             return False
-
 
     async def run(self, validator: Validator) -> None:
         while True:
@@ -244,9 +242,13 @@ class ExternalTaskPool:
                         # Update sent status via API
                         sent_updated = await self._update_task_sent_status(task.id)
                         if sent_updated:
-                            logger.info(f"Successfully sent task {task.id} to miners and updated sent status")
+                            logger.info(
+                                f"Successfully sent task {task.id} to miners and updated sent status"
+                            )
                         else:
-                            logger.warning(f"Task {task.id} sent to miners but failed to update sent status in API")
+                            logger.warning(
+                                f"Task {task.id} sent to miners but failed to update sent status in API"
+                            )
 
                     except Exception as e:
                         logger.error(f"Error processing task {task.id}: {e}")

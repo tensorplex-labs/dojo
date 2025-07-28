@@ -25,4 +25,4 @@ class Task(BaseModel):
     scored_status: bool
     task_metadata: ThreeDTaskMetadata
     task_type: str
-    sent_status: bool
+    sent_status: bool = False  # Default to False if not provided

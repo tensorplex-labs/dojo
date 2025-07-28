@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Dict
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from strenum import StrEnum
@@ -87,9 +87,15 @@ class CodeAnswer(BaseModel):
     files: List[CodeFileObject] = Field(description="List of FileObjects")
 
 
+class ThreeDAssets(BaseModel):
+    url: str = Field(description="URL of the 3D asset")
+
+
 class CompletionResponse(BaseModel):
     model: str = Field(description="Model that generated the completion")
-    completion: CodeAnswer | None = Field(description="Completion from the model")
+    completion: CodeAnswer | ThreeDAssets | None = Field(
+        description="Completion from the model"
+    )
     completion_id: str = Field(description="Unique identifier for the completion")
     # TODO: Check if rank_id is needed
     rank_id: int | None = Field(

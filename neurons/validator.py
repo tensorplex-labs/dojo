@@ -1277,8 +1277,8 @@ class Validator(aobject):
             return
 
         start = get_epoch_time()
-        # active_miner_uids = await self.get_active_miner_uids()
-        # axons = self._retrieve_axons(active_miner_uids)
+        active_miner_uids = await self.get_active_miner_uids()
+        axons = self._retrieve_axons(active_miner_uids)
         if not axons:
             logger.warning("🤷 No axons to query ... skipping")
             return
