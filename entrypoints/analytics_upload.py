@@ -27,7 +27,7 @@ from dojo.objects import ObjectManager
 from dojo.protocol import AnalyticsData, AnalyticsPayload
 from dojo.utils import aget_effective_stake, datetime_to_iso8601_str
 
-VALIDATOR_API_BASE_URL = os.getenv("VALIDATOR_API_BASE_URL")
+DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
 
 
 async def _get_all_miner_hotkeys(subnet_metagraph: SubnetMetagraph) -> List[str]:
@@ -135,7 +135,7 @@ async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response
     try:
         logger.info("POST-ing analytics data to validator API")
         response = await _http_client.post(
-            url=f"{VALIDATOR_API_BASE_URL}/api/v1/analytics/validators/{hotkey}/tasks",
+            url=f"{DOJO_API_BASE_URL}/api/v1/validator/analytics/tasks",
             json=payload.model_dump(mode="json"),
             headers={
                 "X-Hotkey": hotkey,
