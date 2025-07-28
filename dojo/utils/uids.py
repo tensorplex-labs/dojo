@@ -26,16 +26,16 @@ def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
 
 
 def get_bucket_uids(
-    miner_uids, bucket_size: int = BucketConfig.BUCKET_SIZE.value
+    miner_uids: list[int], bucket_size: int = BucketConfig.BUCKET_SIZE.value
 ) -> list[list[int]]:
     """
-    Get axons for a given bucket size.
+    Get uids for a given bucket size.
 
     Args:
-        bucket_size: The size of the bucket to get axons for
+        bucket_size: The size of the bucket to get uids for
 
     Returns:
-        List of axons for the given bucket size
+        List of uids for the given bucket size
     """
 
     if len(miner_uids) < bucket_size:

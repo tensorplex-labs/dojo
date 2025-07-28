@@ -132,13 +132,3 @@ services:
         # disable loki's default of not saving to a file, so we have persistence
         no-file: 0
         max-size: "50m"
-
-  validator-api-service:
-    container_name: validator-api-service
-    image: ghcr.io/tensorplex-labs/dojo:main
-    env_file:
-      - .env
-    ports:
-      - "127.0.0.1:9999:9999"
-    command: ["validator-api-service"]
-    logging: *default-logging
