@@ -81,14 +81,3 @@ if [ "$1" = 'validator' ]; then
         --kami.port ${KAMI_PORT} \
         ${EXTRA_ARGS}
 fi
-
-if [ "$1" = 'validator-api-service' ]; then
-    echo "Environment variables:"
-    echo "DOJO_API_BASE_URL: ${DOJO_API_BASE_URL}"
-    echo "MAX_CHUNK_SIZE_MB: ${MAX_CHUNK_SIZE_MB}"
-    echo "NETUID: ${NETUID}"
-    python entrypoints/validator_api_service.py \
-        --netuid ${NETUID} \
-        --subtensor.network ${SUBTENSOR_NETWORK} \
-        --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT}
-fi

@@ -68,6 +68,7 @@ from dojo.utils import (
     set_expire_time,
 )
 from dojo.utils.config import get_config
+from dojo.utils.uids import get_bucket_uids
 from dojo.utils.weight_utils import (
     aprocess_weights_for_netuid,
     convert_weights_and_uids_for_emit,
@@ -104,7 +105,6 @@ class Validator(aobject):
 
     async def __init__(self):
         await connect_db()
-        self.QUALITY_WEIGHT = 0.8
         self._connection_lock = asyncio.Lock()
         # considering the payload of heartbeats we can afford higher concurrency
         # NOTE: the parameter essentially determines the batch size of batch sending requests
@@ -770,28 +770,56 @@ class Validator(aobject):
             try:
                 # Always clear the synapse history to avoid memory leak not just on success
                 # Check if there are any active miners. If no active miners, skip the request generation.
-                if not self._active_miner_uids:
+                active_miner_uids = await self.get_active_miner_uids()
+                if not active_miner_uids:
                     logger.info(
                         f"No active miners to send request to... sleeping for {ValidatorInterval.VALIDATOR_RUN} seconds"
                     )
                     await asyncio.sleep(ValidatorInterval.VALIDATOR_RUN)
                     continue
-                (
-                    synthetic_task,
-                    ground_truth,
-                    obfuscated_model_to_model,
-                    synthetic_metadata,
-                ) = await self._generate_synthetic_request()
 
-                if synthetic_task and ground_truth:
-                    await self.send_request(
-                        synapse=synthetic_task,
-                        ground_truth=ground_truth,
-                        obfuscated_model_to_model=obfuscated_model_to_model,
-                        synthetic_metadata=synthetic_metadata,
-                    )
+                bucket_uids = get_bucket_uids(miner_uids=active_miner_uids)
+                for uids in bucket_uids:
+                    try:
+                        axons = self._retrieve_axons(uids)
+                        if not axons:
+                            continue
+
+                        (
+                            synthetic_task,
+                            ground_truth,
+                            obfuscated_model_to_model,
+                            synthetic_metadata,
+                        ) = await self._generate_synthetic_request()
+
+                        if not synthetic_task and not ground_truth:
+                            logger.error(
+                                f"No synthetic task or ground truth found for {uids} {synthetic_task=} {ground_truth=}"
+                            )
+                            continue
+
+                        if synthetic_task and ground_truth:
+                            await self.send_request(
+                                synapse=synthetic_task,
+                                ground_truth=ground_truth,
+                                obfuscated_model_to_model=obfuscated_model_to_model,
+                                synthetic_metadata=synthetic_metadata,
+                                axons=axons,
+                            )
+
+                    except FatalSyntheticGenerationError:
+                        # if synthetic-API is unresponsive, shut down validator.
+                        logger.error(
+                            "Synthetic API is unresponsive, shutting down validator"
+                        )
+                        await self.cleanup()
+                        raise
+                    except Exception as e:
+                        logger.error(f"Error in sending request: {e}")
+                        traceback.print_exc()
+                        continue
+
                 self.step += 1
-
                 # Sync metagraph and potentially set weights.
                 await self.sync()
                 await asyncio.sleep(ValidatorInterval.VALIDATOR_RUN)
@@ -809,9 +837,6 @@ class Validator(aobject):
                 logger.error(f"Error during validation: {err}")
                 logger.debug(traceback.format_exc())
                 await asyncio.sleep(ValidatorInterval.VALIDATOR_RUN)
-
-        # Cleanup on exit
-        await self.cleanup()
 
     async def update_tasks_polling(self):
         """
@@ -1025,19 +1050,20 @@ class Validator(aobject):
                 # so miners moving average decay is lower
                 # we incentivise both quality and quantity, but quality has higher weight than quantity
                 final_hotkey_to_synthetic_score = {
-                    hotkey: sum(scores) / len(scores) * self.QUALITY_WEIGHT
+                    hotkey: sum(scores)
+                    / len(scores)
+                    * WeightSettings.QUALITY_WEIGHT.value
                     + sum(scores)
                     / len(processed_request_ids)
-                    * (1 - self.QUALITY_WEIGHT)
+                    * WeightSettings.QUANTITY_WEIGHT.value
                     for hotkey, scores in hotkey_to_synthetic_scores.items()
                     if scores
                 }
 
                 final_hotkey_to_hfl_score = {
-                    hotkey: sum(scores) / len(scores) * self.QUALITY_WEIGHT
-                    + sum(scores)
-                    / len(processed_request_ids)
-                    * (1 - self.QUALITY_WEIGHT)
+                    hotkey: sum(scores)
+                    / len(scores)
+                    * WeightSettings.QUALITY_WEIGHT.value
                     for hotkey, scores in hotkey_to_hfl_scores.items()
                     if scores
                 }
@@ -1234,6 +1260,7 @@ class Validator(aobject):
         ground_truth: dict[str, int],
         obfuscated_model_to_model: ObfuscatedModelMap | None = None,
         synthetic_metadata: dict | None = None,
+        axons: list[AxonInfo] = [],
     ) -> ValidatorTask | None:
         """Send task requests to miners and process their responses.
 
@@ -1250,14 +1277,15 @@ class Validator(aobject):
             return
 
         start = get_epoch_time()
-        active_miner_uids = await self.get_active_miner_uids()
-        axons = self._retrieve_axons(active_miner_uids)
+        # active_miner_uids = await self.get_active_miner_uids()
+        # axons = self._retrieve_axons(active_miner_uids)
         if not axons:
             logger.warning("🤷 No axons to query ... skipping")
             return
 
+        miner_uids = [self.metagraph.hotkeys.index(axon.hotkey) for axon in axons]
         logger.info(
-            f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{active_miner_uids} with expire_at: {synapse.expire_at}"
+            f"⬆️ Sending task request for task id: {synapse.task_id}, miners uids:{miner_uids} with expire_at: {synapse.expire_at}"
         )
 
         miner_responses = await self.send_synthetic_task(synapse, axons)
