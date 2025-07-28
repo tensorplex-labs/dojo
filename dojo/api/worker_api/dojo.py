@@ -9,7 +9,7 @@ from loguru import logger
 
 from dojo import get_dojo_api_base_url
 from dojo.exceptions import CreateTaskFailed
-from dojo.protocol import CodeAnswer, SyntheticTaskSynapse, TaskTypeEnum
+from dojo.protocol import CodeAnswer, SyntheticTaskSynapse, TaskTypeEnum, ThreeDAssets
 from dojo.utils import loaddotenv
 from dojo.utils.retry_utils import async_retry
 
@@ -90,6 +90,7 @@ class DojoAPI:
             completion_dict["completion"] = (
                 completion.completion.model_dump()
                 if isinstance(completion.completion, CodeAnswer)
+                or isinstance(completion.completion, ThreeDAssets)
                 else completion.completion
             )
             completion_dict["criteria"] = (
