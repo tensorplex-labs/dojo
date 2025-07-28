@@ -65,6 +65,8 @@ class DojoAPI:
             TaskTypeEnum.CODE_GENERATION,
         ):
             task_modality = TaskTypeEnum.CODE_GENERATION
+        elif data.task_type in (TaskTypeEnum.TEXT_TO_THREE_D,):
+            task_modality = "THREE_D"
         else:
             task_modality = str(data.task_type).upper()
 

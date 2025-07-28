@@ -17,7 +17,7 @@ class SanitizationFailureReason(StrEnum):
 
 
 class TaskTypeEnum(StrEnum):
-    TEXT_TO_THREE_D = "THREE_D"
+    TEXT_TO_THREE_D = "TEXT_TO_THREE_D"
     TEXT_TO_IMAGE = "TEXT_TO_IMAGE"
     CODE_GENERATION = "CODE_GENERATION"
     TEXT_FEEDBACK = "TEXT_FEEDBACK"
