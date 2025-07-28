@@ -36,8 +36,11 @@ def optimize_payload_for_transport(
     synapse: SyntheticTaskSynapse,
 ) -> SyntheticTaskSynapse:
     synapse_copy = copy.deepcopy(synapse)
-    for response in synapse_copy.completion_responses or []:
-        response.completion = None
+    # Only clear completion for non-3D tasks to reduce payload size
+    # For 3D tasks, we need to preserve the ThreeDAssets URLs
+    if synapse.task_type != "TEXT_TO_THREE_D":
+        for response in synapse_copy.completion_responses or []:
+            response.completion = None
     return synapse_copy
 
 
