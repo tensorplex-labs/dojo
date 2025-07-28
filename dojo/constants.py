@@ -87,5 +87,12 @@ class BucketConfig(Enum):
     BUCKET_SIZE = 4
 
 
+class WeightSettings(Enum):
+    """Weight settings"""
+
+    SYNTHETIC_SCORE_WEIGHT = 1.0
+    HFL_SCORE_WEIGHT = 0.0
+
+
 # Export the constants directly
 ValidatorInterval = get_validator_constants()
