@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union, Dict
+from typing import Dict
 
 
 class ThreeDDuelInfo(BaseModel):
@@ -8,13 +8,14 @@ class ThreeDDuelInfo(BaseModel):
     source: str
     rank_before: float
     rank_after: float
-    explanation: str
 
 
 class ThreeDTaskMetadata(BaseModel):
     prompt: str
     left: ThreeDDuelInfo
     right: ThreeDDuelInfo
+    explanation: str
+    ground_truth: Dict[str, int]
 
 
 class Task(BaseModel):
@@ -24,3 +25,4 @@ class Task(BaseModel):
     scored_status: bool
     task_metadata: ThreeDTaskMetadata
     task_type: str
+    sent_status: bool

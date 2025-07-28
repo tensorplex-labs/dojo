@@ -15,7 +15,7 @@ from dojo.chain import get_async_subtensor
 from dojo.human_feedback import FeedbackLoop
 from dojo.objects import ObjectManager
 from dojo.utils import source_dotenv, validate_services
-from dojo.external_tasks_pool import ExternalTaskPool
+from dojo.external_tasks_pool.tasks_pool import ExternalTaskPool
 
 source_dotenv()
 

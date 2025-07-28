@@ -872,6 +872,7 @@ class Validator(aobject):
                     task_types=[
                         TaskTypeEnum.CODE_GENERATION,
                         TaskTypeEnum.SCORE_FEEDBACK,
+                        TaskTypeEnum.TEXT_TO_THREE_D,
                     ],
                 ):
                     if not task_batch:
@@ -882,8 +883,11 @@ class Validator(aobject):
                         try:
                             validator_task: SyntheticTaskSynapse = task.validator_task
 
-                            if validator_task.task_type == TaskTypeEnum.CODE_GENERATION:
-                                # Regular task flow
+                            if validator_task.task_type in [
+                                TaskTypeEnum.CODE_GENERATION,
+                                TaskTypeEnum.TEXT_TO_THREE_D,
+                            ]:
+                                # Regular task flow (including 3D tasks)
                                 hotkey_to_score = await self._score_task(task)
                                 task_id = task.validator_task.task_id
                                 if task_id:
@@ -1348,7 +1352,15 @@ class Validator(aobject):
         if not axons:
             axons = self._retrieve_axons(uids=active_uids)
 
-        urls = [f"http://{axon.ip}:{axon.port}" for axon in axons]
+        urls = []
+        for axon in axons:
+            logger.info(
+                f"Sending task request to miner: {axon.hotkey} at {axon.ip}:{axon.port}"
+            )
+            ip = axon.ip if axon.ip != "0.0.0.0" else "127.0.0.1"
+            url = f"http://{ip}:{axon.port}"
+            urls.append(url)
+
         logger.info(f"Sending heartbeats to {len(axons)} miners")
 
         synapses = [
@@ -2042,11 +2054,20 @@ class Validator(aobject):
         """
         from dojo.utils.netip import get_int_ip_address, get_public_ip
 
-        public_ip = await get_public_ip()
+        if not os.getenv("EXTERNAL_TASK_HOST"):
+            public_ip = await get_public_ip()
+        else:
+            public_ip = os.getenv("EXTERNAL_TASK_HOST")
+
+        print(f"Public IP: {type(public_ip)}")
 
         logger.info("Serving external tasks port...")
         if not self.kami:
             logger.error("Kami client is not initialized, cannot serve axon")
+            return
+
+        if not public_ip:
+            logger.error("Failed to retrieve public IP address, cannot serve axon")
             return
 
         ip_int = await get_int_ip_address(public_ip)
