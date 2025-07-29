@@ -1,3 +1,9 @@
+## [1.15.0](https://github.com/tensorplex-labs/dojo/compare/v1.14.7...v1.15.0) (2025-07-29)
+
+### Features
+
+* bucket integration ([#243](https://github.com/tensorplex-labs/dojo/issues/243)) ([c91bb61](https://github.com/tensorplex-labs/dojo/commit/c91bb612a50eed82bd14794cc11cc7c63dda56e7))
+
 ## [1.14.7](https://github.com/tensorplex-labs/dojo/compare/v1.14.6...v1.14.7) (2025-07-22)
 
 ## [1.14.6](https://github.com/tensorplex-labs/dojo/compare/v1.14.5...v1.14.6) (2025-07-17)
