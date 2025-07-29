@@ -6,7 +6,7 @@ import torch
 from tabulate import tabulate
 from termcolor import colored
 
-from commons.score_storage import ScoreStorage
+from dojo.storage.score_storage import ScoreStorage
 
 
 def format_score_table(scores: torch.Tensor) -> List[List[str]]:

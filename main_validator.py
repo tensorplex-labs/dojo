@@ -8,15 +8,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from commons.api.middleware import LimitContentLengthMiddleware
-from commons.dataset.synthetic import SyntheticAPI
-from commons.exceptions import FatalSyntheticGenerationError
-from commons.human_feedback import FeedbackLoop
-from commons.objects import ObjectManager
-from commons.utils import validate_services
-from database.client import connect_db, disconnect_db
+from database import connect_db, disconnect_db
+from dojo.api.middleware import LimitContentLengthMiddleware
+from dojo.api.synthetic_api import FatalSyntheticGenerationError, SyntheticAPI
 from dojo.chain import get_async_subtensor
-from dojo.utils.config import source_dotenv
+from dojo.human_feedback import FeedbackLoop
+from dojo.objects import ObjectManager
+from dojo.utils import source_dotenv, validate_services
 
 source_dotenv()
 

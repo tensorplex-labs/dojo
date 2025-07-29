@@ -1,6 +1,5 @@
 import json
 
-from commons.utils import datetime_to_iso8601_str, iso8601_str_to_datetime
 from database.prisma import Json
 from database.prisma.enums import CriteriaTypeEnum, TaskTypeEnum
 from database.prisma.models import Completion, MinerResponse, ValidatorTask
@@ -21,6 +20,7 @@ from dojo.protocol import (
     TextCriteria,
     TextFeedbackScore,
 )
+from dojo.utils import datetime_to_iso8601_str, iso8601_str_to_datetime
 
 from .types import Metadata
 
