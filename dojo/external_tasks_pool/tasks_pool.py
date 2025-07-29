@@ -126,7 +126,7 @@ class ExternalTaskPool:
             completion = CompletionResponse(
                 model=model_id,
                 completion=ThreeDAssets(
-                    url=f"{os.getenv('B2_ENDPOINT')}/{'B2_BUCKET_NAME'}/{task.id}/{model_id}.spz"
+                    url=f"{os.getenv('B2_ENDPOINT')}/{os.getenv('B2_BUCKET_NAME')}/{task.id}/{model_id}.spz"
                 ),
                 completion_id=get_new_uuid(),  # Use the original ID as completion_id
                 score=None,  # Miners will provide the score
