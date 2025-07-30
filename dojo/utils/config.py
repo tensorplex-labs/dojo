@@ -223,3 +223,8 @@ def get_mode() -> Mode:
     if not mode:
         return Mode.NORMAL
     return Mode(mode.lower())
+
+
+def is_dev() -> bool:
+    """Check if the current environment is dev"""
+    return os.getenv("ENVIRONMENT") == "dev"

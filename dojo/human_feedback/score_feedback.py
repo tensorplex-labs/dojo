@@ -17,7 +17,11 @@ from dojo.protocol import ScoreFeedbackEvent, SyntheticTaskSynapse, TextFeedback
 from dojo.utils import datetime_as_utc, iso8601_str_to_datetime, set_expire_time
 
 from .hfl_helpers import HFLManager
-from .utils import create_initial_miner_scores, map_human_feedback_to_task_synapse
+from .utils import (
+    create_initial_miner_scores,
+    get_trusted_coldkey_from_api,
+    map_human_feedback_to_task_synapse,
+)
 
 if TYPE_CHECKING:
     from neurons.validator import Validator
@@ -91,16 +95,23 @@ async def create_score_feedback_task(
         task_synapse.completion_responses = completion_responses
 
         # Get active miners for SF task
-        active_miners = await validator.get_active_miner_uids()
+        active_miners: list[int] = await validator.get_active_miner_uids()
         if len(active_miners) <= 0:
             logger.error(f"No active miners found for SF task for {tf_task.id}")
             return None
 
-        # Send to miners
+        current_axons: list[AxonInfo] = validator._retrieve_axons(active_miners)
+        coldkeys: list[str] = await get_trusted_coldkey_from_api()
+        whitelisted_axons = [axon for axon in current_axons if axon.coldkey in coldkeys]
+
+        selected_axons: list[AxonInfo] = (
+            current_axons if len(whitelisted_axons) < 2 else whitelisted_axons
+        )
+
         miner_responses: list[SyntheticTaskSynapse] = await send_hfl_request(
             synapse=task_synapse,
             task_type=TaskTypeEnum.SCORE_FEEDBACK,
-            axons=validator._retrieve_axons(active_miners),
+            axons=selected_axons,
         )
         logger.info(
             f"Received {len(miner_responses) if miner_responses else 0} miner responses from: {[resp.miner_hotkey for resp in (miner_responses or [])]}"

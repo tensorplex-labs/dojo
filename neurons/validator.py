@@ -78,6 +78,8 @@ from entrypoints.analytics_upload import run_analytics_upload
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
 SyntheticMetadata: TypeAlias = dict[str, str]
 
+is_dev = os.getenv("ENVIRONMENT") == "dev"
+
 # latest_local = get_latest_git_tag()
 # latest_remote = get_latest_remote_tag()
 # if (
@@ -1827,6 +1829,9 @@ class Validator(aobject):
                 logger.debug(
                     f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE} to be considered miner"
                 )
+                continue
+
+            if is_dev and int(uid) in [15, 6]:
                 continue
 
             miner_axons.append(axon)
