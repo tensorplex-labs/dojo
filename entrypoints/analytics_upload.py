@@ -21,7 +21,7 @@ from database.orm import ORM
 from database.prisma.enums import TaskTypeEnum
 from database.prisma.models import ValidatorTask
 from database.prisma.types import ValidatorTaskInclude
-from dojo.constants import AnalyticsConstants, ValidatorConstant
+from dojo.constants import AnalyticsConstants, APIConstants, ValidatorConstant
 from dojo.exceptions import NoProcessedTasksYet
 from dojo.objects import ObjectManager
 from dojo.protocol import AnalyticsData, AnalyticsPayload
@@ -134,8 +134,9 @@ async def _post_task_data(payload, hotkey, signature, message) -> httpx.Response
     _http_client = httpx.AsyncClient(timeout=300)
     try:
         logger.info("POST-ing analytics data to validator API")
+        base_url = APIConstants.get_dojo_base_url()
         response = await _http_client.post(
-            url=f"{DOJO_API_BASE_URL}/api/v1/validator/analytics/tasks",
+            url=f"{base_url}/api/v1/validator/analytics/tasks",
             json=payload.model_dump(mode="json"),
             headers={
                 "X-Hotkey": hotkey,

@@ -6,6 +6,7 @@ import random
 import traceback
 from datetime import datetime, timedelta, timezone
 
+import numpy as np
 from kami import AxonInfo
 from loguru import logger
 
@@ -19,6 +20,8 @@ from database.prisma.types import (
     ValidatorTaskInclude,
 )
 from dojo.api.synthetic_api import HumanFeedbackResponse
+from dojo.api.worker_api.dojo import DojoAPI
+from dojo.objects import ObjectManager
 from dojo.protocol import (
     CodeAnswer,
     CompletionResponse,
@@ -822,6 +825,84 @@ def select_axons_by_coldkey(axons: list[AxonInfo], subset_size: int) -> list[Axo
             break
 
     return selected_axons[:subset_size]
+
+
+async def get_trusted_coldkey_from_api() -> list[str]:
+    """
+    Get the trusted miners from the API.
+    @dev: this function is used to get the trusted miners from the API.
+    @returns: list of coldkeys
+    """
+    try:
+        _validator = await ObjectManager.get_validator()
+
+        hotkey = _validator.keyringpair.hotkey
+        message = f"Getting trusted miners from validator API: {hotkey}"
+        signature = await _validator.kami.sign_message(message)
+
+        whitelisted_miners = await DojoAPI.get_whitelisted_coldkeys(
+            hotkey, signature, message
+        )
+    except Exception as e:
+        logger.error(f"Error getting trusted miners from API: {e}")
+        return []
+
+    return whitelisted_miners
+
+
+def select_axon_with_whitelist(
+    axons: list[AxonInfo],
+    whitelist: list[str],
+    target_count: int = HFLConstants.TARGET_NUM_MINERS.value,
+) -> list[AxonInfo]:
+    """Select axons with percentage bias toward whitelisted miners"""
+
+    whitelist_set = set(whitelist)
+    whitelisted_pool: list[AxonInfo] = []
+    other_pool: list[AxonInfo] = []
+
+    # Create two separate pools
+    for axon in axons:
+        if axon.coldkey in whitelist_set:
+            whitelisted_pool.append(axon)
+        else:
+            other_pool.append(axon)
+
+    selected = []
+    for _ in range(target_count):
+        # Quick exit if no pools available
+        if not whitelisted_pool and not other_pool:
+            break
+
+        # Weighted choice between available pools
+        use_whitelist = False
+        if whitelisted_pool and other_pool:
+            use_whitelist = np.random.random() < 0.95  # 95% chance
+        elif whitelisted_pool:
+            use_whitelist = True
+        # else: use_whitelist stays False (use other_pool)
+
+        # Select from chosen pool
+        pool = whitelisted_pool if use_whitelist else other_pool
+        random.shuffle(pool)
+        chosen = random.choice(pool)
+        # remove from pool to avoid duplicates
+        pool.remove(chosen)
+        selected.append(chosen)
+
+    return selected
+
+
+async def select_trusted_miners(current_axons: list[AxonInfo]) -> list[AxonInfo]:
+    """
+    Get the whitelist of miners from the API.
+    """
+    whitelist = await get_trusted_coldkey_from_api()
+    selected_axons = select_axon_with_whitelist(
+        current_axons, whitelist, HFLConstants.TARGET_NUM_MINERS.value
+    )
+
+    return selected_axons
 
 
 if __name__ == "__main__":

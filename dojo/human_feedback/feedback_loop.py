@@ -32,7 +32,7 @@ from .types import HFLConstants, HFLInterval
 from .utils import (
     evaluate_miner_consensus,
     get_time_window_for_tasks,
-    select_axons_by_coldkey,
+    select_trusted_miners,
 )
 
 if TYPE_CHECKING:
@@ -96,10 +96,7 @@ class FeedbackLoop:
         )
 
         current_axons = validator._retrieve_axons(active_miner_uids)
-        selected_axons = select_axons_by_coldkey(
-            current_axons, HFLConstants.TARGET_NUM_MINERS.value
-        )
-
+        selected_axons = await select_trusted_miners(current_axons)
         miner_responses = await send_hfl_request(
             synapse=text_criteria_task,
             task_type=TaskTypeEnum.TEXT_FEEDBACK,
@@ -397,9 +394,7 @@ class FeedbackLoop:
                         axons = [
                             axon for axon in axons if axon.hotkey not in used_hotkeys
                         ]
-                        selected_axons = select_axons_by_coldkey(
-                            axons, HFLConstants.TARGET_NUM_MINERS.value
-                        )
+                        selected_axons = await select_trusted_miners(axons)
 
                         miner_responses = await send_hfl_request(
                             synapse=task_synapse,
@@ -748,9 +743,7 @@ class FeedbackLoop:
                     )
 
                     current_axons = validator._retrieve_axons(active_miners)
-                    selected_axons = select_axons_by_coldkey(
-                        current_axons, HFLConstants.TARGET_NUM_MINERS.value
-                    )
+                    selected_axons = await select_trusted_miners(current_axons)
 
                     # Send the task to miners
                     miner_responses = await send_hfl_request(

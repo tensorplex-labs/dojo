@@ -1,6 +1,8 @@
 import os
 from enum import Enum, IntEnum
 
+from dojo.utils.config import is_dev
+
 
 class AnalyticsConstants(IntEnum):
     """Constants that don't vary with mode"""
@@ -101,6 +103,12 @@ assert (
     WeightSettings.SYNTHETIC_SCORE_WEIGHT.value + WeightSettings.HFL_SCORE_WEIGHT.value
     == 1.0
 )
+
+
+class APIConstants:
+    @staticmethod
+    def get_dojo_base_url() -> str:
+        return "https://testnet.dojo.network" if is_dev() else "https://dojo.network"
 
 
 # Export the constants directly
