@@ -86,7 +86,7 @@ class MinerConstant(IntEnum):
 class BucketConfig(Enum):
     """Bucket configuration"""
 
-    BUCKET_SIZE = 4
+    BUCKET_SIZE = 2 if is_dev() else 4
 
 
 class WeightSettings(Enum):
@@ -105,10 +105,10 @@ assert (
 )
 
 
-class APIConstants:
-    @staticmethod
-    def get_dojo_base_url() -> str:
-        return "https://testnet.dojo.network" if is_dev() else "https://dojo.network"
+class APIConstants(Enum):
+    DOJO_BASE_URL = (
+        "https://testnet.dojo.network" if is_dev() else "https://dojo.network"
+    )
 
 
 # Export the constants directly

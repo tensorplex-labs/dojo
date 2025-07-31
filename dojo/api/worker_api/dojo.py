@@ -182,7 +182,7 @@ class DojoAPI:
         cls, hotkey: str, signature: str, message: str
     ) -> list[str]:
         """Gets whitelisted miners for a given hotkey"""
-        base_url = APIConstants.get_dojo_base_url()
+        base_url = APIConstants.DOJO_BASE_URL.value
         url = f"{base_url}/api/v1/validator/trusted_miners"
         headers = {
             "X-Hotkey": hotkey,
