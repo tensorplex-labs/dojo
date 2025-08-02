@@ -874,6 +874,9 @@ class Validator(aobject):
             # for each hotkey, a list of scores from all tasks being scored
             hotkey_to_synthetic_scores = defaultdict(list)
             hotkey_to_hfl_scores = defaultdict(list)
+            # Track scores by task type for weighted averaging
+            hotkey_to_code_scores = defaultdict(list)
+            hotkey_to_3d_scores = defaultdict(list)
             try:
                 now = datetime.now(timezone.utc)
                 expire_from = datetime_as_utc(
@@ -919,6 +922,11 @@ class Validator(aobject):
                                     processed_request_ids.append(task_id)
                                 for hotkey, score in hotkey_to_score.items():
                                     hotkey_to_synthetic_scores[hotkey].append(score)
+                                    # Also track by task type for weighted averaging
+                                    if validator_task.task_type == TaskTypeEnum.CODE_GENERATION:
+                                        hotkey_to_code_scores[hotkey].append(score)
+                                    elif validator_task.task_type == TaskTypeEnum.TEXT_TO_THREE_D:
+                                        hotkey_to_3d_scores[hotkey].append(score)
 
                                 success = await self.send_scoring_result_to_miners(
                                     task_id
@@ -1046,19 +1054,38 @@ class Validator(aobject):
                     f"📝 All tasks processed, total tasks: {len(processed_request_ids)}"
                 )
 
-                # average scores across all tasks being scored by this trigger to update_scores
-                # so miners moving average decay is lower
-                # we incentivise both quality and quantity, but quality has higher weight than quantity
-                final_hotkey_to_synthetic_score = {
-                    hotkey: sum(scores)
-                    / len(scores)
-                    * WeightSettings.QUALITY_WEIGHT.value
-                    + sum(scores)
-                    / len(processed_request_ids)
-                    * WeightSettings.QUANTITY_WEIGHT.value
-                    for hotkey, scores in hotkey_to_synthetic_scores.items()
-                    if scores
-                }
+                # Calculate weighted synthetic scores based on task type
+                final_hotkey_to_synthetic_score = {}
+                
+                for hotkey in hotkey_to_synthetic_scores.keys():
+                    code_scores = hotkey_to_code_scores.get(hotkey, [])
+                    three_d_scores = hotkey_to_3d_scores.get(hotkey, [])
+                    
+                    # Calculate average for each task type
+                    code_avg = sum(code_scores) / len(code_scores) if code_scores else 0
+                    three_d_avg = sum(three_d_scores) / len(three_d_scores) if three_d_scores else 0
+                    
+                    # Apply task type weights
+                    weighted_avg = (
+                        code_avg * WeightSettings.CODE_GENERATION_WEIGHT.value +
+                        three_d_avg * WeightSettings.TEXT_TO_THREE_D_WEIGHT.value
+                    )
+                    
+                    # Apply quality/quantity weights
+                    total_tasks = len(code_scores) + len(three_d_scores)
+                    if total_tasks > 0:
+                        final_score = (
+                            weighted_avg * WeightSettings.QUALITY_WEIGHT.value +
+                            total_tasks / len(processed_request_ids) * WeightSettings.QUANTITY_WEIGHT.value
+                        )
+                        final_hotkey_to_synthetic_score[hotkey] = final_score
+                        
+                        # Log task type breakdown for transparency
+                        logger.debug(
+                            f"Hotkey {hotkey[:8]}... - Code tasks: {len(code_scores)} (avg: {code_avg:.3f}), "
+                            f"3D tasks: {len(three_d_scores)} (avg: {three_d_avg:.3f}), "
+                            f"Weighted score: {final_score:.3f}"
+                        )
 
                 final_hotkey_to_hfl_score = {
                     hotkey: sum(scores)

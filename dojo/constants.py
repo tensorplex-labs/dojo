@@ -94,11 +94,18 @@ class WeightSettings(Enum):
     HFL_SCORE_WEIGHT = 0.0
     QUALITY_WEIGHT = 1.0
     QUANTITY_WEIGHT = 0.0
+    # Task type weights within synthetic scores
+    CODE_GENERATION_WEIGHT = 0.95
+    TEXT_TO_THREE_D_WEIGHT = 0.05
 
 
 assert WeightSettings.QUALITY_WEIGHT.value + WeightSettings.QUANTITY_WEIGHT.value == 1.0
 assert (
     WeightSettings.SYNTHETIC_SCORE_WEIGHT.value + WeightSettings.HFL_SCORE_WEIGHT.value
+    == 1.0
+)
+assert (
+    WeightSettings.CODE_GENERATION_WEIGHT.value + WeightSettings.TEXT_TO_THREE_D_WEIGHT.value
     == 1.0
 )
 

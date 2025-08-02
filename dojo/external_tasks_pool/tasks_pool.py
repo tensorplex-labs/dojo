@@ -90,6 +90,10 @@ class ExternalTaskPool:
                 logger.info("No task data in response")
                 return []
 
+            if tasks_data.get("tasks", []) is None:
+                logger.info("No tasks found in the response data")
+                return []
+
             result = []
             for task_data in tasks_data.get("tasks", []):
                 try:
@@ -198,7 +202,7 @@ class ExternalTaskPool:
                 # Fetch tasks from external pool
                 tasks = await self.get_task()
 
-                if not tasks:
+                if len(tasks) == 0:
                     logger.info("No tasks available from external pool")
                     await asyncio.sleep(60)  # Wait before retrying
                     continue
