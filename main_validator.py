@@ -12,10 +12,10 @@ from database import connect_db, disconnect_db
 from dojo.api.middleware import LimitContentLengthMiddleware
 from dojo.api.synthetic_api import FatalSyntheticGenerationError, SyntheticAPI
 from dojo.chain import get_async_subtensor
+from dojo.external_tasks_pool.tasks_pool import ExternalTaskPool
 from dojo.human_feedback import FeedbackLoop
 from dojo.objects import ObjectManager
 from dojo.utils import source_dotenv, validate_services
-from dojo.external_tasks_pool.tasks_pool import ExternalTaskPool
 
 source_dotenv()
 

@@ -105,7 +105,8 @@ assert (
     == 1.0
 )
 assert (
-    WeightSettings.CODE_GENERATION_WEIGHT.value + WeightSettings.TEXT_TO_THREE_D_WEIGHT.value
+    WeightSettings.CODE_GENERATION_WEIGHT.value
+    + WeightSettings.TEXT_TO_THREE_D_WEIGHT.value
     == 1.0
 )
 

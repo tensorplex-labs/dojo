@@ -17,9 +17,9 @@ import torch
 from kami import (
     AxonInfo,
     KamiClient,
+    ServeAxonPayload,
     SetWeightsPayload,
     SubnetMetagraph,
-    ServeAxonPayload,
 )
 from loguru import logger
 from messaging import Client, StdResponse, get_client
@@ -68,11 +68,11 @@ from dojo.utils import (
     _terminal_plot,
     aget_effective_stake,
     aobject,
+    check_if_axon_served,
     datetime_as_utc,
     get_epoch_time,
     get_new_uuid,
     set_expire_time,
-    check_if_axon_served,
 )
 from dojo.utils.config import get_config
 from dojo.utils.uids import get_bucket_uids
@@ -923,9 +923,15 @@ class Validator(aobject):
                                 for hotkey, score in hotkey_to_score.items():
                                     hotkey_to_synthetic_scores[hotkey].append(score)
                                     # Also track by task type for weighted averaging
-                                    if validator_task.task_type == TaskTypeEnum.CODE_GENERATION:
+                                    if (
+                                        validator_task.task_type
+                                        == TaskTypeEnum.CODE_GENERATION
+                                    ):
                                         hotkey_to_code_scores[hotkey].append(score)
-                                    elif validator_task.task_type == TaskTypeEnum.TEXT_TO_THREE_D:
+                                    elif (
+                                        validator_task.task_type
+                                        == TaskTypeEnum.TEXT_TO_THREE_D
+                                    ):
                                         hotkey_to_3d_scores[hotkey].append(score)
 
                                 success = await self.send_scoring_result_to_miners(
@@ -1056,30 +1062,36 @@ class Validator(aobject):
 
                 # Calculate weighted synthetic scores based on task type
                 final_hotkey_to_synthetic_score = {}
-                
+
                 for hotkey in hotkey_to_synthetic_scores.keys():
                     code_scores = hotkey_to_code_scores.get(hotkey, [])
                     three_d_scores = hotkey_to_3d_scores.get(hotkey, [])
-                    
+
                     # Calculate average for each task type
                     code_avg = sum(code_scores) / len(code_scores) if code_scores else 0
-                    three_d_avg = sum(three_d_scores) / len(three_d_scores) if three_d_scores else 0
-                    
+                    three_d_avg = (
+                        sum(three_d_scores) / len(three_d_scores)
+                        if three_d_scores
+                        else 0
+                    )
+
                     # Apply task type weights
                     weighted_avg = (
-                        code_avg * WeightSettings.CODE_GENERATION_WEIGHT.value +
-                        three_d_avg * WeightSettings.TEXT_TO_THREE_D_WEIGHT.value
+                        code_avg * WeightSettings.CODE_GENERATION_WEIGHT.value
+                        + three_d_avg * WeightSettings.TEXT_TO_THREE_D_WEIGHT.value
                     )
-                    
+
                     # Apply quality/quantity weights
                     total_tasks = len(code_scores) + len(three_d_scores)
                     if total_tasks > 0:
                         final_score = (
-                            weighted_avg * WeightSettings.QUALITY_WEIGHT.value +
-                            total_tasks / len(processed_request_ids) * WeightSettings.QUANTITY_WEIGHT.value
+                            weighted_avg * WeightSettings.QUALITY_WEIGHT.value
+                            + total_tasks
+                            / len(processed_request_ids)
+                            * WeightSettings.QUANTITY_WEIGHT.value
                         )
                         final_hotkey_to_synthetic_score[hotkey] = final_score
-                        
+
                         # Log task type breakdown for transparency
                         logger.debug(
                             f"Hotkey {hotkey[:8]}... - Code tasks: {len(code_scores)} (avg: {code_avg:.3f}), "
