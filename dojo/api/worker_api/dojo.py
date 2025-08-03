@@ -8,6 +8,7 @@ import httpx
 from loguru import logger
 
 from dojo import get_dojo_api_base_url
+from dojo.constants import APIConstants
 from dojo.exceptions import CreateTaskFailed
 from dojo.protocol import CodeAnswer, SyntheticTaskSynapse, TaskTypeEnum, ThreeDAssets
 from dojo.utils import loaddotenv
@@ -177,3 +178,23 @@ class DojoAPI:
             f"response_text: {response_data['text']}, "
             f"response_json: {response_data['json']}"
         )
+
+    @classmethod
+    @async_retry(max_retries=5, jitter=True)
+    async def get_whitelisted_coldkeys(
+        cls, hotkey: str, signature: str, message: str
+    ) -> list[str]:
+        """Gets whitelisted miners for a given hotkey"""
+        base_url = APIConstants.DOJO_BASE_URL.value
+        url = f"{base_url}/api/v1/validator/trusted_miners"
+        headers = {
+            "X-Hotkey": hotkey,
+            "X-Signature": signature,
+            "X-Message": message,
+        }
+        logger.info("Getting whitelisted miners")
+
+        response = await cls._http_client.get(url, headers=headers)
+        response.raise_for_status()
+
+        return response.json()

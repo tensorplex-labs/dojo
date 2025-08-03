@@ -199,3 +199,6 @@ migration_logs/
 
 uv.lock
 .python-version
+
+.crush/*
+CRUSH.md

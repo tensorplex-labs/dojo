@@ -85,6 +85,20 @@ from entrypoints.analytics_upload import run_analytics_upload
 ObfuscatedModelMap: TypeAlias = Dict[str, str]
 SyntheticMetadata: TypeAlias = dict[str, str]
 
+is_dev = os.getenv("ENVIRONMENT") == "dev"
+
+# latest_local = get_latest_git_tag()
+# latest_remote = get_latest_remote_tag()
+# if (
+#     latest_local
+#     and latest_remote
+#     and latest_local.strip("v") != latest_remote.strip("v")
+# ):
+#     logger.warning("Your repository is not up to date, and may fail to set weights.")
+#     logger.warning(
+#         f"latest local version: {latest_local}\nlatest remote version: {latest_remote}"
+#     )
+
 
 class Validator(aobject):
     _scores_alock = asyncio.Lock()
@@ -1874,6 +1888,9 @@ class Validator(aobject):
                 logger.debug(
                     f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE} to be considered miner"
                 )
+                continue
+
+            if is_dev and int(uid) in [15, 6]:
                 continue
 
             miner_axons.append(axon)

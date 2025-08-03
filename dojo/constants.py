@@ -1,6 +1,8 @@
 import os
 from enum import Enum, IntEnum
 
+from dojo.utils.config import is_dev
+
 
 class AnalyticsConstants(IntEnum):
     """Constants that don't vary with mode"""
@@ -84,7 +86,7 @@ class MinerConstant(IntEnum):
 class BucketConfig(Enum):
     """Bucket configuration"""
 
-    BUCKET_SIZE = 4
+    BUCKET_SIZE = 2 if is_dev() else 4
 
 
 class WeightSettings(Enum):
@@ -109,6 +111,12 @@ assert (
     + WeightSettings.TEXT_TO_THREE_D_WEIGHT.value
     == 1.0
 )
+
+
+class APIConstants(Enum):
+    DOJO_BASE_URL = (
+        "https://testnet.dojo.network" if is_dev() else "https://dojo.network"
+    )
 
 
 # Export the constants directly
