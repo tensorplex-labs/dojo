@@ -12,9 +12,8 @@ from dojo.protocol import (
     ScoreCriteria,
     SyntheticTaskSynapse,
 )
+from dojo.scoring.utils import minmax_scale
 from dojo.utils import _terminal_plot
-
-from .utils import minmax_scale
 
 
 def _reward_cubic(
@@ -200,6 +199,7 @@ class Scoring:
         logger.debug(f"scoring: raw miner outputs\n{miner_outputs}")
         # convert miner outputs to something ordinal
         miner_outputs_normalised = np.array([minmax_scale(m) for m in miner_outputs])
+
         logger.debug(
             f"scoring: raw miner outputs with nans\n{miner_outputs_normalised}"
         )
@@ -341,6 +341,7 @@ class Scoring:
         if not isinstance(criteria, ScoreCriteria):
             raise NotImplementedError("Only score criteria is supported")
 
+        # A list of scores for each miner responses
         (
             gt_score,
             miner_outputs,
@@ -350,13 +351,25 @@ class Scoring:
             cubic_reward_scores,
         ) = cls.ground_truth_scoring(criteria, ground_truth, valid_responses)
 
+        # Create the same completion sorting order as ground_truth_scoring
+        cid_rank_tuples = [
+            (completion_id, rank) for completion_id, rank in ground_truth.items()
+        ]
+        cid_with_rank_sorted = sorted(
+            cid_rank_tuples, key=lambda x: x[1], reverse=False
+        )
+        cids_sorted = [cid for cid, _ in cid_with_rank_sorted]
+
         for i, response in enumerate(valid_responses):
             if not response.miner_hotkey:
                 continue
 
-            for j, completion_response in enumerate(
-                response.completion_responses or []
-            ):
+            # Sort completions by ground truth rank (SAME AS ground_truth_scoring)
+            sorted_completions = sorted(
+                response.completion_responses or [],
+                key=lambda r: cids_sorted.index(r.completion_id),
+            )
+            for j, completion_response in enumerate(iterable=sorted_completions or []):
                 scores = Score(
                     raw_score=float(miner_outputs[i, j]),
                     ground_truth_score=float(gt_score[i]),

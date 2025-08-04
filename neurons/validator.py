@@ -1701,9 +1701,11 @@ class Validator(aobject):
         hotkey_to_scores = {}
         # NOTE: @scoring, see here for unpacking
         try:
-            updated_miner_responses = Scoring.calculate_score(
-                validator_task=task.validator_task,
-                miner_responses=task.miner_responses,
+            updated_miner_responses: list[SyntheticTaskSynapse] = (
+                Scoring.calculate_score(
+                    validator_task=task.validator_task,
+                    miner_responses=task.miner_responses,
+                )
             )
 
             # FIXME: to align logic here and in `_prepare_scoring_result`
