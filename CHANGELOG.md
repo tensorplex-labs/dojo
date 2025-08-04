@@ -1,3 +1,9 @@
+## [1.15.1](https://github.com/tensorplex-labs/dojo/compare/v1.15.0...v1.15.1) (2025-08-04)
+
+### Bug Fixes
+
+* fixed the raw score in consistent after the updating score ([61f87cd](https://github.com/tensorplex-labs/dojo/commit/61f87cd00159423bb4894a66e4ef0d3aa25d974f))
+
 ## [1.15.0](https://github.com/tensorplex-labs/dojo/compare/v1.14.7...v1.15.0) (2025-07-29)
 
 ### Features
