@@ -1,0 +1,77 @@
+name: Build Go Binaries
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+      - main
+    # tags:
+    #   - 'v*'
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - main
+
+jobs:
+  read_matrix:
+    runs-on: arc-runner-set
+    outputs:
+      matrix: ${{ steps.read_matrix.outputs.matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Read matrix from file
+        id: read_matrix
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const matrix = fs.readFileSync('.github/matrix-config.json', 'utf8');
+            core.setOutput('matrix', matrix);
+
+  build:
+    needs: read_matrix
+    name: Build ${{ matrix.app.name }} (${{ matrix.platform }})
+    runs-on: arc-runner-set
+    strategy:
+      matrix:
+        app: ${{ fromJson(needs.read_matrix.outputs.matrix).app }}
+        platform: ${{ fromJson(needs.read_matrix.outputs.matrix).platform }}
+      max-parallel: 6
+
+    steps:
+      - name: Parse platform
+        id: parse_platform
+        run: |
+          echo "os=$(echo ${{ matrix.platform }} | cut -d'/' -f1)" >> $GITHUB_OUTPUT
+          echo "arch=$(echo ${{ matrix.platform }} | cut -d'/' -f2)" >> $GITHUB_OUTPUT
+          
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.3'
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Build binary
+        env:
+          GOOS: ${{ steps.parse_platform.outputs.os }}
+          GOARCH: ${{ steps.parse_platform.outputs.arch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          go build -ldflags="-w -s" -o dist/${{ matrix.app.name }}-${{ steps.parse_platform.outputs.os }}-${{ steps.parse_platform.outputs.arch }} ./cmd/${{ matrix.app.path }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app.name }}-${{ steps.parse_platform.outputs.os }}-${{ steps.parse_platform.outputs.arch }}
+          path: dist/${{ matrix.app.name }}-${{ steps.parse_platform.outputs.os }}-${{ steps.parse_platform.outputs.arch }}
+          retention-days: 1
