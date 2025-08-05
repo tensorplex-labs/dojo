@@ -8,11 +8,11 @@ on:
       - main
     # tags:
     #   - 'v*'
-  pull_request:
-    branches:
-      - dev
-      - staging
-      - main
+  # pull_request:
+  #   branches:
+  #     - dev
+  #     - staging
+  #     - main
 
 jobs:
   read_matrix:
