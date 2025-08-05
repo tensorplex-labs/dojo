@@ -1,0 +1,7 @@
+- Always use zerolog/log for logging, never use the stdlib log.
+- Make sure not to use magic numbers, always try to define a named constant in types.go
+- If a number/string variable that should be configurable like port, make sure to create a field in a config struct, load the environment variable inside of NewServer(), NewClient(), NewAppropriateName() function, but confirm with the user (me) on what environment variable name to load. Then add the environment variable to the README.md.
+- Ensure that you document the environment variables being used inside an .env.example file.
+- Always try to place types, interfaces, constants, etc. inside of types.go and if the file doesn't exist, create one.
+- When logging, try to log the outputs of functions and variables in the function scope but remember not to repeat yourself.
+- Always use the `bytedance/sonic` library for marshal and unmarshalling JSON, using `sonic.Marshal` and `sonic.Unmarshal` respectively.
