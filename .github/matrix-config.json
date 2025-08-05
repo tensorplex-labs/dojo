@@ -1,0 +1,32 @@
+{
+  "app": [
+    {
+      "name": "messaging-client",
+      "path": "messaging/client"
+    },
+    {
+      "name": "messaging-server",
+      "path": "messaging/server"
+    },
+    {
+      "name": "miner",
+      "path": "miner"
+    },
+    {
+      "name": "scoring",
+      "path": "scoring"
+    },
+    {
+      "name": "signature",
+      "path": "signature"
+    },
+    {
+      "name": "validator",
+      "path": "validator"
+    }
+  ],
+  "platform": [
+    "linux/amd64",
+    "linux/arm64"
+  ]
+}
