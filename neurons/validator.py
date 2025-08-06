@@ -2010,6 +2010,7 @@ class Validator(aobject):
                     "include": {"criterion": {"include": {"scores": True}}}
                 },
                 "miner_responses": True,
+                "ground_truth": True,
             },
         )
 
@@ -2018,6 +2019,24 @@ class Validator(aobject):
                 f"Cannot prepare scoring result for task {task_id}: task or responses, or completions not found"
             )
             return [], []
+
+        # Only sort by ground truth for CODE_GENERATION tasks
+        completions_to_use = task.completions
+        if task.task_type == TaskTypeEnum.CODE_GENERATION and task.ground_truth:
+            ground_truth_map = {
+                gt.obfuscated_model_id: gt.rank_id for gt in task.ground_truth
+            }
+            completions_to_use = sorted(
+                task.completions,
+                key=lambda c: ground_truth_map[c.completion_id],
+            )
+            logger.debug(
+                f"Sorted {len(completions_to_use)} completions by ground truth rank for CODE_GENERATION task {task_id}"
+            )
+        else:
+            logger.debug(
+                f"Using database order for {task.task_type} task {task_id} (no ground truth sorting)"
+            )
 
         participating_hotkeys = []
         scores_list = []
@@ -2030,7 +2049,7 @@ class Validator(aobject):
             miner_completion_scores = []
             completion_responses = map_miner_response_to_completion_responses(
                 miner_response=miner_response,
-                completions=task.completions,
+                completions=completions_to_use,
             )
 
             # Extract scores from completion responses for this miner

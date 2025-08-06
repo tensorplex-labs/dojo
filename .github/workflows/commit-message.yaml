@@ -10,7 +10,7 @@ on:
 jobs:
   commit-lint:
     name: Conventional Commit PR commit messages
-    runs-on: self-hosted
+    runs-on: arc-runner-set
     steps:
       - uses: actions/checkout@v4
         with:
