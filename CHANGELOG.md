@@ -1,3 +1,9 @@
+## [1.15.2](https://github.com/tensorplex-labs/dojo/compare/v1.15.1...v1.15.2) (2025-08-06)
+
+### Bug Fixes
+
+* sorted score result with ground_truth order ([b66d6db](https://github.com/tensorplex-labs/dojo/commit/b66d6db97c98c95e660dffa72445da1d4f56cb1e))
+
 ## [1.15.1](https://github.com/tensorplex-labs/dojo/compare/v1.15.0...v1.15.1) (2025-08-04)
 
 ### Bug Fixes
