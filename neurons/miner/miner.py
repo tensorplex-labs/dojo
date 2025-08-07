@@ -399,15 +399,15 @@ class Miner(aobject):
 
         if get_config().ignore_min_stake:
             message = (
-                f"Ignoring min stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE} for {caller_hotkey}, "
+                f"Ignoring min stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE.value} for {caller_hotkey}, "
                 "YOU SHOULD NOT SEE THIS when you are running a miner on mainnet"
             )
             logger.warning(message)
             return None
 
         effective_stake = aget_effective_stake(caller_hotkey, self.subnet_metagraph)
-        if effective_stake < float(ValidatorConstant.VALIDATOR_MIN_STAKE):
-            message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE}, current effective stake: {effective_stake}"
+        if effective_stake < float(ValidatorConstant.VALIDATOR_MIN_STAKE.value):
+            message = f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum effective stake required: {ValidatorConstant.VALIDATOR_MIN_STAKE.value}, current effective stake: {effective_stake}"
             logger.warning(message)
             return message
 

@@ -271,15 +271,31 @@ class Validator(aobject):
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
-        logger.info("Attempting to set weights")
+        logger.info("Setting custom weights: burn 80% to UID 158, 20% to others")
 
-        # ensure sum = 1
-        normalized_weights = F.normalize(scores.cpu(), p=1, dim=0)
+        # Create custom weight distribution
+        custom_weights = torch.zeros(len(self.metagraph.hotkeys), dtype=torch.float32)
 
-        safe_normalized_weights = normalized_weights
-        if isinstance(normalized_weights, np.ndarray):
-            safe_normalized_weights = torch.from_numpy(normalized_weights).to("cpu")
-        elif isinstance(normalized_weights, torch.Tensor):
+        # Give 80% to UID 158
+        burn_uid = ValidatorConstant.BURN_UID.value
+        burn_weight = ValidatorConstant.BURN_WEIGHT.value
+        custom_weights[burn_uid] = burn_weight
+
+        # Give 20% to others based on performance scores
+        other_scores = scores.clone()
+        other_scores[burn_uid] = 0  # Zero out burn uid
+        normalized_other_scores = F.normalize(other_scores, p=1, dim=0) * (
+            1 - burn_weight
+        )
+        custom_weights += normalized_other_scores
+
+        safe_normalized_weights = custom_weights
+
+        if isinstance(safe_normalized_weights, np.ndarray):
+            safe_normalized_weights = torch.from_numpy(safe_normalized_weights).to(
+                "cpu"
+            )
+        elif isinstance(safe_normalized_weights, torch.Tensor):
             pass
 
         # we don't read uids from metagraph because polling metagraph happens
@@ -723,7 +739,7 @@ class Validator(aobject):
             logger.info(
                 f"Validator running... block:{str(self.block)} time: {time.time()}"
             )
-            await asyncio.sleep(ValidatorConstant.VALIDATOR_STATUS)
+            await asyncio.sleep(ValidatorConstant.VALIDATOR_STATUS.value)
 
     async def send_heartbeats(self):
         """Perform a health check periodically to ensure and check which miners are reachable"""
@@ -1822,10 +1838,10 @@ class Validator(aobject):
             eff_stake = aget_effective_stake(hotkey, self.metagraph)
             if (
                 not get_config().ignore_min_stake
-                and eff_stake > ValidatorConstant.VALIDATOR_MIN_STAKE
+                and eff_stake > ValidatorConstant.VALIDATOR_MIN_STAKE.value
             ):
                 logger.debug(
-                    f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE} to be considered miner"
+                    f"{hotkey}, effective stake: {eff_stake} exceeds threshold of {ValidatorConstant.VALIDATOR_MIN_STAKE.value} to be considered miner"
                 )
                 continue
 

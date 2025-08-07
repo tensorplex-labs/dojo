@@ -38,7 +38,7 @@ async def _get_all_miner_hotkeys(subnet_metagraph: SubnetMetagraph) -> List[str]
         hotkey
         for hotkey in subnet_metagraph.hotkeys
         if aget_effective_stake(hotkey, subnet_metagraph=subnet_metagraph)
-        < ValidatorConstant.VALIDATOR_MIN_STAKE
+        < ValidatorConstant.VALIDATOR_MIN_STAKE.value
     ]
 
 

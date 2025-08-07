@@ -92,6 +92,6 @@ def check_stake(subtensor: bt.subtensor, hotkey: str) -> bool:
 
     stake = get_effective_stake(hotkey, subtensor)
 
-    if stake < ValidatorConstant.VALIDATOR_MIN_STAKE:
+    if stake < ValidatorConstant.VALIDATOR_MIN_STAKE.value:
         return False
     return True
