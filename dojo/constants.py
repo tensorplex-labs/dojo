@@ -66,11 +66,13 @@ def get_validator_constants() -> (
     }[mode]
 
 
-class ValidatorConstant(IntEnum):
+class ValidatorConstant(Enum):
     """Validator-specific constants"""
 
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
     VALIDATOR_STATUS = 60
+    BURN_UID = 158
+    BURN_WEIGHT = 0.8
 
 
 class MinerConstant(IntEnum):
