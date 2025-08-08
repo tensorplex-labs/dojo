@@ -1,14 +1,14 @@
-package chain
+package kami
 
 import (
 	"math/big"
 
-	"github.com/hashicorp/go-retryablehttp"
+	"github.com/go-resty/resty/v2"
 )
 
 // KamiChainRepo is a repository for interacting with the bittensor chain
 type KamiChainRepo struct {
-	httpClient *retryablehttp.Client
+	httpClient *resty.Client
 	baseURL    string
 }
 
