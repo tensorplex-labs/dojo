@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/sethvargo/go-envconfig"
-	pkgconfig "github.com/tensorplex-labs/dojo/pkg/config"
+	pkgconfig "github.com/tensorplex-labs/dojo/internal/config"
 )
 
 // NewConfigFromEnv loads synapse configuration from environment using

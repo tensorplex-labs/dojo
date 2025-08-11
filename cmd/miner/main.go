@@ -9,8 +9,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 	"github.com/tensorplex-labs/dojo/internal/miner"
-	"github.com/tensorplex-labs/dojo/pkg/chain"
-	"github.com/tensorplex-labs/dojo/pkg/utils/logger"
+	"github.com/tensorplex-labs/dojo/internal/utils/logger"
 )
 
 func main() {
@@ -24,15 +23,10 @@ func main() {
 
 	log.Info().Msg("Miner service is starting...")
 
-	chainRepo, err := chain.NewKamiChainRepo()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Error initializing Kami")
-	}
-
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	m := miner.NewMiner(chainRepo)
+	m := miner.NewMiner(nil)
 	m.Run()
 
 	// Setup signal handling for graceful shutdown

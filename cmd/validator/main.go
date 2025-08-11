@@ -8,9 +8,9 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
+	"github.com/tensorplex-labs/dojo/internal/kami"
+	"github.com/tensorplex-labs/dojo/internal/utils/logger"
 	"github.com/tensorplex-labs/dojo/internal/validator"
-	"github.com/tensorplex-labs/dojo/pkg/chain"
-	"github.com/tensorplex-labs/dojo/pkg/utils/logger"
 )
 
 func main() {
@@ -24,7 +24,12 @@ func main() {
 
 	log.Info().Msg("Validator service is starting...")
 
-	chainRepo, err := chain.NewKamiChainRepo()
+	chainRepo, err := kami.NewKami(&kami.KamiEnvConfig{
+		KamiHost:       os.Getenv("KAMI_HOST"),
+		KamiPort:       os.Getenv("KAMI_PORT"),
+		WalletHotkey:   os.Getenv("WALLET_HOTKEY"),
+		WalltetColdkey: os.Getenv("WALLET_COLDKEY"),
+	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error initializing Kami")
 	}

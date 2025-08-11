@@ -1,11 +1,15 @@
 package synapse
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"strings"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
+	"github.com/klauspost/compress/zstd"
 	"github.com/rs/zerolog/log"
 )
 
@@ -47,6 +51,20 @@ func (c *Client) SendHeartbeat(ctx context.Context, url string, hb HeartbeatRequ
 	}
 
 	data := restyResp.Body()
+	if strings.Contains(strings.ToLower(restyResp.Header().Get("Content-Encoding")), "zstd") {
+		r, err := zstd.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return resp, fmt.Errorf("zstd: failed to create reader: %w", err)
+		}
+		defer r.Close()
+
+		out, err := io.ReadAll(r)
+		if err != nil {
+			return resp, fmt.Errorf("zstd: failed to decompress response: %w", err)
+		}
+		data = out
+	}
+
 	if err := sonic.Unmarshal(data, &resp); err != nil {
 		return resp, fmt.Errorf("unmarshal response: %w", err)
 	}

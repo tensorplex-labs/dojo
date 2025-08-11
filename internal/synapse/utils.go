@@ -31,3 +31,18 @@ func LoadConfigFromEnv() Config {
 	}
 	return Config{Address: addr, ClientTimeout: clientTimeout, RetryMax: retryMax, RetryWait: retryWait}
 }
+
+// Check effective stake of uids
+func CheckEffectiveStake(alphaStake int64, rootStake int64) (bool, error) {
+	if alphaStake <= 0 || rootStake <= 0 {
+		return false, nil
+	}
+
+	effectiveRootStake := rootStake * 0.18
+
+	effectiveStake := alphaStake + effectiveRootStake
+	if effectiveStake < 0 {
+		return false, nil
+	}
+	return true, nil
+}
