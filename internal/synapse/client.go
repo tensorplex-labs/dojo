@@ -6,28 +6,31 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
 	"github.com/klauspost/compress/zstd"
 	"github.com/rs/zerolog/log"
+	"github.com/tensorplex-labs/dojo/internal/kami"
 )
 
 type Client struct {
 	httpClient *resty.Client
-	cfg        Config
+	kami       *kami.Kami
 }
 
-func NewClient(cfg Config) *Client {
+func NewClient(kami *kami.Kami) *Client {
 	cli := resty.New()
 
-	cli.SetRetryCount(cfg.RetryMax)
-	cli.SetTimeout(cfg.ClientTimeout)
-	cli.SetRetryWaitTime(cfg.RetryWait)
-	cli.SetRetryMaxWaitTime(cfg.RetryWait * 2)
-	return &Client{httpClient: cli, cfg: cfg}
+	cli.SetRetryCount(5)
+	cli.SetTimeout(60 * time.Second)
+	cli.SetRetryWaitTime(500 * time.Millisecond)
+	cli.SetRetryMaxWaitTime(2 * time.Second)
+	return &Client{httpClient: cli, kami: kami}
 }
 
+// SetKami attaches a Kami client to enable request signing
 // heartbeat Synapse
 func (c *Client) SendHeartbeat(ctx context.Context, url string, hb HeartbeatRequest) (HeartbeatResponse, error) {
 	var resp HeartbeatResponse
@@ -39,6 +42,18 @@ func (c *Client) SendHeartbeat(ctx context.Context, url string, hb HeartbeatRequ
 	req := c.httpClient.R().SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
 		SetBody(b)
+
+	// attach auth headers if kami available
+	if c.kami != nil {
+		headers, err := createAuthHeaders(c.kami, b)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to create auth headers")
+			return resp, fmt.Errorf("create auth headers: %w", err)
+		}
+		for k, v := range headers {
+			req.SetHeader(k, v)
+		}
+	}
 
 	restyResp, err := req.Post(url)
 	if err != nil {
@@ -69,4 +84,28 @@ func (c *Client) SendHeartbeat(ctx context.Context, url string, hb HeartbeatRequ
 		return resp, fmt.Errorf("unmarshal response: %w", err)
 	}
 	return resp, nil
+}
+
+func createAuthHeaders(k *kami.Kami, body []byte) (map[string]string, error) {
+	if k == nil {
+		return nil, fmt.Errorf("kami client is nil")
+	}
+
+	res, err := k.SignMessage(kami.SignMessageParams{Message: string(body)})
+	if err != nil {
+		log.Error().Err(err).Msg("kami: sign message failed")
+		return nil, fmt.Errorf("sign message: %w", err)
+	}
+
+	sig := res.Data.Signature
+	if sig == "" {
+		return nil, fmt.Errorf("empty signature returned from kami")
+	}
+
+	headers := map[string]string{
+		"x-signature": sig,
+		"x-hotkey":    k.WalletHotkey,
+	}
+
+	return headers, nil
 }

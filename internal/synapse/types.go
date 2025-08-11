@@ -1,18 +1,21 @@
 package synapse
 
-import "time"
+import (
+	"time"
+
+	"github.com/tensorplex-labs/dojo/internal/config"
+)
 
 type Config struct {
-	Address       string
+	config.MinerEnvConfig
 	ClientTimeout time.Duration
 	RetryMax      int
 	RetryWait     time.Duration
 }
 
 type HeartbeatRequest struct {
-	ValidatorID string                 `json:"validator_id"`
-	Timestamp   int64                  `json:"timestamp"`
-	Payload     map[string]interface{} `json:"payload,omitempty"`
+	Timestamp       int64  `json:"timestamp"`
+	ValidatorHotkey string `json:"validator_hotkey"`
 }
 
 type HeartbeatResponse struct {

@@ -188,6 +188,29 @@ func (k *Kami) VerifyMessage(params VerifyMessageParams) (VerifyMessageResponse,
 	return result, nil
 }
 
+func (k *Kami) GetKeyringPair() (KeyringPairInfoResponse, error) {
+	apiPath := fmt.Sprintf("%s/substrate/keyring-pair", k.BaseURL)
+
+	resp, err := sendRequest(apiPath, "GET", nil)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get keyring pair")
+		return KeyringPairInfoResponse{}, fmt.Errorf("get keyring pair: %w", err)
+	}
+
+	var result KeyringPairInfoResponse
+	if err := sonic.Unmarshal(resp, &result); err != nil {
+		log.Error().Err(err).Msg("failed to unmarshal keyring pair response")
+		return KeyringPairInfoResponse{}, fmt.Errorf("unmarshal keyring pair response: %w", err)
+	}
+
+	if result.Error != nil {
+		log.Error().Str("error", fmt.Sprintf("%+v", result.Error)).Msg("keyring pair response contains error")
+		return KeyringPairInfoResponse{}, fmt.Errorf("keyring pair response error: %s", result.Error)
+	}
+
+	return result, nil
+}
+
 func sendRequest(url string, method string, body interface{}) ([]byte, error) {
 	client := resty.New()
 	method = strings.ToUpper(method)

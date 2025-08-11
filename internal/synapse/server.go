@@ -7,6 +7,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 	"github.com/rs/zerolog/log"
+	"github.com/tensorplex-labs/dojo/internal/kami"
 )
 
 type Server struct {
@@ -14,10 +15,11 @@ type Server struct {
 	cfg Config
 }
 
-func NewServer(cfg Config) *Server {
+func NewServer(cfg Config, kami *kami.Kami) *Server {
 	app := fiber.New()
 
 	app.Use(ZstdMiddleware())
+	app.Use(VerifySignatureMiddleware(kami))
 
 	s := &Server{app: app, cfg: cfg}
 	app.Post("/heartbeat", s.handleHeartbeat)
@@ -30,8 +32,10 @@ func (s *Server) handleHeartbeat(c fiber.Ctx) error {
 		log.Error().Err(err).Msg("failed to unmarshal heartbeat")
 		return c.Status(fiber.StatusBadRequest).JSON(HeartbeatResponse{Status: "error", Message: "invalid payload"})
 	}
-	log.Info().Str("validator_id", hb.ValidatorID).Int64("timestamp", hb.Timestamp).Msg("received heartbeat")
-	resp := HeartbeatResponse{Status: "ok", ReceivedAt: time.Now().UnixNano()}
+
+	log.Info().Str("Validator Hotkey", hb.ValidatorHotkey).Int64("timestamp", hb.Timestamp).Msg("receive heartbeat")
+
+	resp := HeartbeatResponse{Status: "ok", ReceivedAt: time.Now().UnixNano(), Message: "heartbeat received"}
 	return c.Status(fiber.StatusOK).JSON(resp)
 }
 

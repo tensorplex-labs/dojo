@@ -2,6 +2,7 @@ package synapse
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/klauspost/compress/zstd"
 	"github.com/rs/zerolog/log"
+	"github.com/tensorplex-labs/dojo/internal/kami"
 )
 
 // ZstdMiddleware returns a Fiber middleware that decompresses incoming request
@@ -65,5 +67,41 @@ func ZstdMiddleware() fiber.Handler {
 		}
 
 		return nil
+	}
+}
+
+// VerifySignatureMiddleware verifies requests contain valid signatures in headers.
+// Requires headers: x-signature, x-hotkey, x-timestamp. Uses kami.VerifyMessage to validate.
+func VerifySignatureMiddleware(k *kami.Kami) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		sig := c.Get("x-signature")
+		hotkey := c.Get("x-hotkey")
+		timestamp := c.Get("x-timestamp") // in seconds, not milliseconds e.g. 1700000000 not 1700000000000
+		if sig == "" || hotkey == "" {
+			log.Warn().Bool("missing_sig", sig == "").Bool("missing_hotkey", hotkey == "").Msg("missing signature or hotkey header")
+			return c.Status(fiber.StatusUnauthorized).SendString("missing signature or hotkey header")
+		}
+
+		// read body (already decompressed by zstd middleware if used)
+		// body := c.Body()
+
+		params := kami.VerifyMessageParams{
+			Message:       fmt.Sprintf("%s.%s.i am real and dojo is real, please verify me!", hotkey, timestamp),
+			Signature:     sig,
+			SigneeAddress: hotkey,
+		}
+
+		res, err := k.VerifyMessage(params)
+		if err != nil {
+			log.Error().Err(err).Msg("kami: verify message failed")
+			return c.Status(fiber.StatusUnauthorized).SendString("signature verification error")
+		}
+
+		if !res.Data.Valid {
+			log.Warn().Str("hotkey", hotkey).Msg("invalid signature")
+			return c.Status(fiber.StatusUnauthorized).SendString("invalid signature")
+		}
+
+		return c.Next()
 	}
 }
