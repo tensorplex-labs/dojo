@@ -18,8 +18,9 @@ type KamiEnvConfig struct {
 }
 
 type ServerEnvConfig struct {
-	ServerPort    int `env:"SERVER_PORT"`
-	BodySizeLimit int `env:"SERVER_BODY_LIMIT"`
+	Address       string `env:"AXON_IP"`
+	Port          int    `env:"AXON_PORT"`
+	BodySizeLimit int    `env:"SERVER_BODY_LIMIT"`
 }
 
 type ClientEnvConfig struct {

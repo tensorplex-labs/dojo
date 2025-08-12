@@ -1,0 +1,52 @@
+package validator
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/rs/zerolog/log"
+	"github.com/tensorplex-labs/dojo/internal/synapse"
+	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
+)
+
+func (v *Validator) heartBeat(ctx context.Context, client *synapse.Client, validatorHotkey string) {
+	hb := synapse.HeartbeatRequest{
+		ValidatorHotkey: validatorHotkey,
+		Timestamp:       time.Now().UnixNano(),
+	}
+
+	currentAxons := v.MetagraphData.Metagraph.Axons
+	if len(currentAxons) == 0 {
+		return
+	}
+
+	for uid, axon := range currentAxons {
+		rootStake := v.MetagraphData.Metagraph.TaoStake[uid]
+		alphaStake := v.MetagraphData.Metagraph.AlphaStake[uid]
+		miner, err := chainutils.CheckIfMiner(alphaStake, rootStake)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to check miner status")
+			continue
+		}
+
+		if !miner {
+			continue
+		}
+
+		url := fmt.Sprintf("http://%s/%d/heartbeat", axon.IP, axon.Port)
+		resp, err := client.SendHeartbeat(ctx, url, hb)
+		if err != nil {
+			log.Error().Err(err).Str("url", url).Msg("send heartbeat failed")
+			continue
+		}
+
+		if resp.Status != "ok" {
+			log.Warn().Str("url", url).Str("status", resp.Status).Msg("non-ok heartbeat response")
+		}
+	}
+}
+
+func (v *Validator) sendTaskRound(ctx context.Context, client *synapse.Client, validatorHotkey string) {
+	log.Info().Str("ValidatorHotkey", validatorHotkey).Msg("sending task round")
+}

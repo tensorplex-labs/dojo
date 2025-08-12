@@ -1,13 +1,19 @@
 package validator
 
 import (
-	"github.com/tensorplex-labs/dojo/internal/core"
-	"github.com/tensorplex-labs/dojo/pkg/config"
-	"github.com/tensorplex-labs/dojo/pkg/schnitz"
+	"time"
+
+	"github.com/tensorplex-labs/dojo/internal/kami"
 )
 
-type Validator struct {
-	*core.Node
-	client *schnitz.Client
-	config config.ValidatorEnvConfig
+type IntervalConfig struct {
+	HeartbeatInterval time.Duration
+	MetagraphInterval time.Duration
+	TaskRoundInterval time.Duration
+	BlockInterval     time.Duration
+}
+
+type MetagraphData struct {
+	Metagraph kami.SubnetMetagraph //  index of array is uids, e.g. [0] is uid 0 then its value is the axon
+	Interval  IntervalConfig
 }

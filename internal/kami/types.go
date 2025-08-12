@@ -1,16 +1,8 @@
-package chain
+package kami
 
 import (
 	"math/big"
-
-	"github.com/hashicorp/go-retryablehttp"
 )
-
-// KamiChainRepo is a repository for interacting with the bittensor chain
-type KamiChainRepo struct {
-	httpClient *retryablehttp.Client
-	baseURL    string
-}
 
 // HexOrInt handles fields that can be either a number or a hex string
 // It uses big.Int internally to handle arbitrarily large values without overflow
@@ -26,16 +18,15 @@ type KamiResponse[T any] struct {
 }
 
 type (
-	SubnetMetagraphResponse      = KamiResponse[SubnetMetagraph]
-	LatestBlockResponse          = KamiResponse[LatestBlock]
-	KeyringPairInfoResponse      = KamiResponse[KeyringPairInfo]
-	SubnetHyperparamsResponse    = KamiResponse[SubnetHyperparams]
-	CheckHotkeyResponse          = KamiResponse[CheckHotkey]
-	AccountNonceResponse         = KamiResponse[AccountNonce]
-	SignMessageResponseWrapper   = KamiResponse[SignMessageResponse]
-	VerifyMessageResponseWrapper = KamiResponse[VerifyMessageResponse]
-	ExtrinsicHashResponse        = KamiResponse[string]
-	ServeAxonResponse            = KamiResponse[string]
+	SubnetMetagraphResponse   = KamiResponse[SubnetMetagraph]
+	LatestBlockResponse       = KamiResponse[LatestBlock]
+	KeyringPairInfoResponse   = KamiResponse[KeyringPairInfo]
+	SubnetHyperparamsResponse = KamiResponse[SubnetHyperparams]
+	CheckHotkeyResponse       = KamiResponse[CheckHotkey]
+	AccountNonceResponse      = KamiResponse[AccountNonce]
+	SignMessageResponse       = KamiResponse[SignMessage]
+	VerifyMessageResponse     = KamiResponse[VerifyMessage]
+	ExtrinsicHashResponse     = KamiResponse[string]
 )
 
 type MovingPrice struct {
@@ -237,20 +228,20 @@ type SetCommitRevealWeightsParams struct {
 	RevealRound int    `json:"revealRound"`
 }
 
-type SignMessageParam struct {
+type SignMessageParams struct {
 	Message string `json:"message"`
 }
 
-type SignMessageResponse struct {
+type SignMessage struct {
 	Signature string `json:"signature"`
 }
 
-type VerifyMessageParam struct {
+type VerifyMessageParams struct {
 	Message       string `json:"message"`
 	Signature     string `json:"signature"`
 	SigneeAddress string `json:"signeeAddress"`
 }
 
-type VerifyMessageResponse struct {
+type VerifyMessage struct {
 	Valid bool `json:"valid"`
 }

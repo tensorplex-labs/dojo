@@ -2,83 +2,106 @@ package miner
 
 import (
 	"context"
+	"net"
+	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"
-	"github.com/sethvargo/go-envconfig"
-	"github.com/tensorplex-labs/dojo/internal/core"
-	"github.com/tensorplex-labs/dojo/pkg/chain"
-	"github.com/tensorplex-labs/dojo/pkg/config"
-	"github.com/tensorplex-labs/dojo/pkg/schnitz"
+
+	"github.com/tensorplex-labs/dojo/internal/kami"
+	"github.com/tensorplex-labs/dojo/internal/synapse"
+	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
 )
 
-func NewMiner(chainRepo chain.ChainProvider) *Miner {
-	ctx := context.Background()
+type Miner struct {
+	cfg  *synapse.Config
+	srv  *synapse.Server
+	kami *kami.Kami
+	axon kami.ServeAxonParams
 
-	var envCfg config.MinerEnvConfig
-	if err := envconfig.Process(ctx, &envCfg); err != nil {
-		log.Fatal().Err(err).Msg("Failed to process environment variables for Miner")
-	}
-	// Create server with custom config
-	serverConfig := &schnitz.ServerConfig{
-		Host: "0.0.0.0",
-		Port: envCfg.ServerPort,
-	}
-
-	server := schnitz.NewServer(serverConfig)
-	return &Miner{
-		Node:   core.NewNode(chainRepo),
-		server: server,
-		config: &envCfg,
-	}
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
-func (m *Miner) ServeIP() {
-	ipAddr, err := m.server.GetExternalIP()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get external IP address")
-		return
-	}
+func NewMiner(cfg *synapse.Config, k *kami.Kami) *Miner {
+	ipAddress := cfg.MinerEnvConfig.Address
 
-	getMetagraphFn := m.ChainRepo.GetSubnetMetagraph(m.config.Netuid)
-	latestState, err := getMetagraphFn(m.ChainState)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get latest metagraph")
-		return
-	}
-	m.ChainState = latestState
+	// Convert provided address (or discovered external IP) to integer
+	var ipInt int
+	if ipAddress != "" {
+		// try direct parse
+		p := net.ParseIP(ipAddress)
+		if p == nil {
+			// try DNS lookup
+			addrs, err := net.LookupIP(ipAddress)
+			if err == nil && len(addrs) > 0 {
+				p = addrs[0]
+			}
+		}
 
-	axon := chain.FindAxonByHotkey(latestState.GetMetagraph(), m.config.WalletHotkey)
-	if axon != nil {
-		if axon.IP == ipAddr && axon.Port == m.config.ServerPort {
-			log.Info().Msg("Miner IP and Port already in metagraph, skipping serve axon.")
-			return
+		if p != nil {
+			v, err := chainutils.IPv4ToInt(p)
+			if err != nil {
+				log.Error().Err(err).Str("address", ipAddress).Msg("invalid ipv4 address, falling back to external IP")
+				if ext, extErr := chainutils.GetExternalIPInt(); extErr == nil {
+					ipInt = int(ext)
+				} else {
+					log.Error().Err(extErr).Msg("failed to determine external IP")
+					ipInt = 0
+				}
+			} else {
+				ipInt = int(v)
+			}
+		} else {
+			// couldn't parse or resolve, try external
+			if ext, err := chainutils.GetExternalIPInt(); err == nil {
+				ipInt = int(ext)
+			} else {
+				log.Error().Err(err).Msg("failed to determine external IP")
+				ipInt = 0
+			}
+		}
+	} else {
+		// address empty, try external
+		if ext, err := chainutils.GetExternalIPInt(); err == nil {
+			ipInt = int(ext)
+		} else {
+			log.Error().Err(err).Msg("failed to determine external IP")
+			ipInt = 0
 		}
 	}
 
-	err = m.ChainRepo.SetIP(ipAddr, m.config.ServerPort)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to set IP in metagraph")
-		return
+	serveAxonParams := kami.ServeAxonParams{
+		Version:      1,
+		IP:           ipInt,
+		Port:         int(cfg.Port),
+		IPType:       0, // 0 for IPv4
+		Netuid:       0, // default netuid
+		Protocol:     0, // default protocol
+		Placeholder1: 0,
+		Placeholder2: 0,
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	s := synapse.NewServer(*cfg, nil)
+	return &Miner{cfg: cfg, srv: s, kami: k, axon: serveAxonParams, ctx: ctx, cancel: cancel}
 }
 
 func (m *Miner) Run() {
-	ctx := context.Background()
-	if err := m.Node.Start(ctx); err != nil {
-		log.Fatal().Err(err).Msg("Failed to start node")
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+	go func() {
+		if err := m.srv.Start(m.ctx); err != nil {
+			log.Error().Err(err).Msg("failed to start miner server")
+		}
+	}()
+	log.Info().Str("address", m.cfg.Address).Msg("miner server started")
+}
+
+func (m *Miner) Stop() {
+	if m.cancel != nil {
+		m.cancel()
+		// give some time for shutdown
+		time.Sleep(100 * time.Millisecond)
 	}
-
-	m.RegisterMetagraphSync()
-	m.StartBlockUpdater()
-	m.ServeIP()
-
-	schnitz.ServeRoute(m.server, func(c *fiber.Ctx, req core.Heartbeat) (core.Heartbeat, error) {
-		log.Info().Any("request", req).Msg("Heartbeat handler called")
-		req.Ack = true
-		return req, nil
-	})
-
-	m.server.Start()
-	// TODO: task serving logic
+	log.Info().Msg("miner stopped")
 }

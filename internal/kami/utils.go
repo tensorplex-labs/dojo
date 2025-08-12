@@ -1,4 +1,4 @@
-package chain
+package kami
 
 func FindAxonByHotkey(metagraph SubnetMetagraph, hotkey string) *AxonInfo {
 	index := -1
