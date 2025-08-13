@@ -31,7 +31,7 @@ func initLogger() {
 
 	// Set default to Info level
 	logLevel := zerolog.InfoLevel
-	
+
 	if *debug {
 		logLevel = zerolog.DebugLevel
 	} else if *trace {
@@ -39,10 +39,10 @@ func initLogger() {
 	} else if *info {
 		logLevel = zerolog.InfoLevel
 	}
-	
+
 	// Apply the log level globally
 	zerolog.SetGlobalLevel(logLevel)
-	
+
 	// Log the current level
 	switch logLevel {
 	case zerolog.DebugLevel:

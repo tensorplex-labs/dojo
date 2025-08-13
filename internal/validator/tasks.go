@@ -48,7 +48,8 @@ func (v *Validator) heartBeat(ctx context.Context, client *synapse.Client, valid
 }
 
 func (v *Validator) syncMetagraph() {
-	log.Info().Msg("syncing metagraph data")
+	v.mu.Lock()
+	log.Info().Msg(fmt.Sprintf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid))
 	// Placeholder for actual metagraph sync logic
 	// This would typically involve fetching the latest metagraph from a source
 	// and updating v.MetagraphData accordingly.
@@ -58,9 +59,21 @@ func (v *Validator) syncMetagraph() {
 		return
 	}
 	v.MetagraphData.Metagraph = newMetagraph.Data
+	v.mu.Unlock()
 }
 
-func (v *Validator) syncBlock() {}
+func (v *Validator) syncBlock() {
+	v.mu.Lock()
+	log.Info().Msg(fmt.Sprintf("syncing latest block. current block : %d", v.LatestBlock))
+	newBlockResp, err := v.Kami.GetLatestBlock()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get latest block")
+		return
+	}
+
+	v.LatestBlock = int64(newBlockResp.Data.BlockNumber)
+	v.mu.Unlock()
+}
 
 func (v *Validator) sendTaskRound(ctx context.Context, client *synapse.Client, validatorHotkey string) {
 	log.Info().Str("ValidatorHotkey", validatorHotkey).Msg("sending task round")

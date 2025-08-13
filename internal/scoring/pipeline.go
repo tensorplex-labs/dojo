@@ -1,7 +1,7 @@
 package scoring
 
 import (
-	"github.com/tensorplex-labs/dojo/pkg/utils/logger"
+	"github.com/tensorplex-labs/dojo/internal/utils/logger"
 	"gonum.org/v1/gonum/mat"
 )
 

@@ -1,13 +1,53 @@
 package kami
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 )
 
 // HexOrInt handles fields that can be either a number or a hex string
 // It uses big.Int internally to handle arbitrarily large values without overflow
 type HexOrInt struct {
 	Value *big.Int
+}
+
+// UnmarshalJSON accepts numbers (e.g. 12345) or strings ("0xabc" or "12345")
+func (h *HexOrInt) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 || string(b) == "null" {
+		h.Value = big.NewInt(0)
+		return nil
+	}
+
+	var s string
+	if b[0] == '"' {
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+	} else {
+		s = string(b)
+	}
+
+	s = strings.TrimSpace(s)
+	if s == "" {
+		h.Value = big.NewInt(0)
+		return nil
+	}
+
+	v := new(big.Int)
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		if _, ok := v.SetString(s[2:], 16); !ok {
+			return fmt.Errorf("invalid hex integer: %s", s)
+		}
+	} else {
+		if _, ok := v.SetString(s, 10); !ok {
+			return fmt.Errorf("invalid decimal integer: %s", s)
+		}
+	}
+	h.Value = v
+	return nil
 }
 
 type KamiResponse[T any] struct {
@@ -36,6 +76,60 @@ type MovingPrice struct {
 type DividendEntry struct {
 	Hotkey string
 	Amount float64
+}
+
+func (d *DividendEntry) UnmarshalJSON(b []byte) error {
+	// try object form first
+	type obj DividendEntry
+	var o obj
+	if err := json.Unmarshal(b, &o); err == nil {
+		*d = DividendEntry(o)
+		return nil
+	}
+
+	// try array form: [hotkey, amount]
+	var arr []any
+	if err := json.Unmarshal(b, &arr); err != nil {
+		return fmt.Errorf("invalid dividend entry: %w", err)
+	}
+	if len(arr) < 2 {
+		return fmt.Errorf("dividend array must have at least 2 elements")
+	}
+
+	hot, ok := arr[0].(string)
+	if !ok {
+		return fmt.Errorf("expected hotkey string, got %T", arr[0])
+	}
+
+	var amt float64
+	switch v := arr[1].(type) {
+	case nil:
+		amt = 0
+	case float64:
+		amt = v
+	case string:
+		if v == "" {
+			amt = 0
+		} else {
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return fmt.Errorf("parse amount string: %w", err)
+			}
+			amt = f
+		}
+	default:
+		// fallback: stringify then parse
+		s := fmt.Sprintf("%v", v)
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return fmt.Errorf("unsupported amount type %T", arr[1])
+		}
+		amt = f
+	}
+
+	d.Hotkey = hot
+	d.Amount = amt
+	return nil
 }
 
 // SubnetMetagraph represents the main subnet metagraph structure
@@ -73,7 +167,7 @@ type SubnetMetagraph struct {
 	NumUids                    int              `json:"numUids"`
 	MaxUids                    int              `json:"maxUids"`
 	Burn                       float64          `json:"burn"`
-	Difficulty                 HexOrInt         `json:"difficulty"`
+	Difficulty                 int              `json:"difficulty"`
 	RegistrationAllowed        bool             `json:"registrationAllowed"`
 	PowRegistrationAllowed     bool             `json:"powRegistrationAllowed"`
 	ImmunityPeriod             int              `json:"immunityPeriod"`
@@ -81,7 +175,7 @@ type SubnetMetagraph struct {
 	MaxDifficulty              HexOrInt         `json:"maxDifficulty"`
 	MinBurn                    float64          `json:"minBurn"`
 	MaxBurn                    float64          `json:"maxBurn"`
-	AdjustmentAlpha            int              `json:"adjustmentAlpha"`
+	AdjustmentAlpha            HexOrInt         `json:"adjustmentAlpha"`
 	AdjustmentInterval         int              `json:"adjustmentInterval"`
 	TargetRegsPerInterval      int              `json:"targetRegsPerInterval"`
 	MaxRegsPerBlock            int              `json:"maxRegsPerBlock"`

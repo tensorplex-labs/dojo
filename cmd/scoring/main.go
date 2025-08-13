@@ -6,7 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/tensorplex-labs/dojo/internal/scoring"
-	"github.com/tensorplex-labs/dojo/pkg/utils/logger"
+	"github.com/tensorplex-labs/dojo/internal/utils/logger"
 	"gonum.org/v1/gonum/mat"
 )
 

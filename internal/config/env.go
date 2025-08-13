@@ -1,30 +1,39 @@
 package config
 
+import "time"
+
 type ChainEnvConfig struct {
-	Netuid int `env:"NETUID"`
+	Netuid int `env:"NETUID,default=0"`
 }
 
 type WalletEnvConfig struct {
-	WalletHotkey   string `env:"WALLET_HOTKEY"`
-	WalltetColdkey string `env:"WALLET_COLDKEY"`
-	BittensorDir   string `env:"BITTENSOR_DIR"`
+	WalletHotkey   string `env:"WALLET_HOTKEY,default="`
+	WalltetColdkey string `env:"WALLET_COLDKEY,default="`
+	BittensorDir   string `env:"BITTENSOR_DIR,default="`
 }
 
 type KamiEnvConfig struct {
 	WalletEnvConfig
-	SubtensorNetwork string `env:"SUBTENSOR_NETWORK"`
-	KamiHost         string `env:"KAMI_HOST"`
-	KamiPort         string `env:"KAMI_PORT"`
+	SubtensorNetwork string `env:"SUBTENSOR_NETWORK,default=local"`
+	KamiHost         string `env:"KAMI_HOST,default=127.0.0.1"`
+	KamiPort         string `env:"KAMI_PORT,default=8080"`
 }
 
 type ServerEnvConfig struct {
-	Address       string `env:"AXON_IP"`
-	Port          int    `env:"AXON_PORT"`
-	BodySizeLimit int    `env:"SERVER_BODY_LIMIT"`
+	Address       string `env:"AXON_IP,default=127.0.0.1"`
+	Port          int    `env:"AXON_PORT,default=8080"`
+	BodySizeLimit int    `env:"SERVER_BODY_LIMIT,default=1048576"`
 }
 
 type ClientEnvConfig struct {
-	ClientTimeout int `env:"CLIENT_TIMEOUT"`
+	ClientTimeout time.Duration `env:"CLIENT_TIMEOUT,default=30s"`
+}
+
+type RedisEnvConfig struct {
+	RedisHost     string `env:"REDIS_HOST,default=127.0.0.1"`
+	RedisPort     int    `env:"REDIS_PORT,default=6379"`
+	RedisPassword string `env:"REDIS_PASSWORD,default="`
+	RedisDB       int    `env:"REDIS_DB,default=0"`
 }
 
 type MinerEnvConfig struct {

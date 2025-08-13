@@ -1,15 +1,17 @@
 package main
 
 import (
-	"context"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
+
+	"github.com/tensorplex-labs/dojo/internal/config"
 	"github.com/tensorplex-labs/dojo/internal/kami"
 	"github.com/tensorplex-labs/dojo/internal/utils/logger"
+	"github.com/tensorplex-labs/dojo/internal/utils/redis"
 	"github.com/tensorplex-labs/dojo/internal/validator"
 )
 
@@ -17,44 +19,41 @@ func main() {
 	logger.Init()
 	log.Info().Msg("Starting validator...")
 
-	err := godotenv.Load()
+	_ = godotenv.Load() // best-effort
+
+	cfg, err := config.LoadValidatorEnv()
 	if err != nil {
-		log.Fatal().Msg("Error loading .env file")
+		log.Fatal().Err(err).Msg("failed to load validator env")
 	}
 
-	log.Info().Msg("Validator service is starting...")
-
-	chainRepo, err := kami.NewKami(&kami.KamiEnvConfig{
-		KamiHost:       os.Getenv("KAMI_HOST"),
-		KamiPort:       os.Getenv("KAMI_PORT"),
-		WalletHotkey:   os.Getenv("WALLET_HOTKEY"),
-		WalltetColdkey: os.Getenv("WALLET_COLDKEY"),
-	})
+	kamiCfg, err := config.LoadKamiEnv()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error initializing Kami")
+		log.Fatal().Err(err).Msg("failed to load kami env")
+	}
+	k, err := kami.NewKami(kamiCfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to init kami client")
 	}
 
-	_, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	redisCfg, err := config.LoadRedisEnv()
+	var r *redis.Redis
+	if err != nil {
+		log.Error().Err(err).Msg("failed to load redis env, continuing without redis")
+	} else {
+		r, err = redis.NewRedis(redisCfg)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to init redis client, continuing without redis")
+			r = nil
+		}
+	}
 
-	v := validator.NewValidator(chainRepo)
-	v.Run()
+	v := validator.NewValidator(cfg, k, nil, r)
+	v.Start()
 
-	// Setup signal handling for graceful shutdown
+	// graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	log.Info().Msg("Validator is running. Press Ctrl+C to shutdown...")
-
-	// Wait for shutdown signal
 	<-sigChan
-	log.Info().Msg("Shutdown signal received, gracefully shutting down...")
-
-	// Cancel context to signal all goroutines to stop
-	cancel()
-
-	// Shutdown the validator's worker pool
+	log.Info().Msg("shutdown signal received, stopping validator")
 	v.Stop()
-
-	log.Info().Msg("Validator shutdown complete")
 }

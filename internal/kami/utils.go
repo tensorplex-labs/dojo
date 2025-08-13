@@ -16,3 +16,14 @@ func FindAxonByHotkey(metagraph SubnetMetagraph, hotkey string) *AxonInfo {
 	axon := metagraph.Axons[index]
 	return &axon
 }
+
+func GetHotkey(k *Kami) (string, error) {
+	if k == nil {
+		return "", nil
+	}
+	keyringPair, err := k.GetKeyringPair()
+	if err != nil {
+		return "", err
+	}
+	return keyringPair.Data.KeyringPair.Address, nil
+}

@@ -11,19 +11,16 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/config"
 )
 
-// KamiChainRepo is a repository for interacting with the bittensor chain
-type KamiChainRepo struct {
-	httpClient *resty.Client
-	baseURL    string
-}
-
 // KamiClient defines the methods implemented by the Kami service client
 // Use this interface in callers to allow easy mocking and testing
-type KamiClient interface {
+type KamiInterface interface {
 	ServeAxon(ServeAxonParams) (ExtrinsicHashResponse, error)
-	GetMetagraph() (SubnetMetagraphResponse, error)
-	GetAxon() (LatestBlockResponse, error)
+	GetMetagraph(netuid int) (SubnetMetagraphResponse, error)
 	SetWeights(SetWeightsParams) (ExtrinsicHashResponse, error)
+	SignMessage(SignMessageParams) (SignMessageResponse, error)
+	VerifyMessage(VerifyMessageParams) (VerifyMessageResponse, error)
+	GetKeyringPair() (KeyringPairInfoResponse, error)
+	GetLatestBlock() (LatestBlockResponse, error)
 }
 
 type Kami struct {
@@ -74,7 +71,7 @@ func (k *Kami) ServeAxon(payload ServeAxonParams) (ExtrinsicHashResponse, error)
 }
 
 func (k *Kami) GetMetagraph(netuid int) (SubnetMetagraphResponse, error) {
-	apiPath := fmt.Sprintf("%s/chain/metagraph/%d", k.BaseURL, netuid)
+	apiPath := fmt.Sprintf("%s/chain/subnet-metagraph/%d", k.BaseURL, netuid)
 
 	resp, err := sendRequest(apiPath, "GET", nil)
 	if err != nil {
@@ -189,7 +186,7 @@ func (k *Kami) VerifyMessage(params VerifyMessageParams) (VerifyMessageResponse,
 }
 
 func (k *Kami) GetKeyringPair() (KeyringPairInfoResponse, error) {
-	apiPath := fmt.Sprintf("%s/substrate/keyring-pair", k.BaseURL)
+	apiPath := fmt.Sprintf("%s/substrate/keyring-pair-info", k.BaseURL)
 
 	resp, err := sendRequest(apiPath, "GET", nil)
 	if err != nil {
