@@ -36,6 +36,11 @@ type RedisEnvConfig struct {
 	RedisDB       int    `env:"REDIS_DB,default=0"`
 }
 
+type SyntheticApiEnvConfig struct {
+	OpenrouterApiKey string `env:"OPENROUTER_API_KEY,default="`
+	SyntheticApiUrl  string `env:"SYNTHETIC_API_URL,default=localhost:5003"`
+}
+
 type MinerEnvConfig struct {
 	ChainEnvConfig
 	WalletEnvConfig
