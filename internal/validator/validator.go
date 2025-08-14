@@ -9,14 +9,16 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/config"
 	"github.com/tensorplex-labs/dojo/internal/kami"
 	"github.com/tensorplex-labs/dojo/internal/synapse"
+	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
 	"github.com/tensorplex-labs/dojo/internal/utils/redis"
 )
 
 type Validator struct {
-	Kami     kami.KamiInterface
-	TaskPool any // placeholder for task pool if needed
-	Client   *synapse.Client
-	Redis    redis.RedisInterface
+	Kami         kami.KamiInterface
+	TaskPool     any // placeholder for task pool if needed
+	Client       *synapse.Client
+	Redis        redis.RedisInterface
+	SyntheticApi syntheticapi.SyntheticApiInterface
 
 	// Chain global state
 	LatestBlock     int64
@@ -33,7 +35,7 @@ type Validator struct {
 	mu sync.Mutex // mutex to protect shared data
 }
 
-func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskPool any, redis redis.RedisInterface) *Validator {
+func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskPool any, redis redis.RedisInterface, syntheticApi syntheticapi.SyntheticApiInterface) *Validator {
 	intervalConfig := &IntervalConfig{
 		MetagraphInterval: 30 * time.Second,
 		TaskRoundInterval: 15 * time.Minute,
@@ -43,10 +45,10 @@ func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskP
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Validator{
-		Kami:     kami,
-		TaskPool: taskPool,
-		// Client:   synapse.NewClient(kami),
-		Redis: redis,
+		Kami:         kami,
+		TaskPool:     taskPool,
+		Redis:        redis,
+		SyntheticApi: syntheticApi,
 
 		LatestBlock:     0,               // will be updated during block processing
 		MetagraphData:   MetagraphData{}, // initialize with empty data

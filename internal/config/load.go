@@ -74,3 +74,11 @@ func LoadValidatorEnv() (*ValidatorEnvConfig, error) {
 	}
 	return cfg, nil
 }
+
+func LoadSyntheticApiEnv() (*SyntheticApiEnvConfig, error) {
+	cfg := &SyntheticApiEnvConfig{
+		OpenrouterApiKey: getenv("OPENROUTER_API_KEY", ""),
+		SyntheticApiUrl:  getenv("SYNTHETIC_API_URL", "localhost:5003"),
+	}
+	return cfg, nil
+}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/tensorplex-labs/dojo/internal/config"
 	"github.com/tensorplex-labs/dojo/internal/kami"
+	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
 	"github.com/tensorplex-labs/dojo/internal/utils/logger"
 	"github.com/tensorplex-labs/dojo/internal/utils/redis"
 	"github.com/tensorplex-labs/dojo/internal/validator"
@@ -47,7 +48,17 @@ func main() {
 		}
 	}
 
-	v := validator.NewValidator(cfg, k, nil, r)
+	syntheticApiCfg, err := config.LoadSyntheticApiEnv()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to load synthetic api env")
+	}
+
+	s, err := syntheticapi.NewSyntheticApi(syntheticApiCfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to init synthetic api client")
+	}
+
+	v := validator.NewValidator(cfg, k, nil, r, s)
 	v.Start()
 
 	// graceful shutdown
