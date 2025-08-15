@@ -36,10 +36,20 @@ type Validator struct {
 }
 
 func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskPool any, redis redis.RedisInterface, syntheticApi syntheticapi.SyntheticApiInterface) *Validator {
-	intervalConfig := &IntervalConfig{
-		MetagraphInterval: 30 * time.Second,
-		TaskRoundInterval: 15 * time.Minute,
-		BlockInterval:     12 * time.Second,
+	var intervalConfig *IntervalConfig
+	if cfg.Environment == "dev" || cfg.Environment == "DEV" {
+		log.Warn().Msg("Validator is running in dev/test mode, this is not recommended for production!")
+		intervalConfig = &IntervalConfig{
+			MetagraphInterval: 5 * time.Second,
+			TaskRoundInterval: 10 * time.Second,
+			BlockInterval:     2 * time.Second,
+		}
+	} else {
+		intervalConfig = &IntervalConfig{
+			MetagraphInterval: 30 * time.Second,
+			TaskRoundInterval: 15 * time.Minute,
+			BlockInterval:     12 * time.Second,
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -84,15 +94,17 @@ func (v *Validator) runTicker(ctx context.Context, d time.Duration, fn func()) {
 }
 
 func (v *Validator) Start() {
-	_, err := v.Kami.GetKeyringPair()
+	keyringData, err := v.Kami.GetKeyringPair()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get validator hotkey")
 		return
 	}
 
+	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)
+
 	v.Wg.Add(3)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {
-		v.sendTaskRound(v.Ctx, v.Client, v.ValidatorHotkey)
+		v.sendTaskRound()
 	})
 
 	go v.runTicker(v.Ctx, v.IntervalConfig.MetagraphInterval, func() {

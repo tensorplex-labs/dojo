@@ -75,6 +75,32 @@ func (v *Validator) syncBlock() {
 	v.mu.Unlock()
 }
 
-func (v *Validator) sendTaskRound(ctx context.Context, client *synapse.Client, validatorHotkey string) {
-	log.Info().Str("ValidatorHotkey", validatorHotkey).Msg("sending task round")
+func (v *Validator) sendTaskRound() {
+	ctx := v.Ctx
+	if v.Redis == nil {
+		log.Error().Msg("redis client is not initialized")
+		return
+	}
+
+	taskCount, err := v.Redis.LLen(ctx, "synthetic:questions")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get task count from redis")
+		return
+	}
+
+	if taskCount < 25 { // TODO: this should be CURRENT_ACTIVE_MINER_UIDS
+		log.Info().Msg("not enough tasks in redis, skipping task round")
+		return
+	}
+
+	log.Info().Msg(fmt.Sprintf("sending task round with %d tasks", taskCount))
+	for i := 0; i < int(taskCount); i++ {
+		synApiQuestion, err := v.SyntheticApi.GetQuestion()
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get question from synthetic API")
+			return
+		}
+		log.Debug().Msgf("Received question: %s of id: %s", synApiQuestion.Prompt, synApiQuestion.Qa_Id)
+
+	}
 }

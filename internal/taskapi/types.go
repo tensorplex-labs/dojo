@@ -1,1 +1,32 @@
 package taskapi
+
+type CreateTasksRequest struct {
+	TaskType string `form:"task_type" json:"task_type"`
+	Metadata string `form:"metadata" json:"metadata"`
+	Assignee string `form:"assignee" json:"assignee"`
+	ExpireAt string `form:"expire_at" json:"expire_at"`
+}
+
+type AuthHeaders struct {
+	Hotkey    string `header:"X-Hotkey"`
+	Signature string `header:"X-Signature"`
+	Message   string `header:"X-Message"`
+}
+
+type Response[T any] struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Code    int    `json:"code,omitempty"`
+	Data    T      `json:"data,omitempty"`
+	Page       int   `json:"page,omitempty"`
+	PageSize   int   `json:"page_size,omitempty"`
+	TotalPages int   `json:"total_pages,omitempty"`
+	TotalItems int64 `json:"total_items,omitempty"`
+}
+
+type SuccessResponse[T any] = Response[T]
+
+type ErrorResponse = Response[struct{}]
+
+type PaginatedResponse[T any] = Response[T]

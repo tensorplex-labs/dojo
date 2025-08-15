@@ -1,0 +1,151 @@
+package syntheticapi
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"testing"
+
+	"github.com/tensorplex-labs/dojo/internal/config"
+)
+
+func TestNewSyntheticApi_NilConfig(t *testing.T) {
+	_, err := NewSyntheticApi(nil)
+	if err == nil {
+		t.Fatal("expected error when cfg is nil")
+	}
+}
+
+func TestGetQuestion_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/generate-question" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		resp := GenerateQuestionResponse{Success: true, Prompt: "what?", Qa_Id: "qa-1"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	cfg := &config.SyntheticApiEnvConfig{SyntheticApiUrl: ts.URL}
+	sa, err := NewSyntheticApi(cfg)
+	if err != nil {
+		t.Fatalf("unexpected new error: %v", err)
+	}
+
+	out, err := sa.GetQuestion()
+	if err != nil {
+		t.Fatalf("GetQuestion failed: %v", err)
+	}
+	if out.Prompt != "what?" || out.Qa_Id != "qa-1" || !out.Success {
+		t.Fatalf("unexpected response: %+v", out)
+	}
+}
+
+func TestGetQuestion_Non2xx(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "boom")
+	}))
+	defer ts.Close()
+
+	cfg := &config.SyntheticApiEnvConfig{SyntheticApiUrl: ts.URL}
+	sa, _ := NewSyntheticApi(cfg)
+	_, err := sa.GetQuestion()
+	if err == nil {
+		t.Fatal("expected error for non-2xx response")
+	}
+}
+
+func TestGetAnswer_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/generate-answer" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		qa := r.URL.Query().Get("qa_id")
+		if qa != "qa-1" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		resp := GenerateAnswerResponse{Success: true, Answer: "42"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	cfg := &config.SyntheticApiEnvConfig{SyntheticApiUrl: ts.URL}
+	sa, _ := NewSyntheticApi(cfg)
+	out, err := sa.GetAnswer("qa-1")
+	if err != nil {
+		t.Fatalf("GetAnswer failed: %v", err)
+	}
+	if out.Answer != "42" || !out.Success {
+		t.Fatalf("unexpected response: %+v", out)
+	}
+}
+
+func TestGetQuestionAugment_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/get-question-augment" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		base := r.URL.Query().Get("base_question")
+		num := r.URL.Query().Get("num_augments")
+		n, _ := strconv.Atoi(num)
+		if base == "" || n <= 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		aug := make([]string, n)
+		for i := 0; i < n; i++ {
+			aug[i] = fmt.Sprintf("%s-%d", base, i)
+		}
+		resp := AugmentQuestionResponse{Success: true, Augments: aug}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	cfg := &config.SyntheticApiEnvConfig{SyntheticApiUrl: ts.URL}
+	sa, _ := NewSyntheticApi(cfg)
+	out, err := sa.GetQuestionAugment("hello", 3)
+	if err != nil {
+		t.Fatalf("GetQuestionAugment failed: %v", err)
+	}
+	if len(out.Augments) != 3 || out.Augments[0] != "hello-0" {
+		t.Fatalf("unexpected augments: %+v", out.Augments)
+	}
+}
+
+func TestOrderAnswer_Success(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/order-answer" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		q := r.URL.Query().Get("question")
+		if q == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		resp := GenerateAnswerResponse{Success: true, Answer: q + "-ordered"}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer ts.Close()
+
+	cfg := &config.SyntheticApiEnvConfig{SyntheticApiUrl: ts.URL}
+	sa, _ := NewSyntheticApi(cfg)
+	out, err := sa.OrderAnswer("how")
+	if err != nil {
+		t.Fatalf("OrderAnswer failed: %v", err)
+	}
+	if out.Answer != "how-ordered" {
+		t.Fatalf("unexpected response: %+v", out)
+	}
+}
