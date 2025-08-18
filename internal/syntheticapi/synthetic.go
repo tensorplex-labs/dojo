@@ -13,9 +13,9 @@ import (
 
 type SyntheticApiInterface interface {
 	GetQuestion() (GenerateQuestionResponse, error)
-	GetAnswer(qaID string) (GenerateAnswerResponse, error)
+	GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error)
 	GetQuestionAugment(baseQuestion string, numAugments int) (AugmentQuestionResponse, error)
-	OrderAnswer(question string) (GenerateAnswerResponse, error)
+	OrderAnswer(question string) (GenerateAnswerResponse[OrderAnswer], error)
 }
 
 type SyntheticApi struct {
@@ -58,22 +58,26 @@ func (s *SyntheticApi) GetQuestion() (GenerateQuestionResponse, error) {
 	return out, nil
 }
 
-func (s *SyntheticApi) GetAnswer(qaID string) (GenerateAnswerResponse, error) {
-	var out GenerateAnswerResponse
+func (s *SyntheticApi) GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error) {
+	if qaID == "" {
+		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("taskType and qaID cannot be empty")
+	}
+	var out GenerateAnswerResponse[CodegenAnswer]
+
 	resp, err := s.client.R().
 		SetQueryParam("qa_id", qaID).
 		SetResult(&out).
 		Post("/generate-answer")
 	if err != nil {
 		log.Error().Err(err).Msg("generate-answer request failed")
-		return GenerateAnswerResponse{}, fmt.Errorf("generate answer: %w", err)
+		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("generate answer: %w", err)
 	}
 	if resp.IsError() {
 		log.Error().Int("status", resp.StatusCode()).Str("body", resp.String()).Msg("generate-answer non-2xx")
-		return GenerateAnswerResponse{}, fmt.Errorf("generate-answer status %d: %s", resp.StatusCode(), resp.String())
+		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("generate-answer status %d: %s", resp.StatusCode(), resp.String())
 	}
 	if !out.Success {
-		return GenerateAnswerResponse{}, fmt.Errorf("generate-answer api returned success=false")
+		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("generate-answer api returned success=false")
 	}
 	return out, nil
 }
@@ -101,22 +105,22 @@ func (s *SyntheticApi) GetQuestionAugment(baseQuestion string, numAugments int) 
 	return out, nil
 }
 
-func (s *SyntheticApi) OrderAnswer(question string) (GenerateAnswerResponse, error) {
-	var out GenerateAnswerResponse
+func (s *SyntheticApi) OrderAnswer(question string) (GenerateAnswerResponse[OrderAnswer], error) {
+	var out GenerateAnswerResponse[OrderAnswer]
 	resp, err := s.client.R().
 		SetQueryParam("question", question).
 		SetResult(&out).
 		Post("/order-answer")
 	if err != nil {
 		log.Error().Err(err).Msg("order-answer request failed")
-		return GenerateAnswerResponse{}, fmt.Errorf("order answer: %w", err)
+		return GenerateAnswerResponse[OrderAnswer]{}, fmt.Errorf("order answer: %w", err)
 	}
 	if resp.IsError() {
 		log.Error().Int("status", resp.StatusCode()).Str("body", resp.String()).Msg("order-answer non-2xx")
-		return GenerateAnswerResponse{}, fmt.Errorf("order-answer status %d: %s", resp.StatusCode(), resp.String())
+		return GenerateAnswerResponse[OrderAnswer]{}, fmt.Errorf("order-answer status %d: %s", resp.StatusCode(), resp.String())
 	}
 	if !out.Success {
-		return GenerateAnswerResponse{}, fmt.Errorf("order-answer api returned success=false")
+		return GenerateAnswerResponse[OrderAnswer]{}, fmt.Errorf("order-answer api returned success=false")
 	}
 	return out, nil
 }

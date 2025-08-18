@@ -60,7 +60,7 @@ func TestGetQuestion_Non2xx(t *testing.T) {
 	}
 }
 
-func TestGetAnswer_Success(t *testing.T) {
+func TestGetCodegenAnswer_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/generate-answer" {
 			w.WriteHeader(http.StatusNotFound)
@@ -71,7 +71,7 @@ func TestGetAnswer_Success(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		resp := GenerateAnswerResponse{Success: true, Answer: "42"}
+		resp := GenerateAnswerResponse[CodegenAnswer]{Success: true, Answer: CodegenAnswer{Prompt: "p"}}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -79,11 +79,11 @@ func TestGetAnswer_Success(t *testing.T) {
 
 	cfg := &config.SyntheticApiEnvConfig{SyntheticApiUrl: ts.URL}
 	sa, _ := NewSyntheticApi(cfg)
-	out, err := sa.GetAnswer("qa-1")
+	out, err := sa.GetCodegenAnswer("qa-1")
 	if err != nil {
-		t.Fatalf("GetAnswer failed: %v", err)
+		t.Fatalf("GetCodegenAnswer failed: %v", err)
 	}
-	if out.Answer != "42" || !out.Success {
+	if !out.Success {
 		t.Fatalf("unexpected response: %+v", out)
 	}
 }
@@ -133,7 +133,7 @@ func TestOrderAnswer_Success(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		resp := GenerateAnswerResponse{Success: true, Answer: q + "-ordered"}
+		resp := GenerateAnswerResponse[OrderAnswer]{Success: true, Answer: OrderAnswer{Ordered: q + "-ordered"}}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -145,7 +145,7 @@ func TestOrderAnswer_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OrderAnswer failed: %v", err)
 	}
-	if out.Answer != "how-ordered" {
+	if out.Answer.Ordered != "how-ordered" {
 		t.Fatalf("unexpected response: %+v", out)
 	}
 }

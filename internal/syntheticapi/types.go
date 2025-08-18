@@ -1,17 +1,41 @@
 package syntheticapi
 
 type GenerateQuestionResponse struct {
-	Success bool `json:"success"`
-	Prompt string `json:"prompt"`
-	Qa_Id string `json:"qa_id"`
+	Success bool   `json:"success"`
+	Prompt  string `json:"prompt"`
+	Qa_Id   string `json:"qa_id"`
 }
 
-type GenerateAnswerResponse struct {
+type GenerateAnswerResponse[T CodegenAnswer | OrderAnswer] struct {
 	Success bool `json:"success"`
-	Answer string `json:"answer"`
+	Answer  T    `json:"answer"`
 }
-
 type AugmentQuestionResponse struct {
-	Success bool `json:"success"`
+	Success  bool     `json:"success"`
 	Augments []string `json:"augments"`
 }
+
+// ----------------------------- Codegen Types -----------------------------
+type CodegenAnswer struct {
+	Prompt    string            `json:"prompt"`
+	Responses []CodegenResponse `json:"responses"`
+}
+
+type CodegenResponse struct {
+	Model      string            `json:"model"`
+	Completion CodegenCompletion `json:"completion"`
+	Cid        string            `json:"cid"`
+}
+
+type CodegenCompletion struct {
+	Files []CodegenFiles `json:"files"`
+}
+
+type CodegenFiles struct {
+	Filename string `json:"filename"`
+	Content  string `json:"content"`
+}
+
+type OrderAnswer struct{ Ordered string `json:"ordered"` }
+
+// ----------------------------- Codegen Types -----------------------------

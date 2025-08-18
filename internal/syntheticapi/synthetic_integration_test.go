@@ -29,12 +29,11 @@ func TestSyntheticApi_Integration(t *testing.T) {
 		t.Fatalf("GetQuestion returned empty qa_id: %+v", q)
 	}
 
-	_, err = sa.GetAnswer(q.Qa_Id)
+	_, err = sa.GetCodegenAnswer(q.Qa_Id)
 	if err != nil {
-		t.Fatalf("GetAnswer failed: %v", err)
+		t.Fatalf("GetCodegenAnswer failed: %v", err)
 	}
 
-	// OrderAnswer may accept the prompt; ensure it doesn't error.
 	_, err = sa.OrderAnswer(q.Prompt)
 	if err != nil {
 		t.Fatalf("OrderAnswer failed: %v", err)

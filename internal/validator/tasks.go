@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -82,6 +83,15 @@ func (v *Validator) sendTaskRound() {
 		return
 	}
 
+	// retrieve the current round
+	currentRound, err := v.incrementTaskRound()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to increment task round")
+		return
+	}
+
+	log.Info().Msg(fmt.Sprintf("starting task round %d", currentRound))
+
 	taskCount, err := v.Redis.LLen(ctx, "synthetic:questions")
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get task count from redis")
@@ -101,6 +111,24 @@ func (v *Validator) sendTaskRound() {
 			return
 		}
 		log.Debug().Msgf("Received question: %s of id: %s", synApiQuestion.Prompt, synApiQuestion.Qa_Id)
+		// task request & completion logic
+		log.Info().Msgf("Task round %d: processing question %d with ID %s", currentRound, i+1, synApiQuestion.Qa_Id)
 
+		completion, err := v.SyntheticApi.GetCodegenAnswer(synApiQuestion.Qa_Id)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed to get answer for question ID %s", synApiQuestion.Qa_Id)
+			continue
+		}
+
+		fmt.Printf("Task round %d: received completion for question %d with ID %s: %+v\n", currentRound, i+1, synApiQuestion.Qa_Id, completion)
+		os.Exit(0)
+
+		shouldAugment := v.shouldAugment()
+		switch shouldAugment {
+		case true:
+			log.Debug().Msgf("Task round %d: augmenting question %d with ID %s", currentRound, i+1, synApiQuestion.Qa_Id)
+		default:
+			log.Debug().Msgf("Task round %d: processing question %d without augmentation with ID %s", currentRound, i+1, synApiQuestion.Qa_Id)
+		}
 	}
 }
