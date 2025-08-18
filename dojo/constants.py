@@ -53,9 +53,9 @@ class HighValidatorConstants(IntEnum):
     QUERY_WINDOW = 2 * 60 * 60  # 2 hour
 
 
-def get_validator_constants() -> (
-    type[NormalValidatorConstants | MediumValidatorConstants | HighValidatorConstants]
-):
+def get_validator_constants() -> type[
+    NormalValidatorConstants | MediumValidatorConstants | HighValidatorConstants
+]:
     from dojo.utils.config import Mode, get_mode
 
     mode = get_mode()
@@ -72,7 +72,7 @@ class ValidatorConstant(Enum):
     VALIDATOR_MIN_STAKE = int(os.getenv("VALIDATOR_MIN_STAKE", "5000"))
     VALIDATOR_STATUS = 60
     BURN_UID = 158
-    BURN_WEIGHT = 0.8
+    BURN_WEIGHT = 1.0
 
 
 class MinerConstant(IntEnum):
