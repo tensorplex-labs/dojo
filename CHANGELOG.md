@@ -1,3 +1,9 @@
+## [1.15.4](https://github.com/tensorplex-labs/dojo/compare/v1.15.3...v1.15.4) (2025-08-18)
+
+### Bug Fixes
+
+* adjusting burn emission ([c0ac650](https://github.com/tensorplex-labs/dojo/commit/c0ac6506697635943f6f294d04c7b439c05a60ae))
+
 ## [1.15.3](https://github.com/tensorplex-labs/dojo/compare/v1.15.2...v1.15.3) (2025-08-08)
 
 ## [1.15.2](https://github.com/tensorplex-labs/dojo/compare/v1.15.1...v1.15.2) (2025-08-06)
