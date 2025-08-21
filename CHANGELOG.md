@@ -1,3 +1,9 @@
+## [1.15.6](https://github.com/tensorplex-labs/dojo/compare/v1.15.5...v1.15.6) (2025-08-21)
+
+### Bug Fixes
+
+* disabled syn-api in docker ([15efdda](https://github.com/tensorplex-labs/dojo/commit/15efdda864374a8940910d719a9d8614805852d5))
+
 ## [1.15.5](https://github.com/tensorplex-labs/dojo/compare/v1.15.4...v1.15.5) (2025-08-21)
 
 ### Bug Fixes
