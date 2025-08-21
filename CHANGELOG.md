@@ -1,3 +1,9 @@
+## [1.15.5](https://github.com/tensorplex-labs/dojo/compare/v1.15.4...v1.15.5) (2025-08-21)
+
+### Bug Fixes
+
+* disabled syn api temporary ([a1f464d](https://github.com/tensorplex-labs/dojo/commit/a1f464d99eb4a78055f8f846dce26c42d359e762))
+
 ## [1.15.4](https://github.com/tensorplex-labs/dojo/compare/v1.15.3...v1.15.4) (2025-08-18)
 
 ### Bug Fixes
