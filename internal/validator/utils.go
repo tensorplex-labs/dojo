@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/rs/zerolog/log"
+	"github.com/tensorplex-labs/dojo/internal/kami"
 )
 
 func (v *Validator) shouldAugment() bool {
@@ -46,4 +47,39 @@ func (v *Validator) incrementTaskRound() (int, error) {
 
 	log.Info().Msgf("incremented task round to %d", newRound)
 	return newRound, nil
+}
+
+func (v *Validator) randomStringToSign() (string, error) {
+	// Generate a random string of 32 characters
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	length := 52
+	result := make([]byte, length)
+
+	for i := range result {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random index: %w", err)
+		}
+		result[i] = charset[n.Int64()]
+	}
+
+	return string(result), nil
+}
+
+func (v *Validator) signMessage(message string) (string, error) {
+	// Sign the message using the validator's hotkey
+	if v.Kami == nil {
+		return "", fmt.Errorf("Kami client is not initialized")
+	}
+
+	params := kami.SignMessageParams{
+		Message: message,
+	}
+
+	resp, err := v.Kami.SignMessage(params)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign message: %w", err)
+	}
+
+	return resp.Data.Signature, nil
 }

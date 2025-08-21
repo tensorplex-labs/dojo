@@ -9,7 +9,7 @@ import (
 )
 
 type TaskApiInterface interface {
-	CreateTask(headers AuthHeaders, req CreateTasksRequest) (Response[map[string]any], error)
+	CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[CodegenTaskMetadata]) (Response[map[string]any], error)
 }
 
 type TaskApi struct {
@@ -34,21 +34,27 @@ func NewTaskApi(cfg *config.TaskApiEnvConfig) (*TaskApi, error) {
 }
 
 // TODO: Possibly have a fix response type for task api!
-func (t *TaskApi) CreateTask(headers AuthHeaders, req CreateTasksRequest) (Response[map[string]any], error) {
+func (t *TaskApi) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[CodegenTaskMetadata]) (Response[map[string]any], error) {
 	var out Response[map[string]any]
+	metadataBytes, err := sonic.Marshal(req.Metadata)
+	if err != nil {
+		return Response[map[string]any]{}, fmt.Errorf("marshal metadata: %w", err)
+	}
 	r := t.client.R().
 		SetHeader("X-Hotkey", headers.Hotkey).
 		SetHeader("X-Signature", headers.Signature).
 		SetHeader("X-Message", headers.Message).
 		SetFormData(map[string]string{
 			"task_type": req.TaskType,
-			"metadata":  req.Metadata,
+			"metadata":  string(metadataBytes),
 			"assignee":  req.Assignee,
 			"expire_at": req.ExpireAt,
 		}).
 		SetResult(&out)
+	// Print out the header
+	fmt.Printf("Creating task with headers: %+v\n", headers)
 
-	resp, err := r.Post("/api/v1/tasks/")
+	resp, err := r.Post("/api/v1/validator/tasks")
 	if err != nil {
 		return Response[map[string]any]{}, fmt.Errorf("create task: %w", err)
 	}

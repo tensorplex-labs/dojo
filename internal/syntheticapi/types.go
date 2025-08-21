@@ -6,13 +6,18 @@ type GenerateQuestionResponse struct {
 	Qa_Id   string `json:"qa_id"`
 }
 
-type GenerateAnswerResponse[T CodegenAnswer | OrderAnswer] struct {
+type GenerateAnswerResponse[T CodegenAnswer] struct {
 	Success bool `json:"success"`
 	Answer  T    `json:"answer"`
 }
 type AugmentQuestionResponse struct {
 	Success  bool     `json:"success"`
 	Augments []string `json:"augments"`
+}
+
+type OrderAnswerResponse struct {
+	Success  bool   `json:"success"`
+	AnswerID string `json:"ans_id"`
 }
 
 // ----------------------------- Codegen Types -----------------------------
@@ -35,7 +40,5 @@ type CodegenFiles struct {
 	Filename string `json:"filename"`
 	Content  string `json:"content"`
 }
-
-type OrderAnswer struct{ Ordered string `json:"ordered"` }
 
 // ----------------------------- Codegen Types -----------------------------

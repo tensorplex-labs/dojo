@@ -1,6 +1,7 @@
 package syntheticapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -15,7 +16,7 @@ type SyntheticApiInterface interface {
 	GetQuestion() (GenerateQuestionResponse, error)
 	GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error)
 	GetQuestionAugment(baseQuestion string, numAugments int) (AugmentQuestionResponse, error)
-	OrderAnswer(question string) (GenerateAnswerResponse[OrderAnswer], error)
+	OrderAnswer(question string) (OrderAnswerResponse, error)
 }
 
 type SyntheticApi struct {
@@ -62,11 +63,18 @@ func (s *SyntheticApi) GetCodegenAnswer(qaID string) (GenerateAnswerResponse[Cod
 	if qaID == "" {
 		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("taskType and qaID cannot be empty")
 	}
-	var out GenerateAnswerResponse[CodegenAnswer]
 
+	type rawResp struct {
+		Success bool            `json:"success"`
+		Answer  json.RawMessage `json:"answer"`
+	}
+
+	var raw rawResp
+	payload := map[string]string{"qa_id": qaID}
 	resp, err := s.client.R().
-		SetQueryParam("qa_id", qaID).
-		SetResult(&out).
+		SetHeader("Content-Type", "application/json").
+		SetBody(payload).
+		SetResult(&raw).
 		Post("/generate-answer")
 	if err != nil {
 		log.Error().Err(err).Msg("generate-answer request failed")
@@ -76,19 +84,41 @@ func (s *SyntheticApi) GetCodegenAnswer(qaID string) (GenerateAnswerResponse[Cod
 		log.Error().Int("status", resp.StatusCode()).Str("body", resp.String()).Msg("generate-answer non-2xx")
 		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("generate-answer status %d: %s", resp.StatusCode(), resp.String())
 	}
-	if !out.Success {
+	if !raw.Success {
 		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("generate-answer api returned success=false")
 	}
-	return out, nil
+
+	var ans CodegenAnswer
+	if len(raw.Answer) > 0 {
+		if raw.Answer[0] == '"' {
+			var sjson string
+			if err := sonic.Unmarshal(raw.Answer, &sjson); err != nil {
+				return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("generate answer: unquote answer: %w", err)
+			}
+			if err := sonic.Unmarshal([]byte(sjson), &ans); err != nil {
+				return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("generate answer: decode stringified answer: %w", err)
+			}
+		} else {
+			if err := sonic.Unmarshal(raw.Answer, &ans); err != nil {
+				return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("generate answer: decode answer: %w", err)
+			}
+		}
+	}
+
+	return GenerateAnswerResponse[CodegenAnswer]{Success: true, Answer: ans}, nil
 }
 
 func (s *SyntheticApi) GetQuestionAugment(baseQuestion string, numAugments int) (AugmentQuestionResponse, error) {
 	var out AugmentQuestionResponse
+
+	payload := map[string]string{
+		"question":     baseQuestion,
+		"num_augments": strconv.Itoa(numAugments),
+	}
+
 	resp, err := s.client.R().
-		SetQueryParams(map[string]string{
-			"base_question": baseQuestion,
-			"num_augments":  strconv.Itoa(numAugments),
-		}).
+		SetHeader("Content-Type", "application/json").
+		SetBody(payload).
 		SetResult(&out).
 		Post("/get-question-augment")
 	if err != nil {
@@ -105,22 +135,24 @@ func (s *SyntheticApi) GetQuestionAugment(baseQuestion string, numAugments int) 
 	return out, nil
 }
 
-func (s *SyntheticApi) OrderAnswer(question string) (GenerateAnswerResponse[OrderAnswer], error) {
-	var out GenerateAnswerResponse[OrderAnswer]
+func (s *SyntheticApi) OrderAnswer(question string) (OrderAnswerResponse, error) {
+	var out OrderAnswerResponse
+	payload := map[string]string{"question": question}
 	resp, err := s.client.R().
-		SetQueryParam("question", question).
+		SetHeader("Content-Type", "application/json").
+		SetBody(payload).
 		SetResult(&out).
 		Post("/order-answer")
 	if err != nil {
 		log.Error().Err(err).Msg("order-answer request failed")
-		return GenerateAnswerResponse[OrderAnswer]{}, fmt.Errorf("order answer: %w", err)
+		return OrderAnswerResponse{}, fmt.Errorf("order answer: %w", err)
 	}
 	if resp.IsError() {
 		log.Error().Int("status", resp.StatusCode()).Str("body", resp.String()).Msg("order-answer non-2xx")
-		return GenerateAnswerResponse[OrderAnswer]{}, fmt.Errorf("order-answer status %d: %s", resp.StatusCode(), resp.String())
+		return OrderAnswerResponse{}, fmt.Errorf("order-answer status %d: %s", resp.StatusCode(), resp.String())
 	}
 	if !out.Success {
-		return GenerateAnswerResponse[OrderAnswer]{}, fmt.Errorf("order-answer api returned success=false")
+		return OrderAnswerResponse{}, fmt.Errorf("order-answer api returned success=false")
 	}
 	return out, nil
 }

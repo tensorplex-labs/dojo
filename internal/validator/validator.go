@@ -10,12 +10,13 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/kami"
 	"github.com/tensorplex-labs/dojo/internal/synapse"
 	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
+	"github.com/tensorplex-labs/dojo/internal/taskapi"
 	"github.com/tensorplex-labs/dojo/internal/utils/redis"
 )
 
 type Validator struct {
 	Kami         kami.KamiInterface
-	TaskPool     any // placeholder for task pool if needed
+	TaskApi      taskapi.TaskApiInterface // TaskApiInterface is used to interact with the task API
 	Client       *synapse.Client
 	Redis        redis.RedisInterface
 	SyntheticApi syntheticapi.SyntheticApiInterface
@@ -35,7 +36,7 @@ type Validator struct {
 	mu sync.Mutex // mutex to protect shared data
 }
 
-func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskPool any, redis redis.RedisInterface, syntheticApi syntheticapi.SyntheticApiInterface) *Validator {
+func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskApi taskapi.TaskApiInterface, redis redis.RedisInterface, syntheticApi syntheticapi.SyntheticApiInterface) *Validator {
 	var intervalConfig *IntervalConfig
 	if cfg.Environment == "dev" || cfg.Environment == "DEV" {
 		log.Warn().Msg("Validator is running in dev/test mode, this is not recommended for production!")
@@ -56,7 +57,7 @@ func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskP
 
 	return &Validator{
 		Kami:         kami,
-		TaskPool:     taskPool,
+		TaskApi:      taskApi,
 		Redis:        redis,
 		SyntheticApi: syntheticApi,
 
@@ -101,6 +102,8 @@ func (v *Validator) Start() {
 	}
 
 	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)
+
+	v.ValidatorHotkey = keyringData.Data.KeyringPair.Address
 
 	v.Wg.Add(3)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {
