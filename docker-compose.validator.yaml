@@ -43,31 +43,31 @@ services:
     networks:
       - subtensor
 
-  synthetic-api:
-    container_name: synthetic-api
-    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
-    restart: on-failure
-    labels:
-      com.centurylinklabs.watchtower.enable: "true"
-    env_file:
-      - .env
-    expose:
-      - 5003
-    networks:
-      - dojo-validator
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://synthetic-api:5003/health"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-      start_period: 50s
-    depends_on:
-      redis:
-        condition: service_healthy
-    # allow docker commands inside container
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    logging: *default-logging
+  # synthetic-api:
+  #   container_name: synthetic-api
+  #   image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
+  #   restart: on-failure
+  #   labels:
+  #     com.centurylinklabs.watchtower.enable: "true"
+  #   env_file:
+  #     - .env
+  #   expose:
+  #     - 5003
+  #   networks:
+  #     - dojo-validator
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://synthetic-api:5003/health"]
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 50s
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   # allow docker commands inside container
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   logging: *default-logging
 
   prisma-setup-vali:
     container_name: prisma-setup-vali
@@ -96,7 +96,7 @@ services:
     restart: on-failure
     labels:
       com.centurylinklabs.watchtower.enable: "true"
-      com.centurylinklabs.watchtower.depends-on: "synthetic-api,postgres,kami"
+      com.centurylinklabs.watchtower.depends-on: "postgres,kami"
     env_file:
       - .env
     extra_hosts:
@@ -114,13 +114,13 @@ services:
       - subtensor
       - kami
     depends_on:
-      synthetic-api:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       prisma-setup-vali:
         condition: service_completed_successfully
       kami:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
     logging:
