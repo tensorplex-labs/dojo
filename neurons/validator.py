@@ -801,27 +801,27 @@ class Validator(aobject):
                         if not axons:
                             continue
 
-                        (
-                            synthetic_task,
-                            ground_truth,
-                            obfuscated_model_to_model,
-                            synthetic_metadata,
-                        ) = await self._generate_synthetic_request()
+                        # (
+                        #     synthetic_task,
+                        #     ground_truth,
+                        #     obfuscated_model_to_model,
+                        #     synthetic_metadata,
+                        # ) = await self._generate_synthetic_request()
 
-                        if not synthetic_task and not ground_truth:
-                            logger.error(
-                                f"No synthetic task or ground truth found for {uids} {synthetic_task=} {ground_truth=}"
-                            )
-                            continue
+                        # if not synthetic_task and not ground_truth:
+                        #     logger.error(
+                        #         f"No synthetic task or ground truth found for {uids} {synthetic_task=} {ground_truth=}"
+                        #     )
+                        #     continue
 
-                        if synthetic_task and ground_truth:
-                            await self.send_request(
-                                synapse=synthetic_task,
-                                ground_truth=ground_truth,
-                                obfuscated_model_to_model=obfuscated_model_to_model,
-                                synthetic_metadata=synthetic_metadata,
-                                axons=axons,
-                            )
+                        # if synthetic_task and ground_truth:
+                        #     await self.send_request(
+                        #         synapse=synthetic_task,
+                        #         ground_truth=ground_truth,
+                        #         obfuscated_model_to_model=obfuscated_model_to_model,
+                        #         synthetic_metadata=synthetic_metadata,
+                        #         axons=axons,
+                        #     )
 
                     except FatalSyntheticGenerationError:
                         # if synthetic-API is unresponsive, shut down validator.

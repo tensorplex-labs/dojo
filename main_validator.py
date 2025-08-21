@@ -35,7 +35,7 @@ def _check_fatal_errors(task: asyncio.Task):
         task.result()
     except FatalSyntheticGenerationError as e:
         logger.error(f"Fatal Error - shutting down validator: {e}")
-        asyncio.create_task(_shutdown_validator())
+        # asyncio.create_task(_shutdown_validator())
     finally:
         gc.collect()
 
@@ -114,7 +114,7 @@ async def main():
         logger.info("HFL is disabled, skipping HFL tasks")
 
     # set a callback on validator.run() to check for fatal errors.
-    running_tasks[1].add_done_callback(_check_fatal_errors)
+    # running_tasks[1].add_done_callback(_check_fatal_errors)
 
     await server.serve()
 
