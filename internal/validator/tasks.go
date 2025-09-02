@@ -165,11 +165,11 @@ func (v *Validator) sendTaskRound() {
 			}
 		}
 
-		// shouldAugment := v.shouldAugment()
-		shouldAugment := true // For testing purposes, always augment
+		shouldAugment := v.shouldAugment()
+		// shouldAugment := true // For testing purposes, always augment
 
 		var taskApiRequestPayload taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]
-		var taskAssignees []string // TODO: bucket assign to multiple miners i guess
+		var taskAssignees []string // TODO: bucket assign to multiple miners i guess in the future
 		taskApiRequestPayload.TaskType = "codegen"
 		taskApiRequestPayload.ExpireAt = time.Now().Add(6 * time.Hour).Format(time.RFC3339)
 		taskApiRequestPayload.Assignees = append(taskAssignees, targetMinerHotkey)

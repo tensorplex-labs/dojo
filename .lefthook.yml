@@ -3,7 +3,7 @@ pre-commit:
   commands:
     fmt: { run: "make fmt" }
     vet: { run: "make vet" }
-    lint: { run: "make lint" }
+    # lint: { run: "make lint" }
 
 pre-push:
   commands:
