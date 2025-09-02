@@ -1,10 +1,10 @@
 package taskapi
 
 type CreateTasksRequest[T CodegenTaskMetadata] struct {
-	TaskType string `form:"task_type" json:"task_type"`
-	Metadata T      `form:"metadata" json:"metadata"`
-	Assignee string `form:"assignee" json:"assignee"`
-	ExpireAt string `form:"expire_at" json:"expire_at"`
+	TaskType  string   `form:"task_type" json:"task_type"`
+	Metadata  T        `form:"metadata" json:"metadata"`
+	Assignees []string `form:"assignees" json:"assignees"`
+	ExpireAt  string   `form:"expire_at" json:"expire_at"`
 }
 
 type AuthHeaders struct {

@@ -14,8 +14,9 @@ type IntervalConfig struct {
 }
 
 type MetagraphData struct {
-	Metagraph kami.SubnetMetagraph //  index of array is uids, e.g. [0] is uid 0 then its value is the axon
-	Interval  IntervalConfig
+	Metagraph              kami.SubnetMetagraph //  index of array is uids, e.g. [0] is uid 0 then its value is the axon
+	Interval               IntervalConfig
+	CurrentActiveMinerUids []int64
 }
 
 type Completion[T Codegen] struct {

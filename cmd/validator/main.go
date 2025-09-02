@@ -69,12 +69,21 @@ func main() {
 	}
 
 	v := validator.NewValidator(cfg, k, taskApi, r, s)
-	v.Start()
 
-	// graceful shutdown
+	// setup signal handling for graceful shutdown before starting validator
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
-	log.Info().Msg("shutdown signal received, stopping validator")
-	v.Stop()
+
+	// listen for shutdown signal in a separate goroutine so we can start the validator
+	go func() {
+		<-sigChan
+		log.Info().Msg("shutdown signal received, stopping validator")
+		v.Stop()
+	}()
+
+	v.Start()
+
+	// wait until validator context is cancelled (v.Stop will call Cancel())
+	<-v.Ctx.Done()
+	log.Info().Msg("validator stopped")
 }

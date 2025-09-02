@@ -20,7 +20,7 @@ func TestNewSyntheticApi_NilConfig(t *testing.T) {
 
 func TestGetQuestion_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/generate-question" {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/generate-question" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -62,11 +62,16 @@ func TestGetQuestion_Non2xx(t *testing.T) {
 
 func TestGetCodegenAnswer_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/generate-answer" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/generate-answer" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		qa := r.URL.Query().Get("qa_id")
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		qa := body["qa_id"]
 		if qa != "qa-1" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -90,12 +95,17 @@ func TestGetCodegenAnswer_Success(t *testing.T) {
 
 func TestGetQuestionAugment_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/get-question-augment" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/get-question-augment" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		base := r.URL.Query().Get("base_question")
-		num := r.URL.Query().Get("num_augments")
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		base := body["question"]
+		num := body["num_augments"]
 		n, _ := strconv.Atoi(num)
 		if base == "" || n <= 0 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -124,16 +134,21 @@ func TestGetQuestionAugment_Success(t *testing.T) {
 
 func TestOrderAnswer_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/order-answer" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/order-answer" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		q := r.URL.Query().Get("question")
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		q := body["question"]
 		if q == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		resp := GenerateAnswerResponse[OrderAnswer]{Success: true, Answer: OrderAnswer{Ordered: q + "-ordered"}}
+		resp := OrderAnswerResponse{Success: true, AnswerID: q + "-ordered"}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
@@ -145,7 +160,7 @@ func TestOrderAnswer_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OrderAnswer failed: %v", err)
 	}
-	if out.Answer.Ordered != "how-ordered" {
+	if out.AnswerID != "how-ordered" {
 		t.Fatalf("unexpected response: %+v", out)
 	}
 }

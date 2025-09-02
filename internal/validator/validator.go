@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -33,7 +34,8 @@ type Validator struct {
 	Cancel context.CancelFunc
 	Wg     sync.WaitGroup
 
-	mu sync.Mutex // mutex to protect shared data
+	mu               sync.Mutex  // mutex to protect shared data
+	taskRoundRunning atomic.Bool // atomic flag to indicate if a task round is currently running
 }
 
 func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskApi taskapi.TaskApiInterface, redis redis.RedisInterface, syntheticApi syntheticapi.SyntheticApiInterface) *Validator {

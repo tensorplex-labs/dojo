@@ -10,6 +10,12 @@ type GenerateAnswerResponse[T CodegenAnswer] struct {
 	Success bool `json:"success"`
 	Answer  T    `json:"answer"`
 }
+
+type GenerateAugmentedAnswerResponse[T CodegenAnswer] struct {
+	Success bool `json:"success"`
+	AnsID   T    `json:"ans_id"`
+}
+
 type AugmentQuestionResponse struct {
 	Success  bool     `json:"success"`
 	Augments []string `json:"augments"`

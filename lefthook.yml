@@ -1,0 +1,10 @@
+precommit:
+  commands:
+    format:
+      run: make fmt
+    lint:
+      run: make lint
+    vet:
+      run: make vet
+    test:
+      run: make test
