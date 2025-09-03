@@ -1,3 +1,4 @@
+// Package taskapi provides a simple client wrapper for the task API service.
 package taskapi
 
 import (
@@ -6,18 +7,22 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
+
 	"github.com/tensorplex-labs/dojo/internal/config"
 )
 
+// TaskApiInterface is the interface for the task client methods used by validator.
 type TaskApiInterface interface {
 	CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[CodegenTaskMetadata]) (Response[map[string]any], error)
 }
 
+// TaskApi is a REST client wrapper for the task service.
 type TaskApi struct {
 	cfg    *config.TaskApiEnvConfig
 	client *resty.Client
 }
 
+// NewTaskApi constructs a new TaskApi client.
 func NewTaskApi(cfg *config.TaskApiEnvConfig) (*TaskApi, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("task api env configuration cannot be nil")
@@ -34,8 +39,8 @@ func NewTaskApi(cfg *config.TaskApiEnvConfig) (*TaskApi, error) {
 	}, nil
 }
 
-// TODO: Possibly have a fix response type for task api!
-func (t *TaskApi) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[CodegenTaskMetadata]) (Response[map[string]any], error) {
+// CreateCodegenTask creates a task with codegen metadata for assigned validators.
+func (t *TaskApi) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[CodegenTaskMetadata]) (Response[map[string]any], error) { //nolint:lll
 	var out Response[map[string]any]
 	metadataBytes, err := sonic.Marshal(req.Metadata)
 	if err != nil {

@@ -25,11 +25,11 @@ func TestSyntheticApi_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetQuestion failed: %v", err)
 	}
-	if q.Qa_Id == "" {
+	if q.QaID == "" {
 		t.Fatalf("GetQuestion returned empty qa_id: %+v", q)
 	}
 
-	_, err = sa.GetCodegenAnswer(q.Qa_Id)
+	_, err = sa.GetCodegenAnswer(q.QaID)
 	if err != nil {
 		t.Fatalf("GetCodegenAnswer failed: %v", err)
 	}

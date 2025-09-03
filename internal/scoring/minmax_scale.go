@@ -9,12 +9,12 @@ func MinMaxScale(scores []float64) []float64 {
 	result := make([]float64, len(scores))
 	copy(result, scores)
 
-	min := floats.Min(result)
-	max := floats.Max(result)
+	minVal := floats.Min(result)
+	maxVal := floats.Max(result)
 
-	if max != min {
-		floats.AddConst(-min, result)
-		floats.Scale(1.0/(max-min), result)
+	if maxVal != minVal {
+		floats.AddConst(-minVal, result)
+		floats.Scale(1.0/(maxVal-minVal), result)
 	} else {
 		floats.Scale(0, result)
 	}

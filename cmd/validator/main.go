@@ -21,7 +21,9 @@ func main() {
 	logger.Init()
 	log.Info().Msg("Starting validator...")
 
-	_ = godotenv.Load() // best-effort
+	if err := godotenv.Load(); err != nil {
+		log.Debug().Msg(".env not loaded; continuing with existing environment")
+	}
 
 	cfg, err := config.LoadValidatorEnv()
 	if err != nil {
@@ -49,12 +51,12 @@ func main() {
 		}
 	}
 
-	syntheticApiCfg, err := config.LoadSyntheticApiEnv()
+	syntheticAPICfg, err := config.LoadSyntheticApiEnv()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load synthetic api env")
 	}
 
-	s, err := syntheticapi.NewSyntheticApi(syntheticApiCfg)
+	s, err := syntheticapi.NewSyntheticApi(syntheticAPICfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init synthetic api client")
 	}
@@ -63,12 +65,12 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load task api env")
 	}
-	taskApi, err := taskapi.NewTaskApi(t)
+	taskAPI, err := taskapi.NewTaskApi(t)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init task api client")
 	}
 
-	v := validator.NewValidator(cfg, k, taskApi, r, s)
+	v := validator.NewValidator(cfg, k, taskAPI, r, s)
 
 	// setup signal handling for graceful shutdown before starting validator
 	sigChan := make(chan os.Signal, 1)
