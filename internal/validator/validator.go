@@ -1,24 +1,28 @@
+// Package validator implements the validator runtime: metagraph sync, task
+// orchestration, and communication with external services.
 package validator
 
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
+
 	"github.com/tensorplex-labs/dojo/internal/config"
 	"github.com/tensorplex-labs/dojo/internal/kami"
-	"github.com/tensorplex-labs/dojo/internal/synapse"
 	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
+	"github.com/tensorplex-labs/dojo/internal/taskapi"
 	"github.com/tensorplex-labs/dojo/internal/utils/redis"
 )
 
+// Validator coordinates task rounds and on-chain state for a subnet.
 type Validator struct {
 	Kami         kami.KamiInterface
-	TaskPool     any // placeholder for task pool if needed
-	Client       *synapse.Client
+	TaskAPI      taskapi.TaskApiInterface // TaskAPIInterface is used to interact with the task API
 	Redis        redis.RedisInterface
-	SyntheticApi syntheticapi.SyntheticApiInterface
+	SyntheticAPI syntheticapi.SyntheticApiInterface
 
 	// Chain global state
 	LatestBlock     int64
@@ -32,27 +36,45 @@ type Validator struct {
 	Cancel context.CancelFunc
 	Wg     sync.WaitGroup
 
-	mu sync.Mutex // mutex to protect shared data
+	mu               sync.Mutex  // mutex to protect shared data
+	taskRoundRunning atomic.Bool // atomic flag to indicate if a task round is currently running
 }
 
-func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskPool any, redis redis.RedisInterface, syntheticApi syntheticapi.SyntheticApiInterface) *Validator {
-	intervalConfig := &IntervalConfig{
-		MetagraphInterval: 30 * time.Second,
-		TaskRoundInterval: 15 * time.Minute,
-		BlockInterval:     12 * time.Second,
+// NewValidator constructs a Validator with intervals based on environment.
+func NewValidator(
+	cfg *config.ValidatorEnvConfig,
+	k kami.KamiInterface,
+	taskAPI taskapi.TaskApiInterface,
+	r redis.RedisInterface,
+	s syntheticapi.SyntheticApiInterface,
+) *Validator {
+	var intervalConfig *IntervalConfig
+	if cfg.Environment == "dev" || cfg.Environment == "DEV" {
+		log.Warn().Msg("Validator is running in dev/test mode, this is not recommended for production!")
+		intervalConfig = &IntervalConfig{
+			MetagraphInterval: 5 * time.Second,
+			TaskRoundInterval: 10 * time.Second,
+			BlockInterval:     2 * time.Second,
+		}
+	} else {
+		intervalConfig = &IntervalConfig{
+			MetagraphInterval: 30 * time.Second,
+			TaskRoundInterval: 15 * time.Minute,
+			BlockInterval:     12 * time.Second,
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Validator{
-		Kami:         kami,
-		TaskPool:     taskPool,
-		Redis:        redis,
-		SyntheticApi: syntheticApi,
+		Kami:         k,
+		TaskAPI:      taskAPI,
+		Redis:        r,
+		SyntheticAPI: s,
 
-		LatestBlock:     0,               // will be updated during block processing
-		MetagraphData:   MetagraphData{}, // initialize with empty data
-		ValidatorHotkey: "",              // will be set after fetching from Kami
+		LatestBlock:     0,
+		MetagraphData:   MetagraphData{},
+		ValidatorHotkey: "",
 
 		IntervalConfig:  intervalConfig,
 		ValidatorConfig: cfg,
@@ -61,7 +83,7 @@ func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskP
 		Cancel: cancel,
 		Wg:     sync.WaitGroup{},
 
-		mu: sync.Mutex{}, // initialize mutex
+		mu: sync.Mutex{},
 	}
 }
 
@@ -83,16 +105,21 @@ func (v *Validator) runTicker(ctx context.Context, d time.Duration, fn func()) {
 	}
 }
 
+// Start initializes validator hotkey and kicks off periodic routines.
 func (v *Validator) Start() {
-	_, err := v.Kami.GetKeyringPair()
+	keyringData, err := v.Kami.GetKeyringPair()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get validator hotkey")
 		return
 	}
 
+	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)
+
+	v.ValidatorHotkey = keyringData.Data.KeyringPair.Address
+
 	v.Wg.Add(3)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {
-		v.sendTaskRound(v.Ctx, v.Client, v.ValidatorHotkey)
+		v.sendTaskRound()
 	})
 
 	go v.runTicker(v.Ctx, v.IntervalConfig.MetagraphInterval, func() {
@@ -104,6 +131,7 @@ func (v *Validator) Start() {
 	})
 }
 
+// Stop cancels background routines and waits for them to finish.
 func (v *Validator) Stop() {
 	if v.Cancel != nil {
 		v.Cancel()

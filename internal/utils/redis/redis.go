@@ -19,6 +19,8 @@ type RedisInterface interface {
 	GetMulti(ctx context.Context, keys []string) (map[string]string, error)
 	Set(ctx context.Context, key string, value string, ttl time.Duration) error
 	SetMulti(ctx context.Context, kv map[string]string) error
+	LRange(ctx context.Context, key string, start, stop int64) ([]string, error)
+	LLen(ctx context.Context, key string) (int64, error)
 }
 
 func NewRedis(cfg *config.RedisEnvConfig) (*Redis, error) {
@@ -95,4 +97,33 @@ func (r *Redis) SetMulti(ctx context.Context, kv map[string]string) error {
 		}
 	}
 	return nil
+}
+
+func (r *Redis) LRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
+	resp := r.client.Do(ctx, r.client.B().Lrange().Key(key).Start(start).Stop(stop).Build())
+	if err := resp.Error(); err != nil {
+		if rueidis.IsRedisNil(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+	vals, err := resp.AsStrSlice()
+	if err != nil {
+		if rueidis.IsRedisNil(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+	return vals, nil
+}
+
+func (r *Redis) LLen(ctx context.Context, key string) (int64, error) {
+	resp := r.client.Do(ctx, r.client.B().Llen().Key(key).Build())
+	if err := resp.Error(); err != nil {
+		if rueidis.IsRedisNil(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return resp.AsInt64()
 }

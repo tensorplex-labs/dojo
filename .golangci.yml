@@ -1,169 +1,112 @@
-# golangci-lint configuration for dojo-v2 project
-# See: https://golangci-lint.run/usage/configuration/
+# golangci-lint configuration for dojo (v2)
+version: 2
 
-# Run configuration
 run:
-  timeout: 5m                    # Timeout for analysis
-  modules-download-mode: readonly # Don't download modules, use existing
-  go: "1.21"                     # Target Go version
+  go: "1.24"
 
-# Output formatting
-output:
-  format: colored-line-number    # Show line numbers with colors
-  print-issued-lines: true      # Show the actual problematic lines
-  print-linter-name: true       # Show which linter reported each issue
-
-# Linter-specific settings
-linters-settings:
-  # Import grouping and organization
-  gci:
-    sections:
-      - standard                                     # Standard library imports
-      - default                                      # Third-party imports
-      - prefix(github.com/tensorplex-labs/dojo-v2) # Local project imports
-      - blank                                        # Blank line before dot imports
-      - dot                                          # Dot imports
-  
-  # Go formatting with extra rules
-  gofumpt:
-    extra-rules: true                # Enable additional formatting rules
-  
-  # Import management
-  goimports:
-    local-prefixes: github.com/tensorplex-labs/dojo-v2 # Treat as local imports
-  
-  # Go vet settings
-  govet:
-    check-shadowing: true            # Check for variable shadowing
-    enable-all: true                 # Enable all available checks
-  
-  # Revive linter settings
-  revive:
-    rules:
-      - name: exported
-        arguments: ["checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
-  
-  # Static analysis
-  staticcheck:
-    checks: ["all"]                  # Enable all staticcheck rules
-  
-  # Style checker with exclusions
-  stylecheck:
-    checks: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
-    # Disabled checks:
-    # ST1000: package comment should be of the form "Package x ..."
-    # ST1003: should not use underscores in package names
-    # ST1016: should use consistent method receiver names
-    # ST1020: comment on exported function should be of the form "Foo ..."
-    # ST1021: comment on exported type should be of the form "Type ..."
-    # ST1022: comment on exported variable should be of the form "Var ..."
-  
-  # Unused code detection
-  unused:
-    check-exported: false            # Don't check exported but unused items
-  
-  # Error checking
-  errcheck:
-    check-type-assertions: true      # Check type assertions for errors
-    check-blank: true                # Check assignment to blank identifier
-  
-  # Go critic settings
-  gocritic:
-    enabled-tags:
-      - diagnostic                   # Diagnostic checks
-      - experimental                 # Experimental checks
-      - opinionated                  # Opinionated style checks
-      - performance                  # Performance-related checks
-      - style                        # Style checks
-    disabled-checks:
-      - dupImport                    # Duplicate import detection
-      - ifElseChain                  # Long if-else chains
-      - octalLiteral                 # Octal literal usage
-      - whyNoLint                    # Missing nolint explanations
-  
-  # Function length limits
-  funlen:
-    lines: 100                       # Maximum lines per function
-    statements: 50                   # Maximum statements per function
-  
-  # Cyclomatic complexity
-  gocyclo:
-    min-complexity: 15               # Minimum complexity to report
-  
-  # Cognitive complexity
-  cyclop:
-    max-complexity: 15               # Maximum cognitive complexity
-  
-  # Line length limit
-  lll:
-    line-length: 120                 # Maximum line length
-
-# Enabled linters
 linters:
-  disable-all: true                # Disable all linters by default, then enable specific ones
+  default: none
   enable:
-    - bodyclose                    # Check HTTP response body is closed
-    - depguard                     # Check for disallowed dependencies
-    - dogsled                      # Check for too many blank identifiers
-    - dupl                         # Check for code duplication
-    - errcheck                     # Check for unchecked errors
-    - exportloopref                # Check for loop variable capture issues
-    - funlen                       # Check function length
-    - gci                          # Control import order and grouping
-    - goconst                      # Check for repeated strings that could be constants
-    - gocritic                     # Comprehensive Go code analysis
-    - gocyclo                      # Check cyclomatic complexity
-    - gofumpt                      # Stricter gofmt
-    - goimports                    # Manage imports automatically
-    - gomnd                        # Check for magic numbers
-    - goprintffuncname             # Check printf-like function names
-    - gosec                        # Security-focused linter
-    - gosimple                     # Suggest code simplifications
-    - govet                        # Standard Go static analysis
-    - ineffassign                  # Check for ineffective assignments
-    - lll                          # Check line length
-    - misspell                     # Check for misspellings
-    - nakedret                     # Check for naked returns in long functions
-    - noctx                        # Check for missing context.Context
-    - nolintlint                   # Check nolint directives
-    - revive                       # Extensible Go linter
-    - staticcheck                  # Advanced static analysis
-    - stylecheck                   # Style checker
-    - typecheck                    # Type checking
-    - unconvert                    # Check for unnecessary type conversions
-    - unparam                      # Check for unused function parameters
-    - unused                       # Check for unused code
-    - whitespace                   # Check for unnecessary whitespace
+    - bodyclose
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - funlen
+    - goconst
+    - gocritic
+    - gocyclo
+    - goprintffuncname
+    - gosec
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+  settings:
+    govet:
+      enable:
+        - shadow
+    staticcheck:
+      checks: ["all"]
+    revive:
+      rules:
+        - name: exported
+          arguments: ["checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
+    gocritic:
+      enabled-tags: [diagnostic, experimental, opinionated, performance, style]
+      disabled-checks: [dupImport, ifElseChain, octalLiteral, whyNoLint]
+    funlen:
+      lines: 100
+      statements: 50
+    gocyclo:
+      min-complexity: 15
+    cyclop:
+      max-complexity: 15
+    lll:
+      line-length: 120
+    unused:
+      check-exported: false
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    depguard:
+      rules:
+        cmd:
+          files:
+            - "cmd/**"
+          allow:
+            - $gostd
+            - github.com/tensorplex-labs/dojo/...
+            - github.com/bytedance/sonic
+            - github.com/go-resty/resty/v2
+            - github.com/gofiber/fiber/v3
+            - github.com/joho/godotenv
+            - github.com/klauspost/compress/zstd
+            - github.com/redis/rueidis
+            - github.com/rs/zerolog
+            - github.com/rs/zerolog/pkgerrors
+            - go.uber.org/zap
+            - gonum.org/v1/gonum/...
+        internal:
+          files:
+            - "internal/**"
+          allow:
+            - $gostd
+            - github.com/tensorplex-labs/dojo/...
+            - github.com/bytedance/sonic
+            - github.com/go-resty/resty/v2
+            - github.com/gofiber/fiber/v3
+            - github.com/joho/godotenv
+            - github.com/klauspost/compress/zstd
+            - github.com/redis/rueidis
+            - github.com/rs/zerolog
+            - github.com/rs/zerolog/pkgerrors
+            - go.uber.org/zap
+            - gonum.org/v1/gonum/...
 
-# Issue exclusion rules
-issues:
-  exclude-rules:
-    # Relax rules for test files
-    - path: _test\.go
-      linters:
-        - gomnd                      # Allow magic numbers in tests
-        - funlen                     # Allow longer functions in tests
-        - gocyclo                    # Allow higher complexity in tests
-    
-    # Relax rules for command-line tools
-    - path: cmd/
-      linters:
-        - gomnd                      # Allow magic numbers in CLI tools
-    
-    # Security exclusions for known acceptable cases
-    - text: "weak cryptographic primitive"
-      linters:
-        - gosec                      # Allow weak crypto where appropriate
-    
-    - text: "G304: Potential file inclusion via variable"
-      linters:
-        - gosec                      # Allow dynamic file paths where safe
-  
-  max-issues-per-linter: 0           # No limit on issues per linter
-  max-same-issues: 0                 # No limit on same issues
-  new: false                         # Check all issues, not just new ones
-
-# Severity configuration
-severity:
-  default-severity: error            # Treat all issues as errors by default
-  case-sensitive: false              # Case-insensitive severity matching
+formatters:
+  enable:
+    - gci
+    - goimports
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/tensorplex-labs/dojo)
+        - blank
+        - dot
+    goimports:
+      local-prefixes: github.com/tensorplex-labs/dojo
+    gofumpt:
+      extra-rules: true

@@ -1,0 +1,10 @@
+pre-commit:
+  parallel: true
+  commands:
+    fmt: { run: "make fmt" }
+    vet: { run: "make vet" }
+    # lint: { run: "make lint" }
+
+pre-push:
+  commands:
+    tests: { run: "go test ./..." }
