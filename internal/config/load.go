@@ -76,17 +76,17 @@ func LoadValidatorEnv() (*ValidatorEnvConfig, error) {
 	return cfg, nil
 }
 
-func LoadSyntheticApiEnv() (*SyntheticApiEnvConfig, error) {
-	cfg := &SyntheticApiEnvConfig{
-		OpenrouterApiKey: getenv("OPENROUTER_API_KEY", ""),
-		SyntheticApiUrl:  getenv("SYNTHETIC_API_URL", "localhost:5003"),
+func LoadSyntheticAPIEnv() (*SyntheticAPIEnvConfig, error) {
+	cfg := &SyntheticAPIEnvConfig{
+		OpenrouterAPIKey: getenv("OPENROUTER_API_KEY", ""),
+		SyntheticAPIUrl:  getenv("SYNTHETIC_API_URL", "localhost:5003"),
 	}
 	return cfg, nil
 }
 
-func LoadTaskApiEnv() (*TaskApiEnvConfig, error) {
-	cfg := &TaskApiEnvConfig{
-		TaskApiUrl: getenv("TASK_API_URL", "localhost:5004"),
+func LoadTaskAPIEnv() (*TaskAPIEnvConfig, error) {
+	cfg := &TaskAPIEnvConfig{
+		TaskAPIUrl: getenv("TASK_API_URL", "localhost:5004"),
 	}
 	return cfg, nil
 }

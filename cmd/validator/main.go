@@ -51,21 +51,21 @@ func main() {
 		}
 	}
 
-	syntheticAPICfg, err := config.LoadSyntheticApiEnv()
+	syntheticAPICfg, err := config.LoadSyntheticAPIEnv()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load synthetic api env")
 	}
 
-	s, err := syntheticapi.NewSyntheticApi(syntheticAPICfg)
+	s, err := syntheticapi.NewSyntheticAPI(syntheticAPICfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init synthetic api client")
 	}
 
-	t, err := config.LoadTaskApiEnv()
+	t, err := config.LoadTaskAPIEnv()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load task api env")
 	}
-	taskAPI, err := taskapi.NewTaskApi(t)
+	taskAPI, err := taskapi.NewTaskAPI(t)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init task api client")
 	}

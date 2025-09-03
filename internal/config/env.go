@@ -43,15 +43,15 @@ type RedisEnvConfig struct {
 	RedisDB       int    `env:"REDIS_DB,default=0"`
 }
 
-// SyntheticApiEnvConfig configures synthetic API access.
-type SyntheticApiEnvConfig struct {
-	OpenrouterApiKey string `env:"OPENROUTER_API_KEY,default="` //nolint:staticcheck
-	SyntheticApiUrl  string `env:"SYNTHETIC_API_URL,default=localhost:5003"` //nolint:staticcheck
+// SyntheticAPIEnvConfig configures synthetic API access.
+type SyntheticAPIEnvConfig struct {
+	OpenrouterAPIKey string `env:"OPENROUTER_API_KEY,default="`              //nolint:staticcheck
+	SyntheticAPIUrl  string `env:"SYNTHETIC_API_URL,default=localhost:5003"` //nolint:staticcheck
 }
 
-// TaskApiEnvConfig configures task API access.
-type TaskApiEnvConfig struct {
-	TaskApiUrl string `env:"TASK_API_URL,default=localhost:5004"` //nolint:staticcheck
+// TaskAPIEnvConfig configures task API access.
+type TaskAPIEnvConfig struct {
+	TaskAPIUrl string `env:"TASK_API_URL,default=localhost:5004"`
 }
 
 // MinerEnvConfig configures miner runtime.

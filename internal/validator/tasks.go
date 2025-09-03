@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -14,7 +15,6 @@ import (
 
 func (v *Validator) syncMetagraph() {
 	v.mu.Lock()
-	defer v.mu.Unlock()
 
 	log.Info().Msg(fmt.Sprintf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid))
 	newMetagraph, err := v.Kami.GetMetagraph(v.ValidatorConfig.Netuid)
@@ -42,11 +42,12 @@ func (v *Validator) syncMetagraph() {
 
 	v.MetagraphData.Metagraph = newMetagraph.Data
 	v.MetagraphData.CurrentActiveMinerUids = currentActiveMiners
+
+	v.mu.Unlock()
 }
 
 func (v *Validator) syncBlock() {
 	v.mu.Lock()
-	defer v.mu.Unlock()
 
 	log.Info().Msg(fmt.Sprintf("syncing latest block. current block : %d", v.LatestBlock))
 	newBlockResp, err := v.Kami.GetLatestBlock()
@@ -134,6 +135,9 @@ func (v *Validator) processMinerTask(ctx context.Context, currentRound, index in
 			validatorContent = resp.Completion.Files[0].Content
 		}
 	}
+	if validatorContent == "" {
+		validatorContent = completion.Answer.Prompt
+	}
 
 	var payload taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]
 	payload.TaskType = "codegen"
@@ -172,11 +176,25 @@ func (v *Validator) processMinerTask(ctx context.Context, currentRound, index in
 		return
 	}
 	headers := taskapi.AuthHeaders{Hotkey: v.ValidatorHotkey, Signature: signature, Message: messageToSign}
-	if _, err = v.TaskAPI.CreateCodegenTask(headers, payload); err != nil {
+	var taskCreationResponse taskapi.Response[taskapi.CreateTaskResponse]
+	if taskCreationResponse, err = v.TaskAPI.CreateCodegenTask(headers, payload); err != nil {
 		log.Error().Err(err).Msgf("failed to create task for question %d with ID %s", index+1, synAPIQuestion.QaID)
 		return
 	}
+
 	log.Info().Msgf("Task round %d: created task for question %d with ID %s.", currentRound, index+1, synAPIQuestion.QaID)
+
+	taskID := taskCreationResponse.Data.TaskID
+	// submit the completion to the task
+	var submitCompletionResponse taskapi.Response[taskapi.SubmitCompletionResponse]
+	if submitCompletionResponse, err = v.TaskAPI.SubmitCompletion(headers, taskID, validatorContent); err != nil {
+		log.Error().Err(err).Msgf("failed to submit completion for task ID %s", taskID)
+		return
+	}
+
+	log.Info().Msgf("Submitted completion with ID %s for task ID %s", submitCompletionResponse.Data.CompletionID, taskID)
+
+	os.Exit(1)
 }
 
 func (v *Validator) handleAugmentation(
