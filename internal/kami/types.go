@@ -167,7 +167,7 @@ type SubnetMetagraph struct {
 	NumUids                    int              `json:"numUids"`
 	MaxUids                    int              `json:"maxUids"`
 	Burn                       float64          `json:"burn"`
-	Difficulty                 int              `json:"difficulty"`
+	Difficulty                 HexOrInt         `json:"difficulty"`
 	RegistrationAllowed        bool             `json:"registrationAllowed"`
 	PowRegistrationAllowed     bool             `json:"powRegistrationAllowed"`
 	ImmunityPeriod             int              `json:"immunityPeriod"`

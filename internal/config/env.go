@@ -41,6 +41,10 @@ type SyntheticApiEnvConfig struct {
 	SyntheticApiUrl  string `env:"SYNTHETIC_API_URL,default=localhost:5003"`
 }
 
+type TaskApiEnvConfig struct {
+	TaskApiUrl string `env:"TASK_API_URL,default=localhost:5004"`
+}
+
 type MinerEnvConfig struct {
 	ChainEnvConfig
 	WalletEnvConfig
@@ -50,4 +54,5 @@ type MinerEnvConfig struct {
 type ValidatorEnvConfig struct {
 	ChainEnvConfig
 	ClientEnvConfig
+	Environment string `env:"ENVIRONMENT,default=dev"`
 }

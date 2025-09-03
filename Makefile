@@ -22,7 +22,7 @@ MSG_SERVER_SRC := ./cmd/messaging/server
 MSG_CLIENT_SRC := ./cmd/messaging/client
 SIGNATURE_SRC := ./cmd/signature
 
-.PHONY: all build clean test lint run-validator run-miner run-scoring run-msg-server run-msg-client run-signature
+.PHONY: all build clean test lint run-validator run-miner run-scoring run-msg-server run-msg-client run-signature preflight
 
 # Default target
 all: build
@@ -141,8 +141,13 @@ vet:
 	$(GO) vet ./...
 	@echo "🔍 Code vetted"
 
-# Quick check (format, vet, lint, test)
-check: fmt vet lint test
+# Preflight (ensure lefthook installed and hooks set up)
+preflight:
+	@command -v lefthook >/dev/null 2>&1 || (echo "Installing lefthook..." && $(GO) install github.com/evilmartians/lefthook@latest)
+	@lefthook install
+
+# Quick check (preflight, format, vet, lint, test)
+check: preflight fmt vet lint test
 	@echo "✅ All checks passed"
 
 # Install binaries to GOPATH/bin

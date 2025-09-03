@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -10,12 +11,13 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/kami"
 	"github.com/tensorplex-labs/dojo/internal/synapse"
 	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
+	"github.com/tensorplex-labs/dojo/internal/taskapi"
 	"github.com/tensorplex-labs/dojo/internal/utils/redis"
 )
 
 type Validator struct {
 	Kami         kami.KamiInterface
-	TaskPool     any // placeholder for task pool if needed
+	TaskApi      taskapi.TaskApiInterface // TaskApiInterface is used to interact with the task API
 	Client       *synapse.Client
 	Redis        redis.RedisInterface
 	SyntheticApi syntheticapi.SyntheticApiInterface
@@ -32,21 +34,32 @@ type Validator struct {
 	Cancel context.CancelFunc
 	Wg     sync.WaitGroup
 
-	mu sync.Mutex // mutex to protect shared data
+	mu               sync.Mutex  // mutex to protect shared data
+	taskRoundRunning atomic.Bool // atomic flag to indicate if a task round is currently running
 }
 
-func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskPool any, redis redis.RedisInterface, syntheticApi syntheticapi.SyntheticApiInterface) *Validator {
-	intervalConfig := &IntervalConfig{
-		MetagraphInterval: 30 * time.Second,
-		TaskRoundInterval: 15 * time.Minute,
-		BlockInterval:     12 * time.Second,
+func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskApi taskapi.TaskApiInterface, redis redis.RedisInterface, syntheticApi syntheticapi.SyntheticApiInterface) *Validator {
+	var intervalConfig *IntervalConfig
+	if cfg.Environment == "dev" || cfg.Environment == "DEV" {
+		log.Warn().Msg("Validator is running in dev/test mode, this is not recommended for production!")
+		intervalConfig = &IntervalConfig{
+			MetagraphInterval: 5 * time.Second,
+			TaskRoundInterval: 10 * time.Second,
+			BlockInterval:     2 * time.Second,
+		}
+	} else {
+		intervalConfig = &IntervalConfig{
+			MetagraphInterval: 30 * time.Second,
+			TaskRoundInterval: 15 * time.Minute,
+			BlockInterval:     12 * time.Second,
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Validator{
 		Kami:         kami,
-		TaskPool:     taskPool,
+		TaskApi:      taskApi,
 		Redis:        redis,
 		SyntheticApi: syntheticApi,
 
@@ -84,15 +97,19 @@ func (v *Validator) runTicker(ctx context.Context, d time.Duration, fn func()) {
 }
 
 func (v *Validator) Start() {
-	_, err := v.Kami.GetKeyringPair()
+	keyringData, err := v.Kami.GetKeyringPair()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get validator hotkey")
 		return
 	}
 
+	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)
+
+	v.ValidatorHotkey = keyringData.Data.KeyringPair.Address
+
 	v.Wg.Add(3)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {
-		v.sendTaskRound(v.Ctx, v.Client, v.ValidatorHotkey)
+		v.sendTaskRound()
 	})
 
 	go v.runTicker(v.Ctx, v.IntervalConfig.MetagraphInterval, func() {

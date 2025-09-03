@@ -11,6 +11,7 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/config"
 	"github.com/tensorplex-labs/dojo/internal/kami"
 	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
+	"github.com/tensorplex-labs/dojo/internal/taskapi"
 	"github.com/tensorplex-labs/dojo/internal/utils/logger"
 	"github.com/tensorplex-labs/dojo/internal/utils/redis"
 	"github.com/tensorplex-labs/dojo/internal/validator"
@@ -58,13 +59,31 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to init synthetic api client")
 	}
 
-	v := validator.NewValidator(cfg, k, nil, r, s)
-	v.Start()
+	t, err := config.LoadTaskApiEnv()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to load task api env")
+	}
+	taskApi, err := taskapi.NewTaskApi(t)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to init task api client")
+	}
 
-	// graceful shutdown
+	v := validator.NewValidator(cfg, k, taskApi, r, s)
+
+	// setup signal handling for graceful shutdown before starting validator
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
-	log.Info().Msg("shutdown signal received, stopping validator")
-	v.Stop()
+
+	// listen for shutdown signal in a separate goroutine so we can start the validator
+	go func() {
+		<-sigChan
+		log.Info().Msg("shutdown signal received, stopping validator")
+		v.Stop()
+	}()
+
+	v.Start()
+
+	// wait until validator context is cancelled (v.Stop will call Cancel())
+	<-v.Ctx.Done()
+	log.Info().Msg("validator stopped")
 }

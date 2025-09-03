@@ -71,6 +71,7 @@ func LoadValidatorEnv() (*ValidatorEnvConfig, error) {
 		ClientEnvConfig: ClientEnvConfig{
 			ClientTimeout: durationWithDefault(getenv("CLIENT_TIMEOUT", "30s"), 30*time.Second),
 		},
+		Environment: getenv("ENVIRONMENT", "dev"),
 	}
 	return cfg, nil
 }
@@ -79,6 +80,13 @@ func LoadSyntheticApiEnv() (*SyntheticApiEnvConfig, error) {
 	cfg := &SyntheticApiEnvConfig{
 		OpenrouterApiKey: getenv("OPENROUTER_API_KEY", ""),
 		SyntheticApiUrl:  getenv("SYNTHETIC_API_URL", "localhost:5003"),
+	}
+	return cfg, nil
+}
+
+func LoadTaskApiEnv() (*TaskApiEnvConfig, error) {
+	cfg := &TaskApiEnvConfig{
+		TaskApiUrl: getenv("TASK_API_URL", "localhost:5004"),
 	}
 	return cfg, nil
 }
