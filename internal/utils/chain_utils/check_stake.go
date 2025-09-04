@@ -5,10 +5,6 @@ import (
 )
 
 func CheckIfMiner(alphaStake float64, rootStake float64) (bool, error) {
-	if alphaStake <= 0 || rootStake <= 0 {
-		return false, nil
-	}
-
 	effectiveRootStake := rootStake * 0.18
 
 	effectiveStake := alphaStake + effectiveRootStake

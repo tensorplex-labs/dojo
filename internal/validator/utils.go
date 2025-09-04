@@ -7,21 +7,20 @@ import (
 	"strconv"
 
 	"github.com/rs/zerolog/log"
+
 	"github.com/tensorplex-labs/dojo/internal/kami"
 )
 
 func (v *Validator) shouldAugment() bool {
-	max := big.NewInt(100)
-	n, err := rand.Int(rand.Reader, max)
+	limit := big.NewInt(100)
+	n, err := rand.Int(rand.Reader, limit)
 	if err != nil {
 		return false
 	}
-	return n.Int64() < 25 // 25% chance to augment to prevent gaming
+	return n.Int64() < 25
 }
 
 func (v *Validator) incrementTaskRound() (int, error) {
-	// Increment the task round in Redis
-
 	currentRound, err := v.Redis.Get(v.Ctx, "validator:task_round")
 	if err != nil {
 		return -1, fmt.Errorf("failed to get current task round: %w", err)
@@ -29,7 +28,8 @@ func (v *Validator) incrementTaskRound() (int, error) {
 
 	if currentRound == "" {
 		log.Info().Msg("task round not set, initializing to 1")
-		if err := v.Redis.Set(v.Ctx, "validator:task_round", "1", 0); err != nil {
+		err = v.Redis.Set(v.Ctx, "validator:task_round", "1", 0)
+		if err != nil {
 			return -1, fmt.Errorf("failed to initialize task round: %w", err)
 		}
 		return 1, nil
@@ -41,7 +41,8 @@ func (v *Validator) incrementTaskRound() (int, error) {
 	}
 
 	newRound := currentRoundInt + 1
-	if err := v.Redis.Set(v.Ctx, "validator:task_round", strconv.Itoa(newRound), 0); err != nil {
+	err = v.Redis.Set(v.Ctx, "validator:task_round", strconv.Itoa(newRound), 0)
+	if err != nil {
 		return -1, fmt.Errorf("failed to set new task round: %w", err)
 	}
 
@@ -50,7 +51,6 @@ func (v *Validator) incrementTaskRound() (int, error) {
 }
 
 func (v *Validator) randomStringToSign() (string, error) {
-	// Generate a random string of 32 characters
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	length := 52
 	result := make([]byte, length)
@@ -67,14 +67,11 @@ func (v *Validator) randomStringToSign() (string, error) {
 }
 
 func (v *Validator) signMessage(message string) (string, error) {
-	// Sign the message using the validator's hotkey
 	if v.Kami == nil {
-		return "", fmt.Errorf("Kami client is not initialized")
+		return "", fmt.Errorf("kami client is not initialized")
 	}
 
-	params := kami.SignMessageParams{
-		Message: message,
-	}
+	params := kami.SignMessageParams{Message: message}
 
 	resp, err := v.Kami.SignMessage(params)
 	if err != nil {

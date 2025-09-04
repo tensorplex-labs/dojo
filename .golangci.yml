@@ -58,6 +58,40 @@ linters:
     errcheck:
       check-type-assertions: true
       check-blank: true
+    depguard:
+      rules:
+        cmd:
+          files:
+            - "cmd/**"
+          allow:
+            - $gostd
+            - github.com/tensorplex-labs/dojo/...
+            - github.com/bytedance/sonic
+            - github.com/go-resty/resty/v2
+            - github.com/gofiber/fiber/v3
+            - github.com/joho/godotenv
+            - github.com/klauspost/compress/zstd
+            - github.com/redis/rueidis
+            - github.com/rs/zerolog
+            - github.com/rs/zerolog/pkgerrors
+            - go.uber.org/zap
+            - gonum.org/v1/gonum/...
+        internal:
+          files:
+            - "internal/**"
+          allow:
+            - $gostd
+            - github.com/tensorplex-labs/dojo/...
+            - github.com/bytedance/sonic
+            - github.com/go-resty/resty/v2
+            - github.com/gofiber/fiber/v3
+            - github.com/joho/godotenv
+            - github.com/klauspost/compress/zstd
+            - github.com/redis/rueidis
+            - github.com/rs/zerolog
+            - github.com/rs/zerolog/pkgerrors
+            - go.uber.org/zap
+            - gonum.org/v1/gonum/...
 
 formatters:
   enable:

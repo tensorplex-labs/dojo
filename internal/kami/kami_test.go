@@ -42,7 +42,9 @@ func TestServeAxon_Success(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"statusCode":200,"success":true,"data":"0xabc","error":null}`))
+		if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":"0xabc","error":null}`)); err != nil {
+			panic(err)
+		}
 	})
 
 	res, err := k.ServeAxon(ServeAxonParams{})
@@ -57,7 +59,9 @@ func TestServeAxon_Success(t *testing.T) {
 func TestServeAxon_HTTPError(t *testing.T) {
 	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("bad"))
+		if _, err := w.Write([]byte("bad")); err != nil {
+			panic(err)
+		}
 	})
 	_, err := k.ServeAxon(ServeAxonParams{})
 	if err == nil {
@@ -69,7 +73,9 @@ func TestServeAxon_ResponseErrorField(t *testing.T) {
 	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"statusCode":200,"success":false,"data":"","error":{"msg":"boom"}}`))
+		if _, err := w.Write([]byte(`{"statusCode":200,"success":false,"data":"","error":{"msg":"boom"}}`)); err != nil {
+			panic(err)
+		}
 	})
 	_, err := k.ServeAxon(ServeAxonParams{})
 	if err == nil {
@@ -78,7 +84,20 @@ func TestServeAxon_ResponseErrorField(t *testing.T) {
 }
 
 func TestGetMetagraph_Success(t *testing.T) {
-	payload := `{"statusCode":200,"success":true,"data":{"netuid":1,"name":"n","symbol":"s","identity":{"subnetName":"","githubRepo":"","subnetContact":"","subnetUrl":"","discord":"","description":"","additional":""},"networkRegisteredAt":0,"ownerHotkey":"","ownerColdkey":"","block":0,"tempo":0,"lastStep":0,"blocksSinceLastStep":0,"subnetEmission":0,"alphaIn":0,"alphaOut":0,"taoIn":0,"alphaOutEmission":0,"alphaInEmission":0,"taoInEmission":0,"pendingAlphaEmission":0,"pendingRootEmission":0,"subnetVolume":0,"movingPrice":{"bits":0},"rho":0,"kappa":0,"minAllowedWeights":0,"maxAllowedWeights":0,"weightsVersion":0,"weightsRateLimit":0,"activityCutoff":0,"maxValidators":0,"numUids":0,"maxUids":0,"burn":0,"difficulty":0,"registrationAllowed":false,"powRegistrationAllowed":false,"immunityPeriod":0,"minDifficulty":"0x0","maxDifficulty":"0x0","minBurn":0,"maxBurn":0,"adjustmentAlpha":"0x0","adjustmentInterval":0,"targetRegsPerInterval":0,"maxRegsPerBlock":0,"servingRateLimit":0,"commitRevealWeightsEnabled":false,"commitRevealPeriod":0,"liquidAlphaEnabled":false,"alphaHigh":0,"alphaLow":0,"bondsMovingAvg":0,"hotkeys":[],"coldkeys":[],"identities":[],"axons":[],"active":[],"validatorPermit":[],"pruningScore":[],"lastUpdate":[],"emission":[],"dividends":[],"incentives":[],"consensus":[],"trust":[],"rank":[],"blockAtRegistration":[],"alphaStake":[],"taoStake":[],"totalStake":[],"taoDividendsPerHotkey":[],"alphaDividendsPerHotkey":[]},"error":null}`
+	payload := `{"statusCode":200,"success":true,"data":` +
+		`{"netuid":1,"name":"n","symbol":"s","identity":{"subnetName":"","githubRepo":"","subnetContact":"","subnetUrl":"","discord":"","description":"","additional":""},` +
+		`"networkRegisteredAt":0,"ownerHotkey":"","ownerColdkey":"","block":0,"tempo":0,"lastStep":0,"blocksSinceLastStep":0,` +
+		`"subnetEmission":0,"alphaIn":0,"alphaOut":0,"taoIn":0,"alphaOutEmission":0,"alphaInEmission":0,"taoInEmission":0,` +
+		`"pendingAlphaEmission":0,"pendingRootEmission":0,"subnetVolume":0,"movingPrice":{"bits":0},"rho":0,"kappa":0,` +
+		`"minAllowedWeights":0,"maxAllowedWeights":0,"weightsVersion":0,"weightsRateLimit":0,"activityCutoff":0,` +
+		`"maxValidators":0,"numUids":0,"maxUids":0,"burn":0,"difficulty":0,"registrationAllowed":false,` +
+		`"powRegistrationAllowed":false,"immunityPeriod":0,"minDifficulty":"0x0","maxDifficulty":"0x0","minBurn":0,"maxBurn":0,` +
+		`"adjustmentAlpha":"0x0","adjustmentInterval":0,"targetRegsPerInterval":0,"maxRegsPerBlock":0,"servingRateLimit":0,` +
+		`"commitRevealWeightsEnabled":false,"commitRevealPeriod":0,"liquidAlphaEnabled":false,"alphaHigh":0,"alphaLow":0,` +
+		`"bondsMovingAvg":0,"hotkeys":[],"coldkeys":[],"identities":[],"axons":[],"active":[],"validatorPermit":[],` +
+		`"pruningScore":[],"lastUpdate":[],"emission":[],"dividends":[],"incentives":[],"consensus":[],"trust":[],"rank":[],` +
+		`"blockAtRegistration":[],"alphaStake":[],"taoStake":[],"totalStake":[],"taoDividendsPerHotkey":[],"alphaDividendsPerHotkey":[]},` +
+		`"error":null}`
 	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chain/subnet-metagraph/1" || r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusNotFound)
@@ -106,7 +125,9 @@ func TestGetLatestBlock_Success(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"statusCode":200,"success":true,"data":{"parentHash":"0x1","blockNumber":1,"stateRoot":"0x2","extrinsicsRoot":"0x3"},"error":null}`))
+		if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"parentHash":"0x1","blockNumber":1,"stateRoot":"0x2","extrinsicsRoot":"0x3"},"error":null}`)); err != nil {
+			panic(err)
+		}
 	})
 
 	res, err := k.GetLatestBlock()
@@ -126,7 +147,9 @@ func TestSetWeights_Success(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"statusCode":200,"success":true,"data":"0xdead","error":null}`))
+		if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":"0xdead","error":null}`)); err != nil {
+			panic(err)
+		}
 	})
 
 	res, err := k.SetWeights(SetWeightsParams{Netuid: 1})
@@ -144,15 +167,21 @@ func TestSignVerifyAndKeyring_Success(t *testing.T) {
 		case "/substrate/sign-message/sign":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"statusCode":200,"success":true,"data":{"signature":"sig"},"error":null}`))
+			if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"signature":"sig"},"error":null}`)); err != nil {
+				panic(err)
+			}
 		case "/substrate/sign-message/verify":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"statusCode":200,"success":true,"data":{"valid":true},"error":null}`))
+			if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"valid":true},"error":null}`)); err != nil {
+				panic(err)
+			}
 		case "/substrate/keyring-pair-info":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"statusCode":200,"success":true,"data":{"keyringPair":{"address":"addr","addressRaw":{},"isLocked":false,"meta":{},"publicKey":{},"type":"sr25519"},"walletColdkey":"cold"},"error":null}`))
+			if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"keyringPair":{"address":"addr","addressRaw":{},"isLocked":false,"meta":{},"publicKey":{},"type":"sr25519"},"walletColdkey":"cold"},"error":null}`)); err != nil {
+				panic(err)
+			}
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

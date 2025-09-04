@@ -1,8 +1,10 @@
 package chainutils
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -13,21 +15,30 @@ import (
 // GetExternalIP queries a public IP service and returns the external IPv4 address as net.IP
 func GetExternalIP() (net.IP, error) {
 	client := http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get("https://api.ipify.org")
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.ipify.org", http.NoBody)
+
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to query external IP")
 		return nil, fmt.Errorf("query external ip: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			log.Error().Err(cerr).Msg("failed to close response body")
+		}
+	}()
 
-	buf := make([]byte, 64)
-	n, err := resp.Body.Read(buf)
-	if err != nil && err.Error() != "EOF" {
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
 		log.Error().Err(err).Msg("failed to read ip response")
 		return nil, fmt.Errorf("read ip response: %w", err)
 	}
 
-	ipStr := string(buf[:n])
+	ipStr := string(b)
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
 		return nil, fmt.Errorf("invalid ip returned: %s", ipStr)
