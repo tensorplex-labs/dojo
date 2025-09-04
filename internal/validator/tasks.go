@@ -82,9 +82,12 @@ func (v *Validator) sendTaskRound() {
 
 	var wg sync.WaitGroup
 	for i := range v.MetagraphData.CurrentActiveMinerUids {
-		// TODO: weighted task processors in the future when there are multiple types
+		uid := v.MetagraphData.CurrentActiveMinerUids[i]
 		wg.Add(1)
-		go v.processCodegenTask(currentRound, i, v.MetagraphData.CurrentActiveMinerUids[i])
+		go func(i int, uid int64) {
+			defer wg.Done()
+			v.processCodegenTask(currentRound, i, uid)
+		}(i, uid)
 	}
 
 	wg.Wait()
