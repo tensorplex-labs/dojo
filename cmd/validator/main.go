@@ -63,7 +63,6 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to init synthetic api client")
 	}
 
-
 	t, err := config.LoadTaskAPIEnv()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load task api env")

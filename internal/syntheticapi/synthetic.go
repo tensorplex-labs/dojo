@@ -111,7 +111,7 @@ func (s *SyntheticAPI) fetchCodegenFromField(qaID, field string) (CodegenAnswer,
 	if resp.IsError() {
 		return CodegenAnswer{}, fmt.Errorf("generate-answer status %d: %s", resp.StatusCode(), resp.String())
 	}
-  
+
 	var ok bool
 	if err := decodePossiblyStringified(r["success"], &ok); err != nil {
 		return CodegenAnswer{}, fmt.Errorf("generate-answer decode success: %w", err)

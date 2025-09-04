@@ -11,7 +11,6 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/config"
 )
 
-
 func TestNewSyntheticAPI_NilConfig(t *testing.T) {
 	_, err := NewSyntheticAPI(nil)
 
@@ -94,7 +93,6 @@ func TestGetCodegenAnswer_Success(t *testing.T) {
 		}
 	}))
 	defer ts.Close()
-
 
 	cfg := &config.SyntheticAPIEnvConfig{SyntheticAPIUrl: ts.URL}
 	sa, err := NewSyntheticAPI(cfg)

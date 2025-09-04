@@ -90,10 +90,3 @@ func LoadTaskAPIEnv() (*TaskAPIEnvConfig, error) {
 	}
 	return cfg, nil
 }
-
-func LoadTaskApiEnv() (*TaskApiEnvConfig, error) {
-	cfg := &TaskApiEnvConfig{
-		TaskApiUrl: getenv("TASK_API_URL", "localhost:5004"),
-	}
-	return cfg, nil
-}
