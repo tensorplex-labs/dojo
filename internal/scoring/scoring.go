@@ -21,7 +21,7 @@ func CalcPvPScores(discriminators map[string]string, generators map[string]strin
 
 	// 2. calculate generator scores
 	for addr, id := range generators {
-		scores[addr] = float64(voteCounts[id]) * float64(1.0/totalDiscriminators)
+		scores[addr] = float64(voteCounts[id]) * (1.0 / float64(totalDiscriminators))
 	}
 
 	return scores
