@@ -167,15 +167,21 @@ func TestSignVerifyAndKeyring_Success(t *testing.T) {
 		case "/substrate/sign-message/sign":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"signature":"sig"},"error":null}`)); err != nil { panic(err) }
+			if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"signature":"sig"},"error":null}`)); err != nil {
+				panic(err)
+			}
 		case "/substrate/sign-message/verify":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"valid":true},"error":null}`)); err != nil { panic(err) }
+			if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"valid":true},"error":null}`)); err != nil {
+				panic(err)
+			}
 		case "/substrate/keyring-pair-info":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"keyringPair":{"address":"addr","addressRaw":{},"isLocked":false,"meta":{},"publicKey":{},"type":"sr25519"},"walletColdkey":"cold"},"error":null}`)); err != nil { panic(err) }
+			if _, err := w.Write([]byte(`{"statusCode":200,"success":true,"data":{"keyringPair":{"address":"addr","addressRaw":{},"isLocked":false,"meta":{},"publicKey":{},"type":"sr25519"},"walletColdkey":"cold"},"error":null}`)); err != nil {
+				panic(err)
+			}
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

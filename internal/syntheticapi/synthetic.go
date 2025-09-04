@@ -110,12 +110,23 @@ func (s *SyntheticAPI) fetchCodegenFromField(qaID, field string) (CodegenAnswer,
 	if resp.IsError() {
 		return CodegenAnswer{}, fmt.Errorf("generate-answer status %d: %s", resp.StatusCode(), resp.String())
 	}
-	if v, ok := r["success"]; !ok || string(v) != "true" {
+	var ok bool
+	if err := decodePossiblyStringified(r["success"], &ok); err != nil {
+		return CodegenAnswer{}, fmt.Errorf("generate-answer decode success: %w", err)
+	}
+	if !ok {
 		return CodegenAnswer{}, fmt.Errorf("generate-answer api returned success=false")
 	}
 	var ans CodegenAnswer
-	if err := decodePossiblyStringified(r[field], &ans); err != nil {
-		return CodegenAnswer{}, fmt.Errorf("generate answer: %w", err)
+	if err := decodePossiblyStringified(r[field], &ans); err == nil && (ans.Prompt != "" || len(ans.Responses) > 0) {
+		return ans, nil
+	}
+	alt := "answer"
+	if field == "answer" {
+		alt = "ans_id"
+	}
+	if err := decodePossiblyStringified(r[alt], &ans); err != nil {
+		return CodegenAnswer{}, fmt.Errorf("generate answer decode (%s/%s): %w", field, alt, err)
 	}
 	return ans, nil
 }
@@ -125,7 +136,7 @@ func (s *SyntheticAPI) fetchCodegenFromField(qaID, field string) (CodegenAnswer,
 //nolint:dupl
 func (s *SyntheticAPI) GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error) {
 	if qaID == "" {
-		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("taskType and qaID cannot be empty")
+		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("qaID cannot be empty")
 	}
 	ans, err := s.fetchCodegenFromField(qaID, "answer")
 	if err != nil {

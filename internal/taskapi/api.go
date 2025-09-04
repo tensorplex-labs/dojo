@@ -65,8 +65,6 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 		SetHeader("X-Message", headers.Message).
 		SetFormDataFromValues(vals).
 		SetResult(&out)
-	// Print out the header
-	fmt.Printf("Creating task with headers: %+v\n", headers)
 
 	resp, err := r.Post("/api/v1/validator/tasks")
 	if err != nil {
@@ -82,8 +80,13 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 func (t *TaskAPI) SubmitCompletion(headers AuthHeaders, taskID string, completion string) (Response[SubmitCompletionResponse], error) {
 	var out Response[SubmitCompletionResponse]
 
+	metadataBytes, err := sonic.Marshal(completion)
+	if err != nil {
+		return Response[SubmitCompletionResponse]{}, fmt.Errorf("marshal completion: %w", err)
+	}
+
 	vals := url.Values{}
-	vals.Set("metadata", completion)
+	vals.Set("metadata", string(metadataBytes))
 
 	r := t.client.R().
 		SetHeader("X-Hotkey", headers.Hotkey).
@@ -92,7 +95,7 @@ func (t *TaskAPI) SubmitCompletion(headers AuthHeaders, taskID string, completio
 		SetFormDataFromValues(vals).
 		SetResult(&out)
 
-	resp, err := r.Post(fmt.Sprintf("/api/v1/validator/tasks/%s/completions", taskID))
+	resp, err := r.Put(fmt.Sprintf("/api/v1/validator/tasks/%s/completions", taskID))
 	if err != nil {
 		return Response[SubmitCompletionResponse]{}, fmt.Errorf("submit completion: %w", err)
 	}
