@@ -81,8 +81,10 @@ func (v *Validator) sendTaskRound() {
 	log.Info().Msg(fmt.Sprintf("sending task round with %d tasks", active))
 
 	var wg sync.WaitGroup
-	for i := range v.MetagraphData.CurrentActiveMinerUids {
-		uid := v.MetagraphData.CurrentActiveMinerUids[i]
+	// for _, v := range v.MetagraphData.CurrentActiveMinerUids {
+	for i := range []int{0, 1, 3, 4, 5} { // TODO: remove testing range to loop 5 tasks.
+		// uid := v.MetagraphData.Hotkeys[v]
+		uid := int64(158) // TODO: remove testing uid
 		wg.Add(1)
 		go func(i int, uid int64) {
 			defer wg.Done()
