@@ -1,10 +1,13 @@
 package validator
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
 )
 
@@ -44,6 +47,18 @@ func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) 
 		ValidatorCompletion: validatorContent,
 	}
 
+	if v.shouldAugment() {
+		augmentedCompletion, err := v.SyntheticAPI.GetAugmentedCodegenAnswer(synAPIQuestion.QaID)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed to get augmented answer for question ID %s", synAPIQuestion.QaID)
+		} else if len(augmentedCompletion.AnsID.Responses) > 0 {
+			resp := augmentedCompletion.AnsID.Responses[0]
+			if len(resp.Completion.Files) > 0 {
+				payload.Metadata.ValidatorCompletion = resp.Completion.Files[0].Content
+			}
+		}
+	}
+
 	messageToSign, err := v.randomStringToSign()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to sign message")
@@ -72,4 +87,80 @@ func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) 
 	}
 
 	log.Info().Msgf("Submitted completion with ID %s for task ID %s", submitCompletionResponse.Data.CompletionID, taskID)
+}
+
+func (v *Validator) handleAugmentation(
+	ctx context.Context,
+	currentRound, uid int,
+	synAPIQuestion syntheticapi.GenerateQuestionResponse,
+) string {
+	augmentedAnswer, err := v.augmentProcess(ctx, uid, synAPIQuestion)
+	if err != nil {
+		log.Error().Err(err).Msgf("failed to augment question ID %s", synAPIQuestion.QaID)
+		return ""
+	}
+	if len(augmentedAnswer) == 0 {
+		return ""
+	}
+	ansID := augmentedAnswer[len(augmentedAnswer)-1]
+	deadline := time.Now().Add(3 * time.Minute)
+	for {
+		augmentedCompletion, err := v.SyntheticAPI.GetAugmentedCodegenAnswer(ansID)
+		if err != nil {
+			log.Error().Err(err).Msgf(
+				"failed to get augmented answer from synthetic API for question ID %s",
+				synAPIQuestion.QaID,
+			)
+		}
+		if augmentedCompletion.Success && len(augmentedCompletion.AnsID.Responses) > 0 && len(augmentedCompletion.AnsID.Responses[0].Completion.Files) > 0 {
+			return augmentedCompletion.AnsID.Responses[0].Completion.Files[0].Content
+		}
+		if time.Now().After(deadline) {
+			log.Error().Msgf(
+				"timeout waiting for augmented answer for question ID %s reverting back to unaugmented answer",
+				synAPIQuestion.QaID,
+			)
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ""
+		case <-time.After(1 * time.Second):
+		}
+	}
+	return ""
+}
+
+func (v *Validator) augmentProcess(
+	ctx context.Context,
+	minerUID int,
+	synAPIQuestion syntheticapi.GenerateQuestionResponse,
+) ([]string, error) {
+	var augmentedCompletionsID []string
+	randomAugment := 1
+	augmentResponse, err := v.SyntheticAPI.GetQuestionAugment(synAPIQuestion.Prompt, randomAugment)
+	if err != nil {
+		log.Error().Err(err).Msgf("failed to augment question %s for miner %d\n", synAPIQuestion.QaID, minerUID)
+		return []string{}, err
+	}
+	for _, augment := range augmentResponse.Augments {
+		augmentedQns, err := v.Redis.Get(ctx, fmt.Sprintf("synthetic:qn_augments:%s", augment))
+		if err != nil {
+			log.Error().Err(err).Msgf(
+				"failed to get augmented question from redis for question %s for miner %d\n",
+				synAPIQuestion.QaID, minerUID,
+			)
+			continue
+		}
+		augmentedCompletion, err := v.SyntheticAPI.OrderAnswer(augmentedQns)
+		if err != nil {
+			log.Error().Err(err).Msgf(
+				"failed to get augmented answer for question %s for miner %d\n",
+				synAPIQuestion.QaID, minerUID,
+			)
+			continue
+		}
+		augmentedCompletionsID = append(augmentedCompletionsID, augmentedCompletion.AnswerID)
+	}
+	return augmentedCompletionsID, nil
 }
