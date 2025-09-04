@@ -112,7 +112,7 @@ func (v *Validator) canStartTaskRound(ctx context.Context) bool {
 		return false
 	}
 	if taskCount < int64(active) {
-		log.Info().Msg(fmt.Sprintf("Not enough tasks in pool, skipping task round. current tasks: %d in task pool vs current %d miners", int64(taskCount), active))
+		log.Info().Msg("not enough tasks in redis, skipping task round. current tasks: %d / %d miners", taskCount, active)
 		return false
 	}
 	return true
