@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -66,7 +65,6 @@ func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) 
 
 	taskID := taskCreationResponse.Data.TaskID
 	contentToSubmit := validatorContent
-	fmt.Printf("content to submit: %s\n", contentToSubmit)
 	var submitCompletionResponse taskapi.Response[taskapi.SubmitCompletionResponse]
 	if submitCompletionResponse, err = v.TaskAPI.SubmitCompletion(headers, taskID, contentToSubmit); err != nil {
 		log.Error().Err(err).Msgf("failed to submit completion for task ID %s", taskID)
