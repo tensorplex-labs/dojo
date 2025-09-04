@@ -48,14 +48,10 @@ func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) 
 	}
 
 	if v.shouldAugment() {
-		augmentedCompletion, err := v.SyntheticAPI.GetAugmentedCodegenAnswer(synAPIQuestion.QaID)
-		if err != nil {
-			log.Error().Err(err).Msgf("failed to get augmented answer for question ID %s", synAPIQuestion.QaID)
-		} else if len(augmentedCompletion.AnsID.Responses) > 0 {
-			resp := augmentedCompletion.AnsID.Responses[0]
-			if len(resp.Completion.Files) > 0 {
-				payload.Metadata.ValidatorCompletion = resp.Completion.Files[0].Content
-			}
+		log.Info().Msgf("Augmenting answer for question ID %s", synAPIQuestion.QaID)
+		augmentedCompletion := v.handleAugmentation(v.Ctx, int(minerUid), synAPIQuestion)
+		if len(augmentedCompletion) > 0 {
+			payload.Metadata.ValidatorCompletion = augmentedCompletion
 		}
 	}
 
@@ -91,7 +87,7 @@ func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) 
 
 func (v *Validator) handleAugmentation(
 	ctx context.Context,
-	currentRound, uid int,
+	uid int,
 	synAPIQuestion syntheticapi.GenerateQuestionResponse,
 ) string {
 	augmentedAnswer, err := v.augmentProcess(ctx, uid, synAPIQuestion)
@@ -107,12 +103,13 @@ func (v *Validator) handleAugmentation(
 	for {
 		augmentedCompletion, err := v.SyntheticAPI.GetAugmentedCodegenAnswer(ansID)
 		if err != nil {
-			log.Error().Err(err).Msgf(
+			log.Debug().Msgf(
 				"failed to get augmented answer from synthetic API for question ID %s",
 				synAPIQuestion.QaID,
 			)
 		}
-		if augmentedCompletion.Success && len(augmentedCompletion.AnsID.Responses) > 0 && len(augmentedCompletion.AnsID.Responses[0].Completion.Files) > 0 {
+		if augmentedCompletion.Success && len(augmentedCompletion.AnsID.Responses) > 0 &&
+			len(augmentedCompletion.AnsID.Responses[0].Completion.Files) > 0 {
 			return augmentedCompletion.AnsID.Responses[0].Completion.Files[0].Content
 		}
 		if time.Now().After(deadline) {

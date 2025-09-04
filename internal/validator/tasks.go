@@ -22,9 +22,12 @@ func (v *Validator) syncMetagraph() {
 
 	var currentActiveMiners []int64
 	for uid, axon := range newMetagraph.Data.Axons {
+		hotkey := newMetagraph.Data.Hotkeys[uid]
 		rootStake := newMetagraph.Data.TaoStake[uid]
 		alphaStake := newMetagraph.Data.AlphaStake[uid]
+
 		miner, err := chainutils.CheckIfMiner(alphaStake, rootStake)
+		log.Debug().Msgf("Miner check for UID %d of %s returned: %t", uid, hotkey, miner)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to check miner status")
 			continue
