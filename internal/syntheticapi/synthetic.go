@@ -37,6 +37,7 @@ func decodePossiblyStringified[T any](raw json.RawMessage, out *T) error {
 // SyntheticApiInterface describes the synthetic API client methods used.
 //
 //nolint:revive,staticcheck
+
 type SyntheticAPIInterface interface {
 	GetQuestion() (GenerateQuestionResponse, error)
 	GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error)
@@ -110,6 +111,7 @@ func (s *SyntheticAPI) fetchCodegenFromField(qaID, field string) (CodegenAnswer,
 	if resp.IsError() {
 		return CodegenAnswer{}, fmt.Errorf("generate-answer status %d: %s", resp.StatusCode(), resp.String())
 	}
+  
 	var ok bool
 	if err := decodePossiblyStringified(r["success"], &ok); err != nil {
 		return CodegenAnswer{}, fmt.Errorf("generate-answer decode success: %w", err)

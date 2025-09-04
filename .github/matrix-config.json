@@ -1,24 +1,12 @@
 {
   "app": [
     {
-      "name": "messaging-client",
-      "path": "messaging/client"
-    },
-    {
-      "name": "messaging-server",
-      "path": "messaging/server"
-    },
-    {
       "name": "miner",
       "path": "miner"
     },
     {
       "name": "scoring",
       "path": "scoring"
-    },
-    {
-      "name": "signature",
-      "path": "signature"
     },
     {
       "name": "validator",

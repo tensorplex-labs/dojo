@@ -17,6 +17,7 @@ func TestSyntheticApi_Integration(t *testing.T) {
 
 	cfg := &config.SyntheticAPIEnvConfig{SyntheticAPIUrl: url}
 	sa, err := NewSyntheticAPI(cfg)
+
 	if err != nil {
 		t.Fatalf("NewSyntheticApi failed: %v", err)
 	}

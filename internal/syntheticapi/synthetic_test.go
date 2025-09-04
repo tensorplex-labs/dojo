@@ -11,8 +11,10 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/config"
 )
 
+
 func TestNewSyntheticAPI_NilConfig(t *testing.T) {
 	_, err := NewSyntheticAPI(nil)
+
 	if err == nil {
 		t.Fatal("expected error when cfg is nil")
 	}
@@ -34,6 +36,7 @@ func TestGetQuestion_Success(t *testing.T) {
 
 	cfg := &config.SyntheticAPIEnvConfig{SyntheticAPIUrl: ts.URL}
 	sa, err := NewSyntheticAPI(cfg)
+
 	if err != nil {
 		t.Fatalf("unexpected new error: %v", err)
 	}
@@ -58,6 +61,7 @@ func TestGetQuestion_Non2xx(t *testing.T) {
 
 	cfg := &config.SyntheticAPIEnvConfig{SyntheticAPIUrl: ts.URL}
 	sa, err := NewSyntheticAPI(cfg)
+
 	if err != nil {
 		panic(err)
 	}
@@ -91,8 +95,10 @@ func TestGetCodegenAnswer_Success(t *testing.T) {
 	}))
 	defer ts.Close()
 
+
 	cfg := &config.SyntheticAPIEnvConfig{SyntheticAPIUrl: ts.URL}
 	sa, err := NewSyntheticAPI(cfg)
+
 	if err != nil {
 		panic(err)
 	}
@@ -140,6 +146,7 @@ func TestGetQuestionAugment_Success(t *testing.T) {
 
 	cfg := &config.SyntheticAPIEnvConfig{SyntheticAPIUrl: ts.URL}
 	sa, err := NewSyntheticAPI(cfg)
+
 	if err != nil {
 		panic(err)
 	}
@@ -178,6 +185,7 @@ func TestOrderAnswer_Success(t *testing.T) {
 
 	cfg := &config.SyntheticAPIEnvConfig{SyntheticAPIUrl: ts.URL}
 	sa, err := NewSyntheticAPI(cfg)
+
 	if err != nil {
 		panic(err)
 	}

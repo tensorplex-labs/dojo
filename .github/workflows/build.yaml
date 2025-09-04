@@ -77,8 +77,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.app.name }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch,enable={{is_not_default_branch}}
+            type=raw,value=latest,enable=${{ github.event.workflow_run.head_branch == 'main' }}
+            type=raw,value=${{ github.event.workflow_run.head_branch }},enable=${{ github.event.workflow_run.head_branch != 'main' }}
             type=ref,event=tag
 
       - name: Docker Setup QEMU

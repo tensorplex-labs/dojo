@@ -28,6 +28,7 @@ type TaskAPI struct {
 
 // NewTaskAPI constructs a new TaskAPI client.
 func NewTaskAPI(cfg *config.TaskAPIEnvConfig) (*TaskAPI, error) {
+
 	if cfg == nil {
 		return nil, fmt.Errorf("task api env configuration cannot be nil")
 	}
@@ -38,6 +39,7 @@ func NewTaskAPI(cfg *config.TaskAPIEnvConfig) (*TaskAPI, error) {
 		SetJSONUnmarshaler(sonic.Unmarshal)
 
 	return &TaskAPI{
+
 		cfg:    cfg,
 		client: client,
 	}, nil
@@ -49,6 +51,7 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 	metadataBytes, err := sonic.Marshal(req.Metadata)
 	if err != nil {
 		return Response[CreateTaskResponse]{}, fmt.Errorf("marshal metadata: %w", err)
+
 	}
 
 	vals := url.Values{}
