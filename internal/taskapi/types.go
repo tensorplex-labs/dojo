@@ -13,7 +13,7 @@ type AuthHeaders struct {
 	Message   string `header:"X-Message"`
 }
 
-type Response[T any] struct {
+type Response[T CreateTaskResponse | SubmitCompletionResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -23,6 +23,14 @@ type Response[T any] struct {
 	PageSize   int    `json:"page_size,omitempty"`
 	TotalPages int    `json:"total_pages,omitempty"`
 	TotalItems int64  `json:"total_items,omitempty"`
+}
+
+type CreateTaskResponse struct {
+	TaskID string `json:"task_id"`
+}
+
+type SubmitCompletionResponse struct {
+	CompletionID string `json:"completion_id"`
 }
 
 type SuccessResponse[T any] = Response[T]

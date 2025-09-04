@@ -37,7 +37,8 @@ func decodePossiblyStringified[T any](raw json.RawMessage, out *T) error {
 // SyntheticApiInterface describes the synthetic API client methods used.
 //
 //nolint:revive,staticcheck
-type SyntheticApiInterface interface { //nolint:staticcheck
+
+type SyntheticAPIInterface interface {
 	GetQuestion() (GenerateQuestionResponse, error)
 	GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error)
 	GetAugmentedCodegenAnswer(qaID string) (GenerateAugmentedAnswerResponse[CodegenAnswer], error)
@@ -46,33 +47,29 @@ type SyntheticApiInterface interface { //nolint:staticcheck
 }
 
 // SyntheticApi wraps a REST client for the synthetic service.
-//
-//nolint:staticcheck
-type SyntheticApi struct {
-	cfg    *config.SyntheticApiEnvConfig
+type SyntheticAPI struct {
+	cfg    *config.SyntheticAPIEnvConfig
 	client *resty.Client
 }
 
 // NewSyntheticApi creates a new synthetic API client bound to the configured URL.
-//
-//nolint:staticcheck
-func NewSyntheticApi(cfg *config.SyntheticApiEnvConfig) (*SyntheticApi, error) {
+func NewSyntheticAPI(cfg *config.SyntheticAPIEnvConfig) (*SyntheticAPI, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("configuration cannot be nil")
 	}
 
 	client := resty.New().
-		SetBaseURL(cfg.SyntheticApiUrl).
+		SetBaseURL(cfg.SyntheticAPIUrl).
 		SetJSONMarshaler(sonic.Marshal).
 		SetJSONUnmarshaler(sonic.Unmarshal)
 
-	return &SyntheticApi{
+	return &SyntheticAPI{
 		cfg:    cfg,
 		client: client,
 	}, nil
 }
 
-func (s *SyntheticApi) postJSON(path string, payload, out any) (*resty.Response, error) {
+func (s *SyntheticAPI) postJSON(path string, payload, out any) (*resty.Response, error) {
 	return s.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(payload).
@@ -81,7 +78,7 @@ func (s *SyntheticApi) postJSON(path string, payload, out any) (*resty.Response,
 }
 
 // GetQuestion requests a new synthetic question.
-func (s *SyntheticApi) GetQuestion() (GenerateQuestionResponse, error) {
+func (s *SyntheticAPI) GetQuestion() (GenerateQuestionResponse, error) {
 	var out GenerateQuestionResponse
 	resp, err := s.client.R().
 		SetResult(&out).
@@ -103,7 +100,7 @@ func (s *SyntheticApi) GetQuestion() (GenerateQuestionResponse, error) {
 	return out, nil
 }
 
-func (s *SyntheticApi) fetchCodegenFromField(qaID, field string) (CodegenAnswer, error) {
+func (s *SyntheticAPI) fetchCodegenFromField(qaID, field string) (CodegenAnswer, error) {
 	payload := map[string]string{"qa_id": qaID}
 	type raw map[string]json.RawMessage
 	var r raw
@@ -114,21 +111,34 @@ func (s *SyntheticApi) fetchCodegenFromField(qaID, field string) (CodegenAnswer,
 	if resp.IsError() {
 		return CodegenAnswer{}, fmt.Errorf("generate-answer status %d: %s", resp.StatusCode(), resp.String())
 	}
-	if v, ok := r["success"]; !ok || string(v) != "true" {
+  
+	var ok bool
+	if err := decodePossiblyStringified(r["success"], &ok); err != nil {
+		return CodegenAnswer{}, fmt.Errorf("generate-answer decode success: %w", err)
+	}
+	if !ok {
 		return CodegenAnswer{}, fmt.Errorf("generate-answer api returned success=false")
 	}
 	var ans CodegenAnswer
-	if err := decodePossiblyStringified(r[field], &ans); err != nil {
-		return CodegenAnswer{}, fmt.Errorf("generate answer: %w", err)
+	if err := decodePossiblyStringified(r[field], &ans); err == nil && (ans.Prompt != "" || len(ans.Responses) > 0) {
+		return ans, nil
+	}
+	alt := "answer"
+	if field == "answer" {
+		alt = "ans_id"
+	}
+	if err := decodePossiblyStringified(r[alt], &ans); err != nil {
+		return CodegenAnswer{}, fmt.Errorf("generate answer decode (%s/%s): %w", field, alt, err)
 	}
 	return ans, nil
 }
 
 // GetCodegenAnswer fetches a codegen answer by question ID.
+//
 //nolint:dupl
-func (s *SyntheticApi) GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error) {
+func (s *SyntheticAPI) GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error) {
 	if qaID == "" {
-		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("taskType and qaID cannot be empty")
+		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("qaID cannot be empty")
 	}
 	ans, err := s.fetchCodegenFromField(qaID, "answer")
 	if err != nil {
@@ -139,8 +149,9 @@ func (s *SyntheticApi) GetCodegenAnswer(qaID string) (GenerateAnswerResponse[Cod
 }
 
 // GetAugmentedCodegenAnswer fetches an augmented codegen answer by ID.
+//
 //nolint:dupl
-func (s *SyntheticApi) GetAugmentedCodegenAnswer(qaID string) (GenerateAugmentedAnswerResponse[CodegenAnswer], error) {
+func (s *SyntheticAPI) GetAugmentedCodegenAnswer(qaID string) (GenerateAugmentedAnswerResponse[CodegenAnswer], error) {
 	if qaID == "" {
 		return GenerateAugmentedAnswerResponse[CodegenAnswer]{}, fmt.Errorf("taskType and qaID cannot be empty")
 	}
@@ -153,7 +164,7 @@ func (s *SyntheticApi) GetAugmentedCodegenAnswer(qaID string) (GenerateAugmented
 }
 
 // GetQuestionAugment asks the service to generate augmented variations of a question.
-func (s *SyntheticApi) GetQuestionAugment(baseQuestion string, numAugments int) (AugmentQuestionResponse, error) {
+func (s *SyntheticAPI) GetQuestionAugment(baseQuestion string, numAugments int) (AugmentQuestionResponse, error) {
 	var out AugmentQuestionResponse
 
 	payload := map[string]string{
@@ -180,7 +191,7 @@ func (s *SyntheticApi) GetQuestionAugment(baseQuestion string, numAugments int) 
 }
 
 // OrderAnswer requests the service to generate an answer for the given question.
-func (s *SyntheticApi) OrderAnswer(question string) (OrderAnswerResponse, error) {
+func (s *SyntheticAPI) OrderAnswer(question string) (OrderAnswerResponse, error) {
 	var out OrderAnswerResponse
 	payload := map[string]string{"question": question}
 	resp, err := s.postJSON("/api/order-answer", payload, &out)

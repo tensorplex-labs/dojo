@@ -15,7 +15,9 @@ import (
 // GetExternalIP queries a public IP service and returns the external IPv4 address as net.IP
 func GetExternalIP() (net.IP, error) {
 	client := http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.ipify.org", nil)
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.ipify.org", http.NoBody)
+
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}

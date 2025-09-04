@@ -20,9 +20,9 @@ import (
 // Validator coordinates task rounds and on-chain state for a subnet.
 type Validator struct {
 	Kami         kami.KamiInterface
-	TaskAPI      taskapi.TaskApiInterface // TaskAPIInterface is used to interact with the task API
+	TaskAPI      taskapi.TaskAPIInterface // TaskAPIInterface is used to interact with the task API
 	Redis        redis.RedisInterface
-	SyntheticAPI syntheticapi.SyntheticApiInterface
+	SyntheticAPI syntheticapi.SyntheticAPIInterface
 
 	// Chain global state
 	LatestBlock     int64
@@ -44,9 +44,9 @@ type Validator struct {
 func NewValidator(
 	cfg *config.ValidatorEnvConfig,
 	k kami.KamiInterface,
-	taskAPI taskapi.TaskApiInterface,
+	taskAPI taskapi.TaskAPIInterface,
 	r redis.RedisInterface,
-	s syntheticapi.SyntheticApiInterface,
+	s syntheticapi.SyntheticAPIInterface,
 ) *Validator {
 	var intervalConfig *IntervalConfig
 	if cfg.Environment == "dev" || cfg.Environment == "DEV" {
