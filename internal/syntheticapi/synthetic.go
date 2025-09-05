@@ -41,7 +41,6 @@ func decodePossiblyStringified[T any](raw json.RawMessage, out *T) error {
 type SyntheticAPIInterface interface {
 	GetQuestion() (GenerateQuestionResponse, error)
 	GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error)
-	GetAugmentedCodegenAnswer(qaID string) (GenerateAugmentedAnswerResponse[CodegenAnswer], error)
 	GetQuestionAugment(baseQuestion string, numAugments int) (AugmentQuestionResponse, error)
 	OrderAnswer(question string) (OrderAnswerResponse, error)
 }
@@ -80,6 +79,7 @@ func (s *SyntheticAPI) postJSON(path string, payload, out any) (*resty.Response,
 // GetQuestion requests a new synthetic question.
 func (s *SyntheticAPI) GetQuestion() (GenerateQuestionResponse, error) {
 	var out GenerateQuestionResponse
+
 	resp, err := s.client.R().
 		SetResult(&out).
 		Get("/api/generate-question")
@@ -146,21 +146,6 @@ func (s *SyntheticAPI) GetCodegenAnswer(qaID string) (GenerateAnswerResponse[Cod
 		return GenerateAnswerResponse[CodegenAnswer]{}, err
 	}
 	return GenerateAnswerResponse[CodegenAnswer]{Success: true, Answer: ans}, nil
-}
-
-// GetAugmentedCodegenAnswer fetches an augmented codegen answer by ID.
-//
-//nolint:dupl
-func (s *SyntheticAPI) GetAugmentedCodegenAnswer(qaID string) (GenerateAugmentedAnswerResponse[CodegenAnswer], error) {
-	if qaID == "" {
-		return GenerateAugmentedAnswerResponse[CodegenAnswer]{}, fmt.Errorf("taskType and qaID cannot be empty")
-	}
-	ans, err := s.fetchCodegenFromField(qaID, "ans_id")
-	if err != nil {
-		log.Error().Err(err).Msg("generate-answer request failed")
-		return GenerateAugmentedAnswerResponse[CodegenAnswer]{}, err
-	}
-	return GenerateAugmentedAnswerResponse[CodegenAnswer]{Success: true, AnsID: ans}, nil
 }
 
 // GetQuestionAugment asks the service to generate augmented variations of a question.

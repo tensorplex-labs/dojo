@@ -1,6 +1,7 @@
 package syntheticapi
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -17,7 +18,6 @@ func TestSyntheticApi_Integration(t *testing.T) {
 
 	cfg := &config.SyntheticAPIEnvConfig{SyntheticAPIUrl: url}
 	sa, err := NewSyntheticAPI(cfg)
-
 	if err != nil {
 		t.Fatalf("NewSyntheticApi failed: %v", err)
 	}
@@ -30,7 +30,14 @@ func TestSyntheticApi_Integration(t *testing.T) {
 		t.Fatalf("GetQuestion returned empty qa_id: %+v", q)
 	}
 
+	fmt.Printf("Got question: %+v\n", q)
+
 	_, err = sa.GetCodegenAnswer(q.QaID)
+	if err != nil {
+		t.Fatalf("GetCodegenAnswer failed: %v", err)
+	}
+
+	_, err = sa.GetCodegenAnswer(q.AnsAugID)
 	if err != nil {
 		t.Fatalf("GetCodegenAnswer failed: %v", err)
 	}

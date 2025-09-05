@@ -2,7 +2,9 @@ package validator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -94,6 +96,7 @@ func (v *Validator) sendTaskRound() {
 
 	wg.Wait()
 	log.Info().Msgf("task round %d completed", currentRound)
+	os.Exit(1)
 }
 
 func (v *Validator) canStartTaskRound(ctx context.Context) bool {
@@ -101,19 +104,59 @@ func (v *Validator) canStartTaskRound(ctx context.Context) bool {
 		log.Error().Msg("redis client is not initialized")
 		return false
 	}
-	taskCount, err := v.Redis.LLen(ctx, "synthetic:questions")
+	taskCount, generatedCount, err := v.taskTrackerPure(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to get task count from redis")
+		log.Error().Err(err).Msg("failed to get task tracker")
 		return false
 	}
+
 	active := len(v.MetagraphData.CurrentActiveMinerUids)
 	if active == 0 {
 		log.Info().Msg("no active miners, skipping task round")
 		return false
 	}
-	if taskCount < int64(active) {
-		log.Info().Msg(fmt.Sprintf("Not enough tasks in pool, skipping task round. current tasks: %d in task pool vs current %d miners", int64(taskCount), active))
+
+	if int64(generatedCount) < int64(active) {
+		log.Info().Msg(fmt.Sprintf("Tasks in pool %d, generated tasks %d and active miners %d. Not starting new task round", taskCount, generatedCount, active))
 		return false
 	}
 	return true
+}
+
+// calling via redis so it doesn't pop the tasks out of the list
+func (v *Validator) taskTrackerPure(ctx context.Context) (int, int, error) {
+	vals, err := v.Redis.LRange(ctx, "synthetic:questions", 0, -1)
+	if err != nil {
+		return 0, 0, fmt.Errorf("lrange: %w", err)
+	}
+	complete := 0
+	for _, t := range vals {
+		if t == "" {
+			continue
+		}
+		var taskData CachedTasks
+		if err := json.Unmarshal([]byte(t), &taskData); err != nil {
+			return len(vals), complete, fmt.Errorf("unmarshal: %w", err)
+		}
+		if taskData.AnsAugID == "" || taskData.QaID == "" {
+			continue
+		}
+		if !v.checkCompletionExists(taskData.QaID) {
+			continue
+		}
+		if !v.checkCompletionExists(taskData.AnsAugID) {
+			continue
+		}
+		complete++
+	}
+	return len(vals), complete, nil
+}
+
+func (v *Validator) checkCompletionExists(qaID string) bool {
+	exists, err := v.Redis.Get(v.Ctx, fmt.Sprintf("synthetic:answers:%s", qaID))
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check if completion exists in redis")
+		return false
+	}
+	return exists != ""
 }

@@ -3,9 +3,10 @@ package syntheticapi
 
 // GenerateQuestionResponse is the response for a generated question.
 type GenerateQuestionResponse struct {
-	Success bool   `json:"success"`
-	Prompt  string `json:"prompt"`
-	QaID    string `json:"qa_id"`
+	Success  bool   `json:"success"`
+	Prompt   string `json:"prompt"`
+	QaID     string `json:"qa_id"`
+	AnsAugID string `json:"ans_aug_id"`
 }
 
 // GenerateAnswerResponse is the response for a codegen answer.

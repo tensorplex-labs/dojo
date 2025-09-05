@@ -33,3 +33,10 @@ type Completion[T Codegen] struct {
 type Codegen struct {
 	Completion any `json:"completion"`
 }
+
+// redis cached values for tasks
+type CachedTasks struct {
+	Question string `json:"question"`
+	QaID     string `json:"qa_id"`
+	AnsAugID string `json:"ans_aug_id"`
+}
