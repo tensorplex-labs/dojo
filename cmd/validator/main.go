@@ -51,14 +51,16 @@ func main() {
 		}
 	}
 
-	syntheticAPICfg, err := config.LoadSyntheticAPIEnv()
+	if r == nil {
+		log.Fatal().Msg("redis client is required, exiting")
+	}
 
+	syntheticAPICfg, err := config.LoadSyntheticAPIEnv()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load synthetic api env")
 	}
 
 	s, err := syntheticapi.NewSyntheticAPI(syntheticAPICfg)
-
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init synthetic api client")
 	}
@@ -68,7 +70,6 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to load task api env")
 	}
 	taskAPI, err := taskapi.NewTaskAPI(t)
-
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init task api client")
 	}
