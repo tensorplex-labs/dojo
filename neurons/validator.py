@@ -791,6 +791,9 @@ class Validator(aobject):
                     logger.info(
                         f"No active miners to send request to... sleeping for {ValidatorInterval.VALIDATOR_RUN} seconds"
                     )
+                    # Still need to sync even without active miners (weight setting, metagraph updates, etc.)
+                    self.step += 1
+                    await self.sync()
                     await asyncio.sleep(ValidatorInterval.VALIDATOR_RUN)
                     continue
 
