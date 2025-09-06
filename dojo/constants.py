@@ -13,7 +13,7 @@ class NormalValidatorConstants(IntEnum):
 
     TASK_DEADLINE = 1 * 60 * 60  # 1 hour
 
-    VALIDATOR_RUN = 900  # 15 minutes
+    VALIDATOR_RUN = 600  # 10 minutes
     VALIDATOR_HEARTBEAT = 200
     VALIDATOR_UPDATE_TASK = 600  # 10 minutes
     VALIDATOR_UPDATE_SCORE = 3600  # 1 hour
@@ -53,9 +53,9 @@ class HighValidatorConstants(IntEnum):
     QUERY_WINDOW = 2 * 60 * 60  # 2 hour
 
 
-def get_validator_constants() -> type[
-    NormalValidatorConstants | MediumValidatorConstants | HighValidatorConstants
-]:
+def get_validator_constants() -> (
+    type[NormalValidatorConstants | MediumValidatorConstants | HighValidatorConstants]
+):
     from dojo.utils.config import Mode, get_mode
 
     mode = get_mode()
