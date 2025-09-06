@@ -1,3 +1,9 @@
+## [1.15.7](https://github.com/tensorplex-labs/dojo/compare/v1.15.6...v1.15.7) (2025-09-06)
+
+### Bug Fixes
+
+* syn weight when no active miner ([62b3530](https://github.com/tensorplex-labs/dojo/commit/62b35309049c8d3fdb013ac49fc2cdd74d16a092))
+
 ## [1.15.6](https://github.com/tensorplex-labs/dojo/compare/v1.15.5...v1.15.6) (2025-08-21)
 
 ### Bug Fixes
