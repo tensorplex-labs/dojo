@@ -25,56 +25,33 @@ func main() {
 		log.Debug().Msg(".env not loaded; continuing with existing environment")
 	}
 
-	cfg, err := config.LoadValidatorEnv()
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to load validator env")
+		log.Fatal().Err(err).Msg("failed to load environment configuration")
 	}
 
-	kamiCfg, err := config.LoadKamiEnv()
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to load kami env")
-	}
-	k, err := kami.NewKami(kamiCfg)
+	k, err := kami.NewKami(&cfg.KamiEnvConfig)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init kami client")
 	}
 
-	redisCfg, err := config.LoadRedisEnv()
-	var r *redis.Redis
+	r, err := redis.NewRedis(&cfg.RedisEnvConfig)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to load redis env, continuing without redis")
-	} else {
-		r, err = redis.NewRedis(redisCfg)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to init redis client, continuing without redis")
-			r = nil
-		}
+		log.Error().Err(err).Msg("failed to init redis client, continuing without redis")
+		r = nil
 	}
 
-	if r == nil {
-		log.Fatal().Msg("redis client is required, exiting")
-	}
-
-	syntheticAPICfg, err := config.LoadSyntheticAPIEnv()
+	s, err := syntheticapi.NewSyntheticAPI(&cfg.SyntheticAPIEnvConfig)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load synthetic api env")
 	}
 
-	s, err := syntheticapi.NewSyntheticAPI(syntheticAPICfg)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to init synthetic api client")
-	}
-
-	t, err := config.LoadTaskAPIEnv()
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to load task api env")
-	}
-	taskAPI, err := taskapi.NewTaskAPI(t)
+	taskAPI, err := taskapi.NewTaskAPI(&cfg.TaskAPIEnvConfig)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init task api client")
 	}
 
-	v := validator.NewValidator(cfg, k, taskAPI, r, s)
+	v := validator.NewValidator(&cfg.ValidatorEnvConfig, k, taskAPI, r, s)
 
 	// setup signal handling for graceful shutdown before starting validator
 	sigChan := make(chan os.Signal, 1)
