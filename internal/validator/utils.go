@@ -11,13 +11,13 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/kami"
 )
 
-func (v *Validator) shouldAugment() bool {
+func (v *Validator) shouldAugment(probability int64) bool {
 	limit := big.NewInt(100)
 	n, err := rand.Int(rand.Reader, limit)
 	if err != nil {
 		return false
 	}
-	return n.Int64() < 25
+	return n.Int64() < probability
 }
 
 func (v *Validator) incrementTaskRound() (int, error) {
