@@ -4,6 +4,7 @@ package taskapi
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
@@ -16,6 +17,7 @@ type TaskAPIInterface interface {
 	CreateCodegenTask(
 		headers AuthHeaders,
 		req CreateTasksRequest[CodegenTaskMetadata],
+		validatorCompletion string,
 	) (Response[CreateTaskResponse], error)
 	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
 }
@@ -44,8 +46,9 @@ func NewTaskAPI(cfg *config.TaskAPIEnvConfig) (*TaskAPI, error) {
 }
 
 // CreateCodegenTask creates a task with codegen metadata for assigned validators.
-func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[CodegenTaskMetadata]) (Response[CreateTaskResponse], error) { //nolint:lll
+func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[CodegenTaskMetadata], validatorCompletion string) (Response[CreateTaskResponse], error) { //nolint:lll
 	var out Response[CreateTaskResponse]
+
 	metadataBytes, err := sonic.Marshal(req.Metadata)
 	if err != nil {
 		return Response[CreateTaskResponse]{}, fmt.Errorf("marshal metadata: %w", err)
@@ -54,6 +57,7 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 	vals := url.Values{}
 	vals.Set("task_type", req.TaskType)
 	vals.Set("metadata", string(metadataBytes))
+
 	for _, a := range req.Assignees {
 		vals.Add("assignees", a)
 	}
@@ -64,6 +68,7 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 		SetHeader("X-Signature", headers.Signature).
 		SetHeader("X-Message", headers.Message).
 		SetFormDataFromValues(vals).
+		SetFileReader("files", "index.html", strings.NewReader(validatorCompletion)).
 		SetResult(&out)
 
 	resp, err := r.Post("/api/v1/validator/tasks")

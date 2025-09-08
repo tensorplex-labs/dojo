@@ -72,15 +72,8 @@ func (v *Validator) sendTaskRound() {
 		return
 	}
 
-	currentRound, err := v.incrementTaskRound()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to increment task round")
-		return
-	}
-	log.Info().Msg(fmt.Sprintf("starting task round %d", currentRound))
-
 	active := len(v.MetagraphData.CurrentActiveMinerUids)
-	log.Info().Msg(fmt.Sprintf("sending task round with %d tasks", active))
+	log.Info().Msg(fmt.Sprintf("Starting task round with %d tasks", active))
 
 	var wg sync.WaitGroup
 	// for _, v := range v.MetagraphData.CurrentActiveMinerUids {
@@ -90,13 +83,13 @@ func (v *Validator) sendTaskRound() {
 		wg.Add(1)
 		go func(i int, uid int64) {
 			defer wg.Done()
-			v.processCodegenTask(currentRound, i, uid)
+			v.processCodegenTask(i, uid)
 		}(i, uid)
 	}
 
 	wg.Wait()
-	log.Info().Msgf("task round %d completed", currentRound)
-	os.Exit(1)
+	log.Info().Msgf("Tasks generation completed")
+	os.Exit(1) // TODO: remove
 }
 
 func (v *Validator) canStartTaskRound(ctx context.Context) bool {

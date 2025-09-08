@@ -29,6 +29,7 @@ func NewRedis(cfg *config.RedisEnvConfig) (*Redis, error) {
 	client, err := rueidis.NewClient(rueidis.ClientOption{
 		InitAddress: []string{fmt.Sprintf("%s:%d", cfg.RedisHost, cfg.RedisPort)},
 		Password:    cfg.RedisPassword,
+		Username:    cfg.RedisUsername,
 	})
 	if err != nil {
 		return nil, err

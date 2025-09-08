@@ -66,6 +66,7 @@ type RedisEnvConfig struct {
 	RedisPort     int    `env:"REDIS_PORT" envDefault:"6379"`
 	RedisPassword string `env:"REDIS_PASSWORD" envDefault:"password"`
 	RedisDB       int    `env:"REDIS_DB" envDefault:"0"`
+	RedisUsername string `env:"REDIS_USERNAME" envDefault:"admin"`
 }
 
 // SyntheticAPIEnvConfig configures synthetic API access.
