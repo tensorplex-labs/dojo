@@ -124,7 +124,7 @@ func (v *Validator) canStartTaskRound(ctx context.Context) bool {
 }
 
 // calling via redis so it doesn't pop the tasks out of the list
-func (v *Validator) taskTrackerPure(ctx context.Context) (int, int, error) {
+func (v *Validator) taskTrackerPure(ctx context.Context) (total, completed int, err error) {
 	vals, err := v.Redis.LRange(ctx, "synthetic:questions", 0, -1)
 	if err != nil {
 		return 0, 0, fmt.Errorf("lrange: %w", err)

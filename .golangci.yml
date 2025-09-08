@@ -40,7 +40,8 @@ linters:
       rules: []
     gocritic:
       enabled-tags: [diagnostic, experimental, opinionated, performance, style]
-      disabled-checks: [dupImport, ifElseChain, octalLiteral, whyNoLint]
+      disabled-checks:
+        [dupImport, ifElseChain, octalLiteral, whyNoLint, commentedOutCode]
     funlen:
       lines: 100
       statements: 50

@@ -34,6 +34,7 @@ type OrderAnswerResponse struct {
 }
 
 // ----------------------------- Codegen Types -----------------------------
+
 // CodegenAnswer is the top-level answer payload for codegen tasks.
 type CodegenAnswer struct {
 	Prompt    string            `json:"prompt"`
@@ -57,5 +58,3 @@ type CodegenFiles struct {
 	Filename string `json:"filename"`
 	Content  string `json:"content"`
 }
-
-// ----------------------------- Codegen Types -----------------------------

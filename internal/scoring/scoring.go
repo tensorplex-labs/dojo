@@ -1,7 +1,7 @@
 // Package scoring contains logic to execute and calculate scoring
 package scoring
 
-func CalcPvPScores(discriminators map[string]string, generators map[string]string) (scores map[string]float64) {
+func CalcPvPScores(discriminators, generators map[string]string) (scores map[string]float64) {
 	/*
 		@param discriminators: map of discriminator addresses to their votes. A 'vote' is represented by the unique ID of selected code output.
 		@param generators: map of generator addresses to their generated output ID.
@@ -28,7 +28,7 @@ func CalcPvPScores(discriminators map[string]string, generators map[string]strin
 	return scores
 }
 
-func CalcTrapScores(discriminators map[string]string, positiveGenerators map[string]string, negativeGenerators map[string]string) (scores map[string]float64) {
+func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[string]string) (scores map[string]float64) {
 	/*
 		@param discriminators: map of discriminator addresses to their votes. A 'vote' is represented by the unique ID of selected code output.
 		@param positiveGenerators: map of generator addresses to the superior output ID.
@@ -57,7 +57,7 @@ func CalcTrapScores(discriminators map[string]string, positiveGenerators map[str
 	return scores
 }
 
-func CalcPvVScores(discriminators map[string]string, generators map[string]string, validators map[string]string) (scores map[string]float64) {
+func CalcPvVScores(discriminators, generators, validators map[string]string) (scores map[string]float64) {
 	/*
 		@param discriminators: map of discriminator addresses to their votes. A 'vote' is represented by the unique ID of selected code output.
 		@param generators: map of generator addresses to their generated output ID.
