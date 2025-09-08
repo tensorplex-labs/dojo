@@ -20,7 +20,7 @@ Complete the .env file by changing / uncommenting the required variables
 | NETUID              | Subnet ID                                                         | 52                                          | 52 for mainnet <br>98 for testnet                                                                                                                           |
 | SUBTENSOR_NETWORK   | Network name                                                      | mainnet                                     | finney (mainnet) <br>test (testnet) <br>local (local subtensor)                                                                                             |
 | SUBTENSOR_ENDPOINT  | WebSocket endpoint for network connection                         | <wss://entrypoint-finney.opentensor.ai:443> | <wss://test.finney.opentensor.ai:443> for testnet <br><ws://mainnet-lite:9944> for local subtensor <br><ws://testnet-lite:9944> for local testnet subtensor |
-| DOJO_API_BASE_URL   | Base URL for Dojo API                                             | <https://dojo.network>            | <https://testnet.dojo.network> for testnet <br> https://dojo.network for mainnet                                                                                                             |
+| DOJO_API_BASE_URL   | Base URL for Dojo API                                             | <https://dojo.network>                      | <https://testnet.dojo.network> for testnet <br> https://dojo.network for mainnet                                                                            |
 | DOJO_API_KEY        | Authentication key for Dojo API                                   | -                                           | Dojo API key (Generate it in the next step)                                                                                                                 |
 | AXON_PORT           | Port for Axon server                                              | 8091                                        |                                                                                                                                                             |
 | VALIDATOR_MIN_STAKE | Validator Minimum Stake                                           | 5000                                        | Minimum stake required from validators. It is recommended to set value to 0 for testnet                                                                     |
@@ -55,33 +55,33 @@ make miner
 
 Complete the .env file by changing / uncommenting the required variables
 
-| Variable                | Description                   | Default Value                                           | Remarks                                                                                 |
-| ----------------------- | ----------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| SAS_SUBSTRATE_URL       | Substrate URL                 | Same as SUBTENSOR_ENDPOINT                              | Must match network configuration                                                        |
-| SAS_EXPRESS_PORT        | Sidecar Express server port   | 8081                                                    | Internal service port                                                                   |
-| SUBSTRATE_API_URL       | Substrate API URL             | http://sidecar:8081                                        | Internal service endpoint                                                               |
-| NEXT_PUBLIC_BACKEND_URL | Backend URL for Dojo UI       | http://worker-api:8080                               | Must be accessible from UI                                                              |
-| NEXT_PUBLIC_GA_TAG      | Google Analytics tag          | G-DEVELOPMENT                                           | For development environment                                                             |
-| DISABLE_CSP             | Disable Content Security Policy| true                                                    | Set to true to disable CSP restrictions                                                 |
-| SERVER_PORT             | Worker API server port        | 8080                                                    | Must not conflict with other services                                                   |
-| RUNTIME_ENV             | Runtime environment           | aws                                                     | Options: local, development, production                                                 |
-| CORS_ALLOWED_ORIGINS    | Allowed CORS origins          | <http://localhost*,http://worker-ui*,http://dojo-cli>\* | Comma-separated list                                                                    |
-| TOKEN_EXPIRY            | JWT token expiration in hours | 24                                                      | Adjust if needed                                                                        |
-| JWT_SECRET              | Secret key for JWT tokens     | -                                                       | Use a strong random string                                                              |
-| AWS_ACCESS_KEY_ID       | AWS access key ID             | -                                                       | Optional                                                                                |
-| AWS_SECRET_ACCESS_KEY   | AWS secret access key         | -                                                       | Optional                                                                                |
-| AWS_S3_BUCKET_NAME      | S3 bucket name                | -                                                       | Optional                                                                                |
-| S3_PUBLIC_URL           | Public URL for S3 bucket      | -                                                       | Optional                                                                                |
-| REDIS_HOST              | Redis host                    | redis                                                   | Container name or IP                                                                    |
-| REDIS_PORT              | Redis port                    | 6379                                                    | Default Redis port                                                                      |
-| REDIS_USERNAME          | Redis username                | -                                                       | (Optional) For Redis ACL                                                                |
-| REDIS_PASSWORD          | Redis password                | -                                                       | (Optional) For Redis authentication                                                     |
-| DB_HOST                 | Database host address         | postgres:5432                                           | Format: hostname:port                                                                   |
-| DB_NAME                 | Database name                 | db                                                      | Database Name                                                                           |
-| DB_USERNAME             | Database username             | -                                                       | Database Username                                                                       |
-| DB_PASSWORD             | Database password             | -                                                       | Database Password                                                                       |
-| VALIDATOR_MIN_STAKE     | Validator Minimum Stake       | 5000                                                    | Minimum stake required from validators. It is recommended to set value to 0 for testnet |
-| ETHEREUM_NODE           | Ethereum Node endpoint        | <https://ethereum.publicnode.com>                       | Ethereum endpoint                                                                       |
+| Variable                | Description                     | Default Value                                           | Remarks                                                                                 |
+| ----------------------- | ------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| SAS_SUBSTRATE_URL       | Substrate URL                   | Same as SUBTENSOR_ENDPOINT                              | Must match network configuration                                                        |
+| SAS_EXPRESS_PORT        | Sidecar Express server port     | 8081                                                    | Internal service port                                                                   |
+| SUBSTRATE_API_URL       | Substrate API URL               | http://sidecar:8081                                     | Internal service endpoint                                                               |
+| NEXT_PUBLIC_BACKEND_URL | Backend URL for Dojo UI         | http://worker-api:8080                                  | Must be accessible from UI                                                              |
+| NEXT_PUBLIC_GA_TAG      | Google Analytics tag            | G-DEVELOPMENT                                           | For development environment                                                             |
+| DISABLE_CSP             | Disable Content Security Policy | true                                                    | Set to true to disable CSP restrictions                                                 |
+| SERVER_PORT             | Worker API server port          | 8080                                                    | Must not conflict with other services                                                   |
+| RUNTIME_ENV             | Runtime environment             | aws                                                     | Options: local, development, production                                                 |
+| CORS_ALLOWED_ORIGINS    | Allowed CORS origins            | <http://localhost*,http://worker-ui*,http://dojo-cli>\* | Comma-separated list                                                                    |
+| TOKEN_EXPIRY            | JWT token expiration in hours   | 24                                                      | Adjust if needed                                                                        |
+| JWT_SECRET              | Secret key for JWT tokens       | -                                                       | Use a strong random string                                                              |
+| AWS_ACCESS_KEY_ID       | AWS access key ID               | -                                                       | Optional                                                                                |
+| AWS_SECRET_ACCESS_KEY   | AWS secret access key           | -                                                       | Optional                                                                                |
+| AWS_S3_BUCKET_NAME      | S3 bucket name                  | -                                                       | Optional                                                                                |
+| S3_PUBLIC_URL           | Public URL for S3 bucket        | -                                                       | Optional                                                                                |
+| REDIS_HOST              | Redis host                      | redis                                                   | Container name or IP                                                                    |
+| REDIS_PORT              | Redis port                      | 6379                                                    | Default Redis port                                                                      |
+| REDIS_USERNAME          | Redis username                  | -                                                       | (Optional) For Redis ACL                                                                |
+| REDIS_PASSWORD          | Redis password                  | -                                                       | (Optional) For Redis authentication                                                     |
+| DB_HOST                 | Database host address           | postgres:5432                                           | Format: hostname:port                                                                   |
+| DB_NAME                 | Database name                   | db                                                      | Database Name                                                                           |
+| DB_USERNAME             | Database username               | -                                                       | Database Username                                                                       |
+| DB_PASSWORD             | Database password               | -                                                       | Database Password                                                                       |
+| VALIDATOR_MIN_STAKE     | Validator Minimum Stake         | 5000                                                    | Minimum stake required from validators. It is recommended to set value to 0 for testnet |
+| ETHEREUM_NODE           | Ethereum Node endpoint          | <https://ethereum.publicnode.com>                       | Ethereum endpoint                                                                       |
 
 Start the dojo platform which Dojo CLI will interact with later.
 
@@ -95,7 +95,7 @@ Refer to [option 1](#option-1-centralised-method) to continue setting up the min
 
 Note: URLs are different for testnet and mainnet. Please refer to [docs](https://docs.tensorplex.ai/tensorplex-docs/tensorplex-dojo-testnet/official-links).
 
-1. Head to https://dojo.tensorplex.ai or https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
+1. Head to https://dojo.network or https://testnet.dojo.network and login and sign with your Metamask wallet.
 
 - You'll see an empty homepage with no Tasks, and a "Connect" button on the top right ![image](./assets/ui/homepage.png)
 - Click on "Connect" and you'll see a popup with different wallets for you to connect to ![image](./assets/ui/wallet_popup.jpg)
