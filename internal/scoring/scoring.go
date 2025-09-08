@@ -1,3 +1,4 @@
+// Package scoring contains logic to execute and calculate scoring
 package scoring
 
 func CalcPvPScores(discriminators map[string]string, generators map[string]string) (scores map[string]float64) {
