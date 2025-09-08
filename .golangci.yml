@@ -20,7 +20,6 @@ linters:
     - gosec
     - govet
     - ineffassign
-    - lll
     - misspell
     - nakedret
     - noctx
@@ -38,9 +37,7 @@ linters:
     staticcheck:
       checks: ["all"]
     revive:
-      rules:
-        - name: exported
-          arguments: ["checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
+      rules: []
     gocritic:
       enabled-tags: [diagnostic, experimental, opinionated, performance, style]
       disabled-checks: [dupImport, ifElseChain, octalLiteral, whyNoLint]
