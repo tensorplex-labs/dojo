@@ -40,7 +40,7 @@ func (v *Validator) syncMetagraph() {
 		}
 	}
 
-	log.Info().Msgf("Metagraph synced. Found %d active miners", len(currentActiveMiners))
+	log.Info().Msgf("Metagraph synced. Found %d active miners with uid: %v", len(currentActiveMiners), currentActiveMiners)
 
 	v.MetagraphData.Metagraph = newMetagraph.Data
 	v.MetagraphData.CurrentActiveMinerUids = currentActiveMiners
@@ -138,18 +138,18 @@ func (v *Validator) taskTrackerPure(ctx context.Context) (int, int, error) {
 		if err := json.Unmarshal([]byte(t), &taskData); err != nil {
 			return len(vals), complete, fmt.Errorf("unmarshal: %w", err)
 		}
-		if taskData.AnsAugID == "" || taskData.QaID == "" {
-			continue
+		if v.isTaskReady(taskData) {
+			complete++
 		}
-		if !v.checkCompletionExists(taskData.QaID) {
-			continue
-		}
-		if !v.checkCompletionExists(taskData.AnsAugID) {
-			continue
-		}
-		complete++
 	}
 	return len(vals), complete, nil
+}
+
+func (v *Validator) isTaskReady(taskData CachedTasks) bool {
+	return taskData.AnsAugID != "" &&
+		taskData.QaID != "" &&
+		v.checkCompletionExists(taskData.QaID) &&
+		v.checkCompletionExists(taskData.AnsAugID)
 }
 
 func (v *Validator) checkCompletionExists(qaID string) bool {
