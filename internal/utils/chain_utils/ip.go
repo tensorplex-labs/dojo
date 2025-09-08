@@ -1,3 +1,4 @@
+// Package chainutils/ip.go provides utility functions for working with IP addresses
 package chainutils
 
 import (
@@ -17,7 +18,6 @@ func GetExternalIP() (net.IP, error) {
 	client := http.Client{Timeout: 5 * time.Second}
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.ipify.org", http.NoBody)
-
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}

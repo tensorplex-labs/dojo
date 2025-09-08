@@ -44,6 +44,8 @@ type ErrorResponse = Response[struct{}]
 type PaginatedResponse[T any] = Response[T]
 
 // ------------- Task Types -------------//
+
+// CodegenTaskMetadata represents the metadata for a codegen task
 type CodegenTaskMetadata struct {
 	Prompt              string `json:"prompt"`
 	ValidatorCompletion string `json:"validator_completion"`

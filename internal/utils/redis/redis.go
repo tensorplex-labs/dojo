@@ -1,3 +1,4 @@
+// Package redis provides a Redis client for interacting with Redis
 package redis
 
 import (
@@ -6,6 +7,7 @@ import (
 	"time"
 
 	"github.com/redis/rueidis"
+
 	"github.com/tensorplex-labs/dojo/internal/config"
 )
 
@@ -17,7 +19,7 @@ type Redis struct {
 type RedisInterface interface {
 	Get(ctx context.Context, key string) (string, error)
 	GetMulti(ctx context.Context, keys []string) (map[string]string, error)
-	Set(ctx context.Context, key string, value string, ttl time.Duration) error
+	Set(ctx context.Context, key, value string, ttl time.Duration) error
 	SetMulti(ctx context.Context, kv map[string]string) error
 	LRange(ctx context.Context, key string, start, stop int64) ([]string, error)
 	LLen(ctx context.Context, key string) (int64, error)
@@ -77,7 +79,7 @@ func (r *Redis) GetMulti(ctx context.Context, keys []string) (map[string]string,
 	return m, nil
 }
 
-func (r *Redis) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
+func (r *Redis) Set(ctx context.Context, key, value string, ttl time.Duration) error {
 	if ttl > 0 {
 		return r.client.Do(ctx, r.client.B().Set().Key(key).Value(value).Ex(ttl).Build()).Error()
 	}

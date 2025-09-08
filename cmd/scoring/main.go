@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog/log"
+
 	"github.com/tensorplex-labs/dojo/internal/scoring"
 	"github.com/tensorplex-labs/dojo/internal/utils/logger"
 )
@@ -53,9 +54,6 @@ func testCalcTrapScores() {
 	}
 
 	scores := scoring.CalcTrapScores(discriminators, positiveGenerators, negativeGenerators)
-	// if len(scores) == 0 {
-	// 	fmt.Println("No trap scores assigned, as expected for correct voters.")
-	// }
 	for addr, score := range scores {
 		fmt.Printf("Address: %s, Score: %f\n", addr, score)
 	}

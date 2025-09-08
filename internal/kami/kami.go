@@ -14,7 +14,7 @@ import (
 // KamiInterface defines the methods implemented by the Kami service client
 // Use this interface in callers to allow easy mocking and testing
 //
-//nolint:revive
+
 type KamiInterface interface {
 	ServeAxon(ServeAxonParams) (ExtrinsicHashResponse, error)
 	GetMetagraph(netuid int) (SubnetMetagraphResponse, error)

@@ -12,16 +12,16 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/config"
 )
 
-// TaskApiInterface is the interface for the task client methods used by validator.
+// TaskAPIInterface is the interface for the task client methods used by validator.
 type TaskAPIInterface interface {
 	CreateCodegenTask(
 		headers AuthHeaders,
 		req CreateTasksRequest[CodegenTaskMetadata],
 	) (Response[CreateTaskResponse], error)
-	SubmitCompletion(headers AuthHeaders, taskID string, completion string) (Response[SubmitCompletionResponse], error)
+	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
 }
 
-// TaskApi is a REST client wrapper for the task service.
+// TaskAPI is a REST client wrapper for the task service.
 type TaskAPI struct {
 	cfg    *config.TaskAPIEnvConfig
 	client *resty.Client
@@ -81,7 +81,7 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 	return out, nil
 }
 
-func (t *TaskAPI) SubmitCompletion(headers AuthHeaders, taskID string, completion string) (Response[SubmitCompletionResponse], error) {
+func (t *TaskAPI) SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error) {
 	var out Response[SubmitCompletionResponse]
 
 	metadataBytes, err := sonic.Marshal(completion)

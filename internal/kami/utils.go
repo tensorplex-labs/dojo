@@ -11,7 +11,6 @@ func FindAxonByHotkey(metagraph SubnetMetagraph, hotkey string) *AxonInfo {
 }
 
 func GetHotkey(k *Kami) (string, error) {
-
 	keyringPair, err := k.GetKeyringPair()
 	if err != nil {
 		return "", err
