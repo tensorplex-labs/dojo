@@ -14,12 +14,16 @@ import (
 
 // TaskAPIInterface is the interface for the task client methods used by validator.
 type TaskAPIInterface interface {
+	// POST requests
 	CreateCodegenTask(
 		headers AuthHeaders,
 		req CreateTasksRequest[CodegenTaskMetadata],
 		validatorCompletion string,
 	) (Response[CreateTaskResponse], error)
 	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
+
+	// GET requests
+	GetExpiredTasks(validatorHotkey string) (Response[VotesResponse], error)
 }
 
 // TaskAPI is a REST client wrapper for the task service.
@@ -108,5 +112,24 @@ func (t *TaskAPI) SubmitCompletion(headers AuthHeaders, taskID, completion strin
 		return Response[SubmitCompletionResponse]{}, fmt.Errorf("submit completion returned status %d: %s",
 			resp.StatusCode(), resp.String())
 	}
+	return out, nil
+}
+
+func (t *TaskAPI) GetExpiredTasks(validatorHotkey string) (Response[VotesResponse], error) {
+	var out Response[VotesResponse]
+	r := t.client.R().
+		SetHeader("X-Hotkey", validatorHotkey).
+		SetResult(&out)
+
+	resp, err := r.Get("/api/v1/validator/tasks/expired")
+	if err != nil {
+		return Response[VotesResponse]{}, fmt.Errorf("get expired tasks: %w", err)
+	}
+
+	if resp.IsError() {
+		return Response[VotesResponse]{}, fmt.Errorf("get expired tasks returned status %d: %s",
+			resp.StatusCode(), resp.String())
+	}
+
 	return out, nil
 }

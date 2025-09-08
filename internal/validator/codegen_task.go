@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -46,7 +47,8 @@ func (v *Validator) processCodegenTask(index int, minerUID int64) {
 	payload.Metadata = taskapi.CodegenTaskMetadata{
 		Prompt: completion.Answer.Prompt,
 	}
-
+	var taskAugmented bool
+	taskAugmented = false
 	if v.shouldAugment(augmentedProbability) {
 		var augmentedCompletion syntheticapi.GenerateAnswerResponse[syntheticapi.CodegenAnswer]
 		augmentedCompletion, err = v.SyntheticAPI.GetCodegenAnswer(synAPIQuestion.AnsAugID)
@@ -59,6 +61,7 @@ func (v *Validator) processCodegenTask(index int, minerUID int64) {
 			log.Info().Msgf("Using augmented answer for question ID %s", synAPIQuestion.QaID)
 			validatorContent = augmentedCompletion.Answer.Responses[0].Completion.Files[0].Content
 		}
+		taskAugmented = true
 	} else {
 		log.Info().Msgf("Not using augmented answer for question ID %s", synAPIQuestion.QaID)
 	}
@@ -78,6 +81,14 @@ func (v *Validator) processCodegenTask(index int, minerUID int64) {
 	if err != nil {
 		log.Error().Err(err).Msgf("failed to create task for question %d with ID %s", index+1, synAPIQuestion.QaID)
 		return
+	}
+
+	if taskAugmented {
+		if err = v.Redis.Set(v.Ctx, fmt.Sprintf("trap:%s", taskCreationResponse.Data.TaskID), v.ValidatorHotkey, 0); err != nil {
+			log.Error().Err(err).Msgf("failed to set trap for task ID %s", taskCreationResponse.Data.TaskID)
+		} else {
+			log.Debug().Msgf("Set trap for task ID %s", taskCreationResponse.Data.TaskID)
+		}
 	}
 
 	log.Info().Msgf("Created task and completion for task ID %s", taskCreationResponse.Data.TaskID)

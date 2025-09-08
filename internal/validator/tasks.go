@@ -62,6 +62,10 @@ func (v *Validator) syncBlock() {
 	v.mu.Unlock()
 }
 
+func (v *Validator) startScoring() {
+	v.processTasksToScore()
+}
+
 func (v *Validator) sendTaskRound() {
 	if !v.taskRoundRunning.CompareAndSwap(false, true) {
 		return

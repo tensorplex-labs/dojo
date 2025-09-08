@@ -19,7 +19,7 @@ type AuthHeaders struct {
 }
 
 // Response represents a generic API response structure.
-type Response[T CreateTaskResponse | SubmitCompletionResponse | any] struct {
+type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -54,4 +54,24 @@ type PaginatedResponse[T any] = Response[T]
 type CodegenTaskMetadata struct {
 	Prompt              string `json:"prompt"`
 	ValidatorCompletion string `json:"validator_completion"`
+}
+
+// VotesResponse represents the response structure for votes
+type VotesResponse struct {
+	Votes []VoteData `json:"votes"`
+}
+
+// VoteData represents the structure of a single vote
+type VoteData struct {
+	ID                string `json:"id"`
+	VoterHotkey       string `json:"voter_hotkey"`
+	TaskID            string `json:"task_id"`
+	ChoseCompletionID string `json:"chose_completion_id"`
+	Weight            int64  `json:"weight"`
+	Tasktype          string `json:"tasktype"`
+	ValidatorHotkey   string `json:"validator_hotkey"`
+	CreatedAt         string `json:"created_at"`
+	ExpireAt          string `json:"expire_at"`
+
+	UpdatedAt string `json:"updated_at"`
 }

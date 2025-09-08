@@ -1,6 +1,6 @@
 package kami
 
-func FindAxonByHotkey(metagraph SubnetMetagraph, hotkey string) *AxonInfo {
+func FindAxonByHotkey(metagraph *SubnetMetagraph, hotkey string) *AxonInfo {
 	for i, currHotkey := range metagraph.Hotkeys {
 		if currHotkey == hotkey {
 			axon := metagraph.Axons[i]
