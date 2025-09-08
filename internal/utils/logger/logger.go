@@ -1,15 +1,15 @@
+// Package logger provides a global logger for the application
 package logger
 
 import (
 	"flag"
 	"os"
 
-	"go.uber.org/zap"
-
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/rs/zerolog/pkgerrors"
+	"go.uber.org/zap"
 )
 
 var Logger *zap.Logger

@@ -34,10 +34,7 @@ func decodePossiblyStringified[T any](raw json.RawMessage, out *T) error {
 	return nil
 }
 
-// SyntheticApiInterface describes the synthetic API client methods used.
-//
-//nolint:revive,staticcheck
-
+// SyntheticAPIInterface describes the synthetic API client methods used.
 type SyntheticAPIInterface interface {
 	GetQuestion() (GenerateQuestionResponse, error)
 	GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error)
@@ -45,13 +42,13 @@ type SyntheticAPIInterface interface {
 	OrderAnswer(question string) (OrderAnswerResponse, error)
 }
 
-// SyntheticApi wraps a REST client for the synthetic service.
+// SyntheticAPI wraps a REST client for the synthetic service.
 type SyntheticAPI struct {
 	cfg    *config.SyntheticAPIEnvConfig
 	client *resty.Client
 }
 
-// NewSyntheticApi creates a new synthetic API client bound to the configured URL.
+// NewSyntheticAPI creates a new synthetic API client bound to the configured URL.
 func NewSyntheticAPI(cfg *config.SyntheticAPIEnvConfig) (*SyntheticAPI, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("configuration cannot be nil")
@@ -134,8 +131,6 @@ func (s *SyntheticAPI) fetchCodegenFromField(qaID, field string) (CodegenAnswer,
 }
 
 // GetCodegenAnswer fetches a codegen answer by question ID.
-//
-//nolint:dupl
 func (s *SyntheticAPI) GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error) {
 	if qaID == "" {
 		return GenerateAnswerResponse[CodegenAnswer]{}, fmt.Errorf("qaID cannot be empty")

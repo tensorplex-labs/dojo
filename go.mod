@@ -4,6 +4,7 @@ go 1.24.3
 
 require (
 	github.com/bytedance/sonic v1.14.1
+	github.com/caarlos0/env/v11 v11.3.1
 	github.com/go-resty/resty/v2 v2.16.5
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/rueidis v1.0.64
@@ -14,7 +15,6 @@ require (
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
-	github.com/caarlos0/env/v11 v11.3.1 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect

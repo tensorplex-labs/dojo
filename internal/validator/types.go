@@ -34,7 +34,7 @@ type Codegen struct {
 	Completion any `json:"completion"`
 }
 
-// redis cached values for tasks
+// CachedTasks represents redis cached values for tasks
 type CachedTasks struct {
 	Question string `json:"question"`
 	QaID     string `json:"qa_id"`
