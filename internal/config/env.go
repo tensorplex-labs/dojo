@@ -2,6 +2,7 @@
 package config
 
 import (
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -82,5 +83,43 @@ type TaskAPIEnvConfig struct {
 type ValidatorEnvConfig struct {
 	ChainEnvConfig
 	ClientEnvConfig
-	Environment string `env:"ENVIRONMENT" envDefault:"test"`
+	Environment string `env:"ENVIRONMENT" envDefault:"dev"`
+}
+
+type IntervalConfig struct {
+	MetagraphInterval time.Duration
+	TaskRoundInterval time.Duration
+	BlockInterval     time.Duration
+}
+
+var (
+	DevIntervalConfig = &IntervalConfig{
+		MetagraphInterval: 5 * time.Second,
+		TaskRoundInterval: 10 * time.Second,
+		BlockInterval:     2 * time.Second,
+	}
+	TestIntervalConfig = &IntervalConfig{
+		MetagraphInterval: 30 * time.Second,
+		TaskRoundInterval: 15 * time.Minute,
+		BlockInterval:     12 * time.Second,
+	}
+
+	ProdIntervalConfig = &IntervalConfig{
+		MetagraphInterval: 30 * time.Second,
+		TaskRoundInterval: 15 * time.Minute,
+		BlockInterval:     12 * time.Second,
+	}
+)
+
+func NewIntervalConfig(environment string) *IntervalConfig {
+	switch strings.ToLower(environment) {
+	case "dev":
+		return DevIntervalConfig
+	case "test":
+		return TestIntervalConfig
+	case "prod":
+		return ProdIntervalConfig
+	}
+
+	return DevIntervalConfig
 }
