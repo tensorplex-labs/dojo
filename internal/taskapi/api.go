@@ -17,6 +17,7 @@ type TaskAPIInterface interface {
 	CreateCodegenTask(
 		headers AuthHeaders,
 		req CreateTasksRequest[CodegenTaskMetadata],
+		validatorCompletion string,
 	) (Response[CreateTaskResponse], error)
 	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
 }
@@ -45,7 +46,7 @@ func NewTaskAPI(cfg *config.TaskAPIEnvConfig) (*TaskAPI, error) {
 }
 
 // CreateCodegenTask creates a task with codegen metadata for assigned validators.
-func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[CodegenTaskMetadata]) (Response[CreateTaskResponse], error) { //nolint:lll
+func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[CodegenTaskMetadata], validatorCompletion string) (Response[CreateTaskResponse], error) { //nolint:lll
 	var out Response[CreateTaskResponse]
 
 	metadataBytes, err := sonic.Marshal(req.Metadata)
@@ -67,7 +68,7 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 		SetHeader("X-Signature", headers.Signature).
 		SetHeader("X-Message", headers.Message).
 		SetFormDataFromValues(vals).
-		SetFileReader("files", "index.html", strings.NewReader(req.Metadata.ValidatorCompletion)).
+		SetFileReader("files", "index.html", strings.NewReader(validatorCompletion)).
 		SetResult(&out)
 
 	resp, err := r.Post("/api/v1/validator/tasks")

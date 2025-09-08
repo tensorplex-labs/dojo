@@ -14,7 +14,6 @@ import (
 
 func (v *Validator) syncMetagraph() {
 	v.mu.Lock()
-	defer v.mu.Unlock()
 
 	log.Info().Msg(fmt.Sprintf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid))
 	newMetagraph, err := v.Kami.GetMetagraph(v.ValidatorConfig.Netuid)
@@ -46,7 +45,7 @@ func (v *Validator) syncMetagraph() {
 	v.MetagraphData.Metagraph = newMetagraph.Data
 	v.MetagraphData.CurrentActiveMinerUids = currentActiveMiners
 
-	// v.mu.Unlock()
+	v.mu.Unlock()
 }
 
 func (v *Validator) syncBlock() {

@@ -2,7 +2,7 @@ package taskapi
 
 import "mime/multipart"
 
-// ------------- Generic Types -------------//
+// CreateTasksRequest represents the payload to create a new task.
 type CreateTasksRequest[T CodegenTaskMetadata] struct {
 	TaskType  string                  `form:"task_type" json:"task_type"`
 	Metadata  T                       `form:"metadata" json:"metadata"`
@@ -11,12 +11,14 @@ type CreateTasksRequest[T CodegenTaskMetadata] struct {
 	Files     []*multipart.FileHeader `form:"files" json:"files,omitempty"`
 }
 
+// AuthHeaders represents the authentication headers required for API requests.
 type AuthHeaders struct {
 	Hotkey    string `header:"X-Hotkey"`
 	Signature string `header:"X-Signature"`
 	Message   string `header:"X-Message"`
 }
 
+// Response represents a generic API response structure.
 type Response[T CreateTaskResponse | SubmitCompletionResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
@@ -29,21 +31,24 @@ type Response[T CreateTaskResponse | SubmitCompletionResponse | any] struct {
 	TotalItems int64  `json:"total_items,omitempty"`
 }
 
+// CreateTaskResponse represents the response data for a created task.
 type CreateTaskResponse struct {
 	TaskID string `json:"task_id"`
 }
 
+// SubmitCompletionResponse represents the response data for a submitted completion.
 type SubmitCompletionResponse struct {
 	CompletionID string `json:"completion_id"`
 }
 
+// SuccessResponse represents a successful API response with data.
 type SuccessResponse[T any] = Response[T]
 
+// ErrorResponse represents an error API response without data.
 type ErrorResponse = Response[struct{}]
 
+// PaginatedResponse represents a paginated API response with data.
 type PaginatedResponse[T any] = Response[T]
-
-// ------------- Task Types -------------//
 
 // CodegenTaskMetadata represents the metadata for a codegen task
 type CodegenTaskMetadata struct {
