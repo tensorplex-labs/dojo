@@ -29,7 +29,7 @@ type Validator struct {
 	MetagraphData   MetagraphData
 	ValidatorHotkey string
 
-	IntervalConfig  *IntervalConfig            // used for heartbeat and task round intervals
+	IntervalConfig  *config.IntervalConfig     // used for heartbeat and task round intervals
 	ValidatorConfig *config.ValidatorEnvConfig // configuration for the validator
 
 	Ctx    context.Context
@@ -48,23 +48,16 @@ func NewValidator(
 	r redis.RedisInterface,
 	s syntheticapi.SyntheticAPIInterface,
 ) *Validator {
-	var intervalConfig *IntervalConfig
-	if cfg.Environment == "dev" || cfg.Environment == "DEV" {
-		log.Warn().Msg("Validator is running in dev/test mode, this is not recommended for production!")
-		intervalConfig = &IntervalConfig{
-			MetagraphInterval: 5 * time.Second,
-			TaskRoundInterval: 10 * time.Second,
-			BlockInterval:     2 * time.Second,
-		}
-	} else {
-		intervalConfig = &IntervalConfig{
-			MetagraphInterval: 30 * time.Second,
-			TaskRoundInterval: 15 * time.Minute,
-			BlockInterval:     12 * time.Second,
-		}
-	}
+	intervalConfig := config.NewIntervalConfig(cfg.Environment)
 
+	keyringData, err := k.GetKeyringPair()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get validator hotkey")
+		return nil
+	}
 	ctx, cancel := context.WithCancel(context.Background())
+
+	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)
 
 	return &Validator{
 		Kami:         k,
@@ -74,7 +67,7 @@ func NewValidator(
 
 		LatestBlock:     0,
 		MetagraphData:   MetagraphData{},
-		ValidatorHotkey: "",
+		ValidatorHotkey: keyringData.Data.KeyringPair.Address,
 
 		IntervalConfig:  intervalConfig,
 		ValidatorConfig: cfg,
@@ -107,15 +100,6 @@ func (v *Validator) runTicker(ctx context.Context, d time.Duration, fn func()) {
 
 // Start initializes validator hotkey and kicks off periodic routines.
 func (v *Validator) Start() {
-	keyringData, err := v.Kami.GetKeyringPair()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to get validator hotkey")
-		return
-	}
-
-	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)
-
-	v.ValidatorHotkey = keyringData.Data.KeyringPair.Address
 
 	v.Wg.Add(3)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {

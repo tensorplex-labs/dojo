@@ -15,8 +15,5 @@ func CheckIfMiner(alphaStake float64, rootStake float64) (bool, error) {
 		stakeFilter = 10000 // Production environment threshold
 	}
 
-	if effectiveStake < stakeFilter {
-		return true, nil
-	}
-	return false, nil
+	return effectiveStake < stakeFilter, nil
 }

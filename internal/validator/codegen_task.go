@@ -8,6 +8,12 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
 )
 
+const (
+	taskType             = "codeGen"
+	augmentedProbability = int64(25)
+	expireAt             = 6 * time.Hour
+)
+
 func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) {
 	synAPIQuestion, err := v.SyntheticAPI.GetQuestion()
 	if err != nil {
@@ -23,28 +29,24 @@ func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) 
 		return
 	}
 
-	var validatorContent string
-	if len(completion.Answer.Responses) > 0 {
-		resp := completion.Answer.Responses[0]
-		if len(resp.Completion.Files) > 0 {
-			validatorContent = resp.Completion.Files[0].Content
-		}
-	}
-	if validatorContent == "" {
+	if len(completion.Answer.Responses) == 0 ||
+		len(completion.Answer.Responses[0].Completion.Files) == 0 ||
+		completion.Answer.Responses[0].Completion.Files[0].Content == "" {
 		log.Error().Msgf("empty completion for question ID %s", synAPIQuestion.QaID)
 		return
 	}
+	validatorContent := completion.Answer.Responses[0].Completion.Files[0].Content
 
 	var payload taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]
-	payload.TaskType = "codeGen"
-	payload.ExpireAt = time.Now().Add(6 * time.Hour).Format(time.RFC3339)
+	payload.TaskType = taskType
+	payload.ExpireAt = time.Now().Add(expireAt).Format(time.RFC3339)
 	payload.Assignees = append(payload.Assignees, v.MetagraphData.Metagraph.Hotkeys[minerUid], v.ValidatorHotkey)
 	payload.Metadata = taskapi.CodegenTaskMetadata{
 		Prompt:              completion.Answer.Prompt,
 		ValidatorCompletion: validatorContent,
 	}
 
-	if v.shouldAugment() {
+	if v.shouldAugment(augmentedProbability) {
 		augmentedCompletion, err := v.SyntheticAPI.GetCodegenAnswer(synAPIQuestion.AnsAugID)
 		if err != nil {
 			log.Error().Err(err).Msgf("failed to get augmented answer for question ID %s", synAPIQuestion.QaID)
@@ -54,10 +56,12 @@ func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) 
 			if len(resp.Completion.Files) > 0 && len(resp.Completion.Files[0].Content) > 0 {
 				payload.Metadata.ValidatorCompletion = resp.Completion.Files[0].Content
 				validatorContent = resp.Completion.Files[0].Content
+				// TODO: change log level to debug during production
 				log.Info().Msgf("Using augmented answer for question ID %s", synAPIQuestion.QaID)
 			}
 		}
 	} else {
+		// TODO: change log level to debug during production
 		log.Info().Msgf("Not using augmented answer for question ID %s", synAPIQuestion.QaID)
 	}
 
@@ -72,8 +76,8 @@ func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) 
 		return
 	}
 	headers := taskapi.AuthHeaders{Hotkey: v.ValidatorHotkey, Signature: signature, Message: messageToSign}
-	var taskCreationResponse taskapi.Response[taskapi.CreateTaskResponse]
-	if taskCreationResponse, err = v.TaskAPI.CreateCodegenTask(headers, payload); err != nil {
+	taskCreationResponse, err := v.TaskAPI.CreateCodegenTask(headers, payload)
+	if err != nil {
 		log.Error().Err(err).Msgf("failed to create task for question %d with ID %s", index+1, synAPIQuestion.QaID)
 		return
 	}
@@ -82,8 +86,8 @@ func (v *Validator) processCodegenTask(currentRound, index int, minerUid int64) 
 
 	taskID := taskCreationResponse.Data.TaskID
 	contentToSubmit := validatorContent
-	var submitCompletionResponse taskapi.Response[taskapi.SubmitCompletionResponse]
-	if submitCompletionResponse, err = v.TaskAPI.SubmitCompletion(headers, taskID, contentToSubmit); err != nil {
+	submitCompletionResponse, err := v.TaskAPI.SubmitCompletion(headers, taskID, contentToSubmit)
+	if err != nil {
 		log.Error().Err(err).Msgf("failed to submit completion for task ID %s", taskID)
 		return
 	}
