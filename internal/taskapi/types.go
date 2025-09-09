@@ -58,20 +58,31 @@ type CodegenTaskMetadata struct {
 
 // VotesResponse represents the response structure for votes
 type VotesResponse struct {
-	Votes []VoteData `json:"votes"`
+	Tasks []VoteTaskData `json:"tasks"`
+	Total int64          `json:"total"`
 }
 
 // VoteData represents the structure of a single vote
 type VoteData struct {
-	ID                string `json:"id"`
-	VoterHotkey       string `json:"voter_hotkey"`
-	TaskID            string `json:"task_id"`
-	ChoseCompletionID string `json:"chose_completion_id"`
-	Weight            int64  `json:"weight"`
-	Tasktype          string `json:"tasktype"`
-	ValidatorHotkey   string `json:"validator_hotkey"`
-	CreatedAt         string `json:"created_at"`
-	ExpireAt          string `json:"expire_at"`
+	ID                 string  `json:"id"`
+	VoterHotkey        string  `json:"voter_hotkey"`
+	ChosenCompletionID string  `json:"chosen_completion_id"`
+	Weight             float64 `json:"weight"`
+	CreatedAt          string  `json:"created_at"`
+}
 
-	UpdatedAt string `json:"updated_at"`
+type VoteTaskData struct {
+	ID              string           `json:"id"`
+	TaskType        string           `json:"task_type"`
+	ValidatorHotkey string           `json:"validator_hotkey"`
+	ExpireAt        string           `json:"expire_at"`
+	TaskStatus      string           `json:"task_status"`
+	CreatedAt       string           `json:"created_at"`
+	Completions     []VoteCompletion `json:"completions"`
+	Votes           []VoteData       `json:"votes"`
+}
+
+type VoteCompletion struct {
+	ID                string `json:"id"`
+	ParticipantHotkey string `json:"participant_hotkey"`
 }
