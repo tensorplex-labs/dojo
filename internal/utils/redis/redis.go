@@ -23,6 +23,7 @@ type RedisInterface interface {
 	SetMulti(ctx context.Context, kv map[string]string) error
 	LRange(ctx context.Context, key string, start, stop int64) ([]string, error)
 	LLen(ctx context.Context, key string) (int64, error)
+	Del(ctx context.Context, key string) error
 }
 
 func NewRedis(cfg *config.RedisEnvConfig) (*Redis, error) {
@@ -129,4 +130,8 @@ func (r *Redis) LLen(ctx context.Context, key string) (int64, error) {
 		return 0, err
 	}
 	return resp.AsInt64()
+}
+
+func (r *Redis) Del(ctx context.Context, key string) error {
+	return r.client.Do(ctx, r.client.B().Del().Key(key).Build()).Error()
 }

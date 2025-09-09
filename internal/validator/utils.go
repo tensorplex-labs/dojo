@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/tensorplex-labs/dojo/internal/kami"
+	"github.com/tensorplex-labs/dojo/internal/taskapi"
 )
 
 func (v *Validator) shouldAugment(probability int64) bool {
@@ -46,4 +47,22 @@ func (v *Validator) signMessage(message string) (string, error) {
 	}
 
 	return resp.Data.Signature, nil
+}
+
+func (v *Validator) setupAuthHeaders() (taskapi.AuthHeaders, error) {
+	messageToSign, err := v.randomStringToSign()
+	if err != nil {
+		return taskapi.AuthHeaders{}, fmt.Errorf("failed to generate message: %w", err)
+	}
+
+	signature, err := v.signMessage(messageToSign)
+	if err != nil {
+		return taskapi.AuthHeaders{}, fmt.Errorf("failed to sign message: %w", err)
+	}
+
+	return taskapi.AuthHeaders{
+		Hotkey:    v.ValidatorHotkey,
+		Signature: signature,
+		Message:   messageToSign,
+	}, nil
 }

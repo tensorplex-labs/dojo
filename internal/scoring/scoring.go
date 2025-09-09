@@ -63,7 +63,7 @@ func CalcPvVScores(discriminators, generators, validators map[string]string) (sc
 		@param validators: map of validator addresses to their generated output ID.
 		@return scores: map of addresses to their scores
 
-		- discriminator that voted for validator output gets 1/100 score
+		- discriminator that voted for validator output gets 1/ totalDiscriminators score
 		- discriminator that voted for generator output gets nothing
 		- generator gains  1 - num_votes * 1/ totalDiscriminators
 	*/
