@@ -23,7 +23,7 @@ type TaskAPIInterface interface {
 	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
 
 	// GET requests
-	GetExpiredTasks(validatorHotkey string) (Response[VotesResponse], error)
+	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
 }
 
 // TaskAPI is a REST client wrapper for the task service.
@@ -115,13 +115,15 @@ func (t *TaskAPI) SubmitCompletion(headers AuthHeaders, taskID, completion strin
 	return out, nil
 }
 
-func (t *TaskAPI) GetExpiredTasks(validatorHotkey string) (Response[VotesResponse], error) {
+func (t *TaskAPI) GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error) {
 	var out Response[VotesResponse]
 	r := t.client.R().
-		SetHeader("X-Hotkey", validatorHotkey).
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
 		SetResult(&out)
 
-	resp, err := r.Get("/api/v1/validator/tasks/expired")
+	resp, err := r.Get("/api/v1/validator/votes/expired")
 	if err != nil {
 		return Response[VotesResponse]{}, fmt.Errorf("get expired tasks: %w", err)
 	}

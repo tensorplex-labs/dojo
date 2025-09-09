@@ -42,14 +42,13 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 
 	scores = make(map[string]float64)
 
-	// tally votes
-	voteCounts := make(map[string]int)
-	for _, vote := range discriminators {
-		voteCounts[vote]++
+	negativeOutputs := make(map[string]bool)
+	for _, outputID := range negativeGenerators {
+		negativeOutputs[outputID] = true
 	}
-	// calculate discriminator penalty scores.
+
 	for addr, vote := range discriminators {
-		if _, isNegative := negativeGenerators[vote]; isNegative {
+		if negativeOutputs[vote] {
 			scores[addr] = -1.0
 		}
 	}
@@ -64,12 +63,17 @@ func CalcPvVScores(discriminators, generators, validators map[string]string) (sc
 		@param validators: map of validator addresses to their generated output ID.
 		@return scores: map of addresses to their scores
 
-		- discriminator that voted for validator output gets 1/100 score
+		- discriminator that voted for validator output gets 1/ totalDiscriminators score
 		- discriminator that voted for generator output gets nothing
 		- generator gains  1 - num_votes * 1/ totalDiscriminators
 	*/
 
 	scores = make(map[string]float64)
+	validatorOutputs := make(map[string]bool)
+	for _, outputID := range validators {
+		validatorOutputs[outputID] = true
+	}
+
 	// tally votes
 	voteCounts := make(map[string]int)
 	for _, vote := range discriminators {
@@ -79,16 +83,14 @@ func CalcPvVScores(discriminators, generators, validators map[string]string) (sc
 	// calculate discriminator scores
 	totalDiscriminators := len(discriminators)
 	for addr, vote := range discriminators {
-		if _, isValidator := validators[vote]; isValidator {
+		if validatorOutputs[vote] {
 			scores[addr] = 1.0 / float64(totalDiscriminators)
 		}
 	}
 
 	// calculate generator scores
-	for addr, vote := range generators {
-		if _, isGenerator := generators[vote]; isGenerator {
-			scores[addr] = float64(voteCounts[addr]) * float64(1.0/totalDiscriminators)
-		}
+	for addr, outputID := range generators {
+		scores[addr] = float64(voteCounts[outputID]) * (1.0 / float64(totalDiscriminators))
 	}
 
 	return scores

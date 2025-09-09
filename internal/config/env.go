@@ -91,6 +91,7 @@ type IntervalConfig struct {
 	MetagraphInterval time.Duration
 	TaskRoundInterval time.Duration
 	BlockInterval     time.Duration
+	ScoringInterval   time.Duration
 }
 
 var (
@@ -98,17 +99,20 @@ var (
 		MetagraphInterval: 5 * time.Second,
 		TaskRoundInterval: 10 * time.Second,
 		BlockInterval:     2 * time.Second,
+		ScoringInterval:   10 * time.Second,
 	}
 	TestIntervalConfig = &IntervalConfig{
 		MetagraphInterval: 30 * time.Second,
 		TaskRoundInterval: 15 * time.Minute,
 		BlockInterval:     12 * time.Second,
+		ScoringInterval:   10 * time.Minute,
 	}
 
 	ProdIntervalConfig = &IntervalConfig{
 		MetagraphInterval: 30 * time.Second,
 		TaskRoundInterval: 15 * time.Minute,
 		BlockInterval:     12 * time.Second,
+		ScoringInterval:   10 * time.Minute,
 	}
 )
 

@@ -46,11 +46,11 @@ func testCalcTrapScores() {
 		"ng1": "n_out",
 	}
 	discriminators := map[string]string{
-		"d1": "pg1",
-		"d2": "pg1",
-		"d3": "pg1",
-		"d4": "ng1",
-		"d5": "ng1",
+		"d1": "p_out",
+		"d2": "p_out",
+		"d3": "p_out",
+		"d4": "n_out",
+		"d5": "n_out",
 	}
 
 	scores := scoring.CalcTrapScores(discriminators, positiveGenerators, negativeGenerators)
@@ -65,13 +65,14 @@ func testCalcPvVScores() {
 		"v1": "out1",
 	}
 	generators := map[string]string{
-		"g1": "out2", // Output is another generator's address to test implementation
+		"g1": "out2", // Output is another generator's completion to test implementation
 	}
 	discriminators := map[string]string{
-		"d1": "v1", // Vote for a validator's address
-		"d2": "v1", // Vote for a validator's address
-		"d3": "g1", // Vote for a generator's address
-		"d4": "v1",
+		"d1": "out1", // Vote for a validator's completion
+		"d2": "out1", // Vote for a validator's completion
+		"d3": "out2", // Vote for a generator's completion
+		"d4": "out1",
+		"d5": "out1",
 	}
 
 	scores := scoring.CalcPvVScores(discriminators, generators, validators)
