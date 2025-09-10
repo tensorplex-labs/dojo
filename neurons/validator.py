@@ -393,7 +393,8 @@ class Validator(aobject):
                     version_key=self.spec_version,
                 )
 
-                result = await self.kami.set_weights(payload)
+                # result = await self.kami.set_weights(payload)
+                result = await self.kami.set_timelocked_weights(payload)
                 if result.get("statusCode", None) == 200:
                     logger.success(f"Set weights successfully: {result.get('data')}")
                     return result
