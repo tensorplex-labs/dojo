@@ -339,3 +339,10 @@ type VerifyMessageParams struct {
 type VerifyMessage struct {
 	Valid bool `json:"valid"`
 }
+
+type SetTimelockedWeightsParams struct {
+	Netuid        int
+	Commit        string
+	RevealRound   int
+	CommitVersion int
+}

@@ -9,12 +9,12 @@ const (
 	U16MAX = 65535
 )
 
-func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) ([]int64, []int, error) {
+func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) ([]int, []int, error) {
 	if len(uids) != len(weights) {
 		return nil, nil, fmt.Errorf("uids and weights must have the same length, got %d and %d", len(uids), len(weights))
 	}
 	if len(uids) == 0 {
-		return []int64{}, []int{}, nil
+		return []int{}, []int{}, nil
 	}
 
 	maxWeight := 0.0
@@ -31,17 +31,17 @@ func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) ([]int64, []i
 	}
 
 	if maxWeight == 0 {
-		return []int64{}, []int{}, nil
+		return []int{}, []int{}, nil
 	}
 
-	weightUids := make([]int64, 0, len(uids))
+	weightUids := make([]int, 0, len(uids))
 	weightVals := make([]int, 0, len(weights))
 
 	for i, w := range weights {
 		uint16Val := int(math.Round((w / maxWeight) * float64(U16MAX)))
 
 		if uint16Val > 0 {
-			weightUids = append(weightUids, uids[i])
+			weightUids = append(weightUids, int(uids[i]))
 			weightVals = append(weightVals, uint16Val)
 		}
 	}
