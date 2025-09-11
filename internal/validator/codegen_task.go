@@ -3,7 +3,6 @@ package validator
 import (
 	"fmt"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -18,7 +17,7 @@ const (
 	expireAt                = 6 * time.Hour
 )
 
-func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners, wg *sync.WaitGroup) {
+func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners) {
 	for len(processedMiners.uids) < len(activeMinerUIDs) {
 		validatorDuel := v.shouldDuelValidator(validatorDuelProbablity)
 		var selectedMinerUIDs []int64

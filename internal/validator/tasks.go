@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 
@@ -79,10 +78,9 @@ func (v *Validator) sendTaskRound() {
 	active := len(v.MetagraphData.CurrentActiveMinerUids)
 	log.Info().Msg(fmt.Sprintf("Starting task round with %d tasks", active))
 
-	var wg sync.WaitGroup
 	var processedMiners ProcessedMiners
+	v.processCodegenTask(v.MetagraphData.CurrentActiveMinerUids, &processedMiners)
 
-	v.processCodegenTask(v.MetagraphData.CurrentActiveMinerUids, &processedMiners, &wg)
 	log.Info().Msgf("Tasks generation completed")
 	os.Exit(1) // TODO: remove
 }

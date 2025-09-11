@@ -59,15 +59,19 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 		return Response[CreateTaskResponse]{}, fmt.Errorf("marshal metadata: %w", err)
 	}
 
-	assigneeBytes, err := sonic.Marshal(req.Assignees)
-	if err != nil {
-		return Response[CreateTaskResponse]{}, fmt.Errorf("marshal assignees: %w", err)
-	}
-
 	vals := url.Values{}
 	vals.Set("task_type", req.TaskType)
 	vals.Set("metadata", string(metadataBytes))
-	vals.Set("assignees", string(assigneeBytes))
+
+	for _, assignee := range req.Assignees {
+		assigneeBytes, err := sonic.Marshal(assignee)
+		if err != nil {
+			return Response[CreateTaskResponse]{}, fmt.Errorf("marshal assignee: %w", err)
+		}
+
+		vals.Add("assignees", string(assigneeBytes))
+	}
+
 	vals.Set("expire_at", req.ExpireAt)
 
 	var r *resty.Request
