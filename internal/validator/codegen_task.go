@@ -99,13 +99,9 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 }
 
 func hasValidatorContent(completion syntheticapi.GenerateAnswerResponse[syntheticapi.CodegenAnswer]) bool {
-	if len(completion.Answer.Responses) == 0 {
-		return false
-	}
-	if len(completion.Answer.Responses[0].Completion.Files) == 0 {
-		return false
-	}
-	return completion.Answer.Responses[0].Completion.Files[0].Content != ""
+	return len(completion.Answer.Responses) > 0 &&
+		len(completion.Answer.Responses[0].Completion.Files) > 0 &&
+		completion.Answer.Responses[0].Completion.Files[0].Content != ""
 }
 
 func (v *Validator) maybeAugment(
@@ -134,12 +130,12 @@ func (v *Validator) maybeAugment(
 			log.Debug().Msgf("Using augmented answer for question ID %s", syn.QaID)
 			validatorContent = augmentedCompletion.Answer.Responses[0].Completion.Files[0].Content
 		}
-		taskAugmented = true
 	} else {
 		selectedAugmentedMiner = selectedMinerUIDs[rand.Intn(len(selectedMinerUIDs))]
 		augmentedPrompt = augmentedCompletion.Answer.Prompt
 	}
 
+	taskAugmented = true
 	return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent
 }
 
