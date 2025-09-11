@@ -15,4 +15,4 @@ jobs:
         with:
           package: dojo-v2*
           expand-packages: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT }}
