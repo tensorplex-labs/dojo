@@ -1,3 +1,5 @@
+## [1.15.9](https://github.com/tensorplex-labs/dojo/compare/v1.15.8...v1.15.9) (2025-09-11)
+
 ## [1.15.8](https://github.com/tensorplex-labs/dojo/compare/v1.15.7...v1.15.8) (2025-09-08)
 
 ## [1.15.7](https://github.com/tensorplex-labs/dojo/compare/v1.15.6...v1.15.7) (2025-09-06)
