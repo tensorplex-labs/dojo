@@ -63,7 +63,7 @@ func (v *Validator) syncBlock() {
 }
 
 func (v *Validator) startScoring() {
-	v.processTasksToScore()
+	v.processTasksToScore(v.LatestScores, v.LatestScoresStep)
 }
 
 func (v *Validator) sendTaskRound() {
@@ -156,4 +156,23 @@ func (v *Validator) checkCompletionExists(qaID string) bool {
 		return false
 	}
 	return exists != ""
+}
+
+func (v *Validator) setWeights(scores []float64) {
+	if v.LatestScoresStep < scoringStepLimit {
+		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresStep, scoringStepLimit))
+		return
+	}
+
+	uids := make([]int64, uidCount)
+	for i := range uidCount {
+		uids[i] = int64(i)
+	}
+
+	// TODO: if we want to apply random transformations such as cubic transformation
+	weights := scores
+
+	if err := v.setWeightsOnChain(uids, weights); err != nil {
+		log.Error().Err(err).Msg("failed to set weights")
+	}
 }

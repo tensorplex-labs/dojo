@@ -88,31 +88,35 @@ type ValidatorEnvConfig struct {
 }
 
 type IntervalConfig struct {
-	MetagraphInterval time.Duration
-	TaskRoundInterval time.Duration
-	BlockInterval     time.Duration
-	ScoringInterval   time.Duration
+	MetagraphInterval     time.Duration
+	TaskRoundInterval     time.Duration
+	BlockInterval         time.Duration
+	ScoringInterval       time.Duration
+	WeightSettingInterval time.Duration
 }
 
 var (
 	DevIntervalConfig = &IntervalConfig{
-		MetagraphInterval: 5 * time.Second,
-		TaskRoundInterval: 10 * time.Second,
-		BlockInterval:     2 * time.Second,
-		ScoringInterval:   10 * time.Second,
+		MetagraphInterval:     5 * time.Second,
+		TaskRoundInterval:     10 * time.Second,
+		BlockInterval:         2 * time.Second,
+		ScoringInterval:       10 * time.Second,
+		WeightSettingInterval: 40 * time.Second,
 	}
 	TestIntervalConfig = &IntervalConfig{
-		MetagraphInterval: 30 * time.Second,
-		TaskRoundInterval: 15 * time.Minute,
-		BlockInterval:     12 * time.Second,
-		ScoringInterval:   10 * time.Minute,
+		MetagraphInterval:     30 * time.Second,
+		TaskRoundInterval:     15 * time.Minute,
+		BlockInterval:         12 * time.Second,
+		ScoringInterval:       5 * time.Minute,
+		WeightSettingInterval: 20 * time.Minute,
 	}
 
 	ProdIntervalConfig = &IntervalConfig{
-		MetagraphInterval: 30 * time.Second,
-		TaskRoundInterval: 15 * time.Minute,
-		BlockInterval:     12 * time.Second,
-		ScoringInterval:   10 * time.Minute,
+		MetagraphInterval:     30 * time.Second,
+		TaskRoundInterval:     15 * time.Minute,
+		BlockInterval:         12 * time.Second,
+		ScoringInterval:       15 * time.Minute,
+		WeightSettingInterval: 60 * time.Minute,
 	}
 )
 
