@@ -43,11 +43,13 @@ type CachedTasks struct {
 	AnsAugID string `json:"ans_aug_id"`
 }
 
+
 // ProcessedMiners keeps track of miners that have already been assigned tasks for particular round
 type ProcessedMiners struct {
 	sync.Mutex
 	uids []int64
 }
+
 
 const (
 	scoresFileName   string  = "scores.json"
