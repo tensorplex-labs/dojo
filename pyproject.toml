@@ -63,7 +63,7 @@ dependencies = [
   "langfuse==2.48.0",
   'orjson==3.10.16',
   'zstandard==0.23.0',
-  "kami-client>=1.2.0",
+  "kami-client>=1.2.2",
   "dojo-messaging>=1.0.10",
   "redis-om==0.3.5"
 ]
