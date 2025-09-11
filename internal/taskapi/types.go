@@ -6,9 +6,14 @@ import "mime/multipart"
 type CreateTasksRequest[T CodegenTaskMetadata] struct {
 	TaskType  string                  `form:"task_type" json:"task_type"`
 	Metadata  T                       `form:"metadata" json:"metadata"`
-	Assignees []string                `form:"assignees" json:"assignees"`
+	Assignees []AssigneeData          `form:"assignees" json:"assignees"`
 	ExpireAt  string                  `form:"expire_at" json:"expire_at"`
 	Files     []*multipart.FileHeader `form:"files" json:"files,omitempty"`
+}
+
+type AssigneeData struct {
+	Hotkey string `form:"hotkey" json:"hotkey"`
+	Prompt string `form:"prompt" json:"prompt"`
 }
 
 // AuthHeaders represents the authentication headers required for API requests.
@@ -19,7 +24,7 @@ type AuthHeaders struct {
 }
 
 // Response represents a generic API response structure.
-type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | any] struct {
+type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -52,8 +57,8 @@ type PaginatedResponse[T any] = Response[T]
 
 // CodegenTaskMetadata represents the metadata for a codegen task
 type CodegenTaskMetadata struct {
-	Prompt              string `json:"prompt"`
-	ValidatorCompletion string `json:"validator_completion"`
+	Prompt        string `json:"prompt"`
+	ValidatorDuel bool   `json:"validator_duel"`
 }
 
 // VotesResponse represents the response structure for votes
@@ -71,6 +76,7 @@ type VoteData struct {
 	CreatedAt          string  `json:"created_at"`
 }
 
+// VoteTaskData represents the structure of a vote task
 type VoteTaskData struct {
 	ID              string           `json:"id"`
 	TaskType        string           `json:"task_type"`
@@ -82,7 +88,14 @@ type VoteTaskData struct {
 	Votes           []VoteData       `json:"votes"`
 }
 
+// VoteCompletion represents a single completion within a vote task
 type VoteCompletion struct {
 	ID                string `json:"id"`
 	ParticipantHotkey string `json:"participant_hotkey"`
+}
+
+// TaskStatusUpdateResponse represents the response data for a task status update.
+type TaskStatusUpdateResponse struct {
+	TaskID string `json:"task_id"`
+	Status string `json:"status"`
 }

@@ -95,7 +95,6 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 	}
 	log.Info().Msg("Successfully saved updated scores to scores.json")
 
-	// TODO: update task status to scored
 	v.LatestScores = updatedScores
 	v.LatestScoresStep = currentStep + 1
 	log.Info().Msgf("Processed %d tasks in %v", len(allTaskScores), time.Since(startTime))
@@ -118,6 +117,15 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 		taskScores := v.calculateSingleTaskScore(task)
 		if len(taskScores) > 0 {
 			allTaskScores[task.ID] = taskScores
+			headers, err := v.setupAuthHeaders()
+			if err != nil {
+				log.Error().Err(err).Msg("failed to setup authentication")
+				return nil
+			}
+
+			if _, err := v.TaskAPI.UpdateTaskStatus(headers, task.ID, "SCORED"); err != nil {
+				log.Error().Err(err).Msgf("failed to update task status to SCORED for task %s", task.ID)
+			}
 		}
 	}
 
