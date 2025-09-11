@@ -74,22 +74,15 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 
 	vals.Set("expire_at", req.ExpireAt)
 
-	var r *resty.Request
+	r := t.client.R().
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
+		SetFormDataFromValues(vals).
+		SetResult(&out)
+
 	if validatorCompletion != "" {
-		r = t.client.R().
-			SetHeader("X-Hotkey", headers.Hotkey).
-			SetHeader("X-Signature", headers.Signature).
-			SetHeader("X-Message", headers.Message).
-			SetFormDataFromValues(vals).
-			SetFileReader("files", "index.html", strings.NewReader(validatorCompletion)).
-			SetResult(&out)
-	} else {
-		r = t.client.R().
-			SetHeader("X-Hotkey", headers.Hotkey).
-			SetHeader("X-Signature", headers.Signature).
-			SetHeader("X-Message", headers.Message).
-			SetFormDataFromValues(vals).
-			SetResult(&out)
+		r.SetFileReader("files", "index.html", strings.NewReader(validatorCompletion))
 	}
 
 	resp, err := r.Post("/api/v1/validator/tasks")
