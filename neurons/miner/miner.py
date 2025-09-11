@@ -69,11 +69,11 @@ class Miner(aobject):
 
             logger.info("Setting up bittensor objects....")
             self.server = Server(kami=self.kami)
-            self.keyringpair = await self.kami.get_keyringpair()
+            self.keyringpair = (await self.kami.get_keyringpair()).keyringPair
             await self.register_synapse_handlers()
             await self.init_metagraphs()
             logger.info(
-                f"Miner hotkey: {self.keyringpair.hotkey} uid: {self.subnet_metagraph.hotkeys.index(self.keyringpair.hotkey)}"
+                f"Miner hotkey: {self.keyringpair.address} uid: {self.subnet_metagraph.hotkeys.index(self.keyringpair.address)}"
             )
             if not await check_redis_connection():
                 raise ConnectionError()
@@ -296,7 +296,7 @@ class Miner(aobject):
                 served_request = ServedRequest(
                     validator_task_id=synapse.task_id,
                     dojo_task_id=dojo_task_id,
-                    hotkey=self.keyringpair.hotkey,
+                    hotkey=self.keyringpair.address,
                 )
                 try:
                     # 1. Save first
@@ -340,7 +340,7 @@ class Miner(aobject):
         try:
             served_request = ServedRequest.find(
                 ServedRequest.validator_task_id == synapse.validator_task_id,
-                ServedRequest.hotkey == self.keyringpair.hotkey,
+                ServedRequest.hotkey == self.keyringpair.address,
             ).first()
             if not served_request:
                 message = f"Did not serve request from validator with {synapse.validator_task_id}"
@@ -446,12 +446,12 @@ class Miner(aobject):
     async def check_registered(self):
         is_member = await self.kami.is_hotkey_registered(
             netuid=int(self.config.netuid),  # type: ignore
-            hotkey=str(self.keyringpair.hotkey),
+            hotkey=str(self.ke.keyringpair.address),
             # block=int(self.block),
         )
         if not is_member:
             logger.error(
-                f"Hotkey: {self.keyringpair.hotkey} is not registered on netuid {self.config.netuid}."
+                f"Hotkey: {self.ke.keyringpair.address} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli s register` before trying again"
             )
             await self._cleanup()
@@ -468,7 +468,7 @@ class Miner(aobject):
         """
         Check if the axon is served successfully.
         """
-        hotkey = self.keyringpair.hotkey
+        hotkey = self.keyringpair.address
         uid = self.subnet_metagraph.hotkeys.index(hotkey)
         current_axon: AxonInfo = self.subnet_metagraph.axons[uid]
         current_axon_ip: str = current_axon.ip

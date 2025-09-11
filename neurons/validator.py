@@ -15,6 +15,7 @@ import aiohttp
 import numpy as np
 import torch
 from kami import AxonInfo, KamiClient, SetWeightsPayload, SubnetMetagraph
+from kami.types import KeyringPair
 from loguru import logger
 from messaging import Client, StdResponse, get_client
 from torch.nn import functional as F
@@ -123,11 +124,11 @@ class Validator(aobject):
         self.metagraph = await self.kami.get_metagraph(self.config.netuid)
         logger.info(f"Metagraph Loaded for {self.metagraph.netuid}")
 
-        self.keyringpair = await self.kami.get_keyringpair()
-        self.client = Client(hotkey=self.keyringpair.hotkey, session=get_client())
-        self.uid = self.metagraph.hotkeys.index(self.keyringpair.hotkey)
+        self.keyringpair: KeyringPair = (await self.kami.get_keyringpair()).keyringPair
+        self.client = Client(hotkey=self.keyringpair.address, session=get_client())
+        self.uid = self.metagraph.hotkeys.index(self.keyringpair.address)
         logger.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} with hotkey {self.keyringpair.hotkey}"
+            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} with hotkey {self.keyringpair.address}"
         )
 
         self.step = 0
@@ -1155,11 +1156,11 @@ class Validator(aobject):
     async def check_registered(self):
         is_registered = await self.kami.is_hotkey_registered(
             netuid=int(self.config.netuid),  # type: ignore
-            hotkey=str(self.keyringpair.hotkey),
+            hotkey=str(self.keyringpair.address),
         )
         if not is_registered:
             logger.error(
-                f"Hotkey {self.keyringpair.hotkey} is not registered on netuid {self.config.netuid}."
+                f"Hotkey {self.keyringpair.address} is not registered on netuid {self.config.netuid}."
                 f" Please register the hotkey using `btcli s register` before trying again"
             )
             await self.cleanup()
