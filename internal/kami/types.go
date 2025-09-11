@@ -268,7 +268,7 @@ type SubnetHyperparams struct {
 	MaxWeightsLimit            int     `json:"maxWeightsLimit"`
 	Tempo                      int     `json:"tempo"`
 	MinDifficulty              int64   `json:"minDifficulty"`
-	MaxDifficulty              int64   `json:"maxDifficulty"`
+	MaxDifficulty              any     `json:"maxDifficulty"`
 	WeightsVersion             int     `json:"weightsVersion"`
 	WeightsRateLimit           int     `json:"weightsRateLimit"`
 	AdjustmentInterval         int     `json:"adjustmentInterval"`
@@ -281,7 +281,7 @@ type SubnetHyperparams struct {
 	MaxRegsPerBlock            int     `json:"maxRegsPerBlock"`
 	ServingRateLimit           int     `json:"servingRateLimit"`
 	MaxValidators              int     `json:"maxValidators"`
-	AdjustmentAlpha            string  `json:"adjustmentAlpha"`
+	AdjustmentAlpha            any     `json:"adjustmentAlpha"`
 	Difficulty                 int64   `json:"difficulty"`
 	CommitRevealPeriod         int     `json:"commitRevealPeriod"`
 	CommitRevealWeightsEnabled bool    `json:"commitRevealWeightsEnabled"`
@@ -341,8 +341,8 @@ type VerifyMessage struct {
 }
 
 type SetTimelockedWeightsParams struct {
-	Netuid        int
-	Commit        string
-	RevealRound   int
-	CommitVersion int
+	Netuid              int    `json:"netuid"`
+	Commit              string `json:"commit"`
+	RevealRound         int    `json:"revealRound"`
+	CommitRevealVersion int    `json:"commitRevealVersion"`
 }

@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/rs/zerolog/log"
+
 	"github.com/tensorplex-labs/dojo/internal/kami"
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
 	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
@@ -72,16 +73,17 @@ func (v *Validator) setupAuthHeaders() (taskapi.AuthHeaders, error) {
 
 // TODO implement version key
 
-func (v *Validator) setWeights(uids []int64, weights []float64) (string, error) {
-
+func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 	convertedUids, convertedWeights, err := chainutils.ConvertWeightsAndUidsForEmit(uids, weights)
 	if err != nil {
-		return "", fmt.Errorf("failed to convert weights and uids: %w", err)
+		return fmt.Errorf("failed to convert weights and uids: %w", err)
 	}
+
+	log.Info().Msgf("Setting weights on chain: uids: %v, weights: %v", convertedUids, convertedWeights)
 
 	subnetHyperparams, err := v.Kami.GetSubnetHyperparams(v.MetagraphData.Metagraph.Netuid)
 	if err != nil {
-		return "", fmt.Errorf("failed to get subnet hyperparams: %w", err)
+		return fmt.Errorf("failed to get subnet hyperparams: %w", err)
 	}
 
 	if subnetHyperparams.Data.CommitRevealWeightsEnabled {
@@ -89,7 +91,7 @@ func (v *Validator) setWeights(uids []int64, weights []float64) (string, error) 
 		revealPeriod := subnetHyperparams.Data.CommitRevealPeriod
 
 		if tempo == 0 || revealPeriod == 0 {
-			return "", fmt.Errorf("tempo or reveal period is not set")
+			return fmt.Errorf("tempo or reveal period is not set")
 		}
 
 		log.Info().Msgf("Commit reveal weights enabled: tempo: %d, reveal_period: %d", tempo, revealPeriod)
@@ -104,7 +106,7 @@ func (v *Validator) setWeights(uids []int64, weights []float64) (string, error) 
 		// 	v.ValidatorConfig.Netuid,
 		// 	revealPeriod,
 		// 	12.0,
-		// 	v.ValidatorHotkey,
+		// 	v.ValidatorHotkey, // TODO: needs to be in bytes!
 		// )
 
 		commit_for_reveal := "test"
@@ -114,17 +116,16 @@ func (v *Validator) setWeights(uids []int64, weights []float64) (string, error) 
 		log.Info().Msgf("Reveal round: %d", reveal_round)
 
 		_, err = v.Kami.SetTimelockedWeights(kami.SetTimelockedWeightsParams{
-			Netuid:        v.MetagraphData.Metagraph.Netuid,
-			Commit:        hex.EncodeToString([]byte(commit_for_reveal)),
-			RevealRound:   reveal_round,
-			CommitVersion: 4,
+			Netuid:              v.MetagraphData.Metagraph.Netuid,
+			Commit:              hex.EncodeToString([]byte(commit_for_reveal)),
+			RevealRound:         reveal_round,
+			CommitRevealVersion: 4,
 		})
-
 		if err != nil {
-			return "", fmt.Errorf("failed to set timelocked weights: %w", err)
+			return fmt.Errorf("failed to set timelocked weights: %w", err)
 		}
 
-		return "", nil
+		return nil
 
 	}
 
@@ -135,9 +136,8 @@ func (v *Validator) setWeights(uids []int64, weights []float64) (string, error) 
 		VersionKey: 1,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to set weights: %w", err)
+		return fmt.Errorf("failed to set weights: %w", err)
 	}
 
-	return "", nil
-
+	return nil
 }
