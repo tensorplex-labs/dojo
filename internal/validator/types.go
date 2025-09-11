@@ -11,10 +11,11 @@ import (
 
 // IntervalConfig groups ticker intervals used by the validator runtime.
 type IntervalConfig struct {
-	HeartbeatInterval time.Duration
-	MetagraphInterval time.Duration
-	TaskRoundInterval time.Duration
-	BlockInterval     time.Duration
+	HeartbeatInterval     time.Duration
+	MetagraphInterval     time.Duration
+	TaskRoundInterval     time.Duration
+	BlockInterval         time.Duration
+	WeightSettingInterval time.Duration
 }
 
 // MetagraphData holds the current subnet metagraph and derived runtime data.
@@ -46,4 +47,14 @@ type CachedTasks struct {
 type ProcessedMiners struct {
 	sync.Mutex
 	uids []int64
+const (
+	scoresFileName   string  = "scores.json"
+	decayFactor      float32 = 0.9
+	uidCount         int     = 256
+	scoringStepLimit int     = 4
+)
+
+type ScoresFileData struct {
+	Scores []float64 `json:"scores"`
+	Step   int       `json:"step"`
 }

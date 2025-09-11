@@ -4,10 +4,12 @@ package validator
 
 import (
 	"context"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/rs/zerolog/log"
 
 	"github.com/tensorplex-labs/dojo/internal/config"
@@ -25,9 +27,11 @@ type Validator struct {
 	SyntheticAPI syntheticapi.SyntheticAPIInterface
 
 	// Chain global state
-	LatestBlock     int64
-	MetagraphData   MetagraphData
-	ValidatorHotkey string
+	LatestBlock      int64
+	MetagraphData    MetagraphData
+	ValidatorHotkey  string
+	LatestScores     []float64
+	LatestScoresStep int
 
 	IntervalConfig  *config.IntervalConfig     // used for heartbeat and task round intervals
 	ValidatorConfig *config.ValidatorEnvConfig // configuration for the validator
@@ -55,6 +59,18 @@ func NewValidator(
 		log.Error().Err(err).Msg("failed to get validator hotkey")
 		return nil
 	}
+
+	scoresFile, err := os.ReadFile(scoresFileName)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to load scores from file")
+		return nil
+	}
+	var latestScoresFileData ScoresFileData
+	if err := sonic.Unmarshal(scoresFile, &latestScoresFileData); err != nil {
+		log.Error().Err(err).Msg("failed to unmarshal scores from file")
+		return nil
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)
@@ -65,9 +81,11 @@ func NewValidator(
 		Redis:        r,
 		SyntheticAPI: s,
 
-		LatestBlock:     0,
-		MetagraphData:   MetagraphData{},
-		ValidatorHotkey: keyringData.Data.KeyringPair.Address,
+		LatestBlock:      0,
+		MetagraphData:    MetagraphData{},
+		ValidatorHotkey:  keyringData.Data.KeyringPair.Address,
+		LatestScores:     latestScoresFileData.Scores,
+		LatestScoresStep: latestScoresFileData.Step,
 
 		IntervalConfig:  intervalConfig,
 		ValidatorConfig: cfg,
@@ -100,7 +118,7 @@ func (v *Validator) runTicker(ctx context.Context, d time.Duration, fn func()) {
 
 // Start initializes validator hotkey and kicks off periodic routines.
 func (v *Validator) Start() {
-	v.Wg.Add(4)
+	v.Wg.Add(5)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {
 		v.sendTaskRound()
 	})
@@ -115,6 +133,10 @@ func (v *Validator) Start() {
 
 	go v.runTicker(v.Ctx, v.IntervalConfig.ScoringInterval, func() {
 		v.startScoring()
+	})
+
+	go v.runTicker(v.Ctx, v.IntervalConfig.WeightSettingInterval, func() {
+		v.setWeights(v.LatestScores)
 	})
 }
 

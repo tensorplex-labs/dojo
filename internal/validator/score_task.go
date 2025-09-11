@@ -7,7 +7,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/rs/zerolog/log"
+
 	"github.com/tensorplex-labs/dojo/internal/scoring"
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
 )
@@ -22,7 +24,16 @@ type CompletionMaps struct {
 	negativeGenerators map[string]string
 }
 
-func (v *Validator) processTasksToScore() {
+func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep int) {
+	currentStep := latestScoresStep
+
+	if currentStep >= scoringStepLimit {
+		log.Info().Msg("Initializing scores")
+		v.initializeScores(scoresFileName)
+		currentStep = 0
+		latestScores = make([]float64, uidCount)
+	}
+
 	startTime := time.Now()
 
 	headers, err := v.setupAuthHeaders()
@@ -50,9 +61,44 @@ func (v *Validator) processTasksToScore() {
 		return
 	}
 
-	// TODO: update task status to scored
-	log.Info().Msgf("Processed %d tasks in %v", len(allTaskScores), time.Since(startTime))
+	// TO REMOVE AFTER TESTING
+	// allTaskScoresData, err := os.ReadFile("all_task_scores.json")
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("failed to read all_task_scores.json")
+	// 	return
+	// }
 
+	// if err := sonic.Unmarshal(allTaskScoresData, &allTaskScores); err != nil {
+	// 	log.Error().Err(err).Msg("failed to unmarshal all_task_scores.json")
+	// 	return
+	// }
+	// log.Info().Msg("Successfully loaded scores from all_task_scores.json")
+
+	updatedScores, err := v.updateScores(allTaskScores, latestScores)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to update scores")
+		return
+	}
+
+	updatedScoresJSON, err := sonic.Marshal(ScoresFileData{
+		Scores: updatedScores,
+		Step:   currentStep + 1,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("failed to marshal updated scores")
+		return
+	}
+
+	if err := os.WriteFile(scoresFileName, updatedScoresJSON, 0o644); err != nil {
+		log.Error().Err(err).Msg("failed to write scores.json")
+		return
+	}
+	log.Info().Msg("Successfully saved updated scores to scores.json")
+
+	// TODO: update task status to scored
+	v.LatestScores = updatedScores
+	v.LatestScoresStep = currentStep + 1
+	log.Info().Msgf("Processed %d tasks in %v", len(allTaskScores), time.Since(startTime))
 }
 
 func (v *Validator) fetchTasksToScore(headers taskapi.AuthHeaders) ([]taskapi.VoteTaskData, error) {
@@ -174,7 +220,7 @@ func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]flo
 			existingScores = make(map[string]map[string]float64)
 		} else {
 			backupName := fmt.Sprintf("%s.backup", filename)
-			if backupErr := os.WriteFile(backupName, existingData, 0644); backupErr != nil {
+			if backupErr := os.WriteFile(backupName, existingData, 0o644); backupErr != nil {
 				log.Warn().Err(backupErr).Msg("Failed to create backup of existing scores file")
 			} else {
 				log.Info().Msgf("Created backup: %s", backupName)
@@ -191,10 +237,49 @@ func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]flo
 		return fmt.Errorf("failed to marshal task scores: %w", err)
 	}
 
-	if err := os.WriteFile(filename, jsonData, 0644); err != nil {
+	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
 		return fmt.Errorf("failed to write scores to file: %w", err)
 	}
 
 	log.Info().Msgf("Successfully saved scores for %d tasks to %s", len(allTaskScores), filename)
 	return nil
+}
+
+func (v *Validator) initializeScores(filename string) {
+	scoresFileDataInitialState := ScoresFileData{
+		Scores: make([]float64, uidCount),
+		Step:   0,
+	}
+
+	// overwrite the file with 0 scores and 0 step
+	jsonData, err := sonic.MarshalIndent(scoresFileDataInitialState, "", "  ")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to marshal scores file data")
+		return
+	}
+	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
+		log.Error().Err(err).Msg("failed to write scores to file")
+		return
+	}
+}
+
+func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, latestScores []float64) ([]float64, error) {
+	updatedScores := latestScores
+
+	hotkeyToUID := make(map[string]int)
+	for uid, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
+		hotkeyToUID[hotkey] = uid
+	}
+
+	for taskID, taskScores := range allTaskScores {
+		for hotkey, score := range taskScores {
+			if uid, exists := hotkeyToUID[hotkey]; exists {
+				updatedScores[uid] += score
+			} else {
+				log.Warn().Str("hotkey", hotkey).Str("taskID", taskID).Msg("hotkey not found in metagraph")
+			}
+		}
+	}
+
+	return updatedScores, nil
 }

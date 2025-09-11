@@ -18,11 +18,13 @@ import (
 type KamiInterface interface {
 	ServeAxon(ServeAxonParams) (ExtrinsicHashResponse, error)
 	GetMetagraph(netuid int) (SubnetMetagraphResponse, error)
+	GetSubnetHyperparams(netuid int) (SubnetHyperparamsResponse, error)
 	SetWeights(SetWeightsParams) (ExtrinsicHashResponse, error)
 	SignMessage(SignMessageParams) (SignMessageResponse, error)
 	VerifyMessage(VerifyMessageParams) (VerifyMessageResponse, error)
 	GetKeyringPair() (KeyringPairInfoResponse, error)
 	GetLatestBlock() (LatestBlockResponse, error)
+	SetTimelockedWeights(SetTimelockedWeightsParams) (ExtrinsicHashResponse, error)
 }
 
 // Kami is a client wrapper for the Kami HTTP API.
@@ -111,6 +113,12 @@ func (k *Kami) GetMetagraph(netuid int) (SubnetMetagraphResponse, error) {
 	return getJSON[SubnetMetagraph](k.client, path)
 }
 
+// GetSubnetHyperparams fetches the subnet hyperparams for the given netuid.
+func (k *Kami) GetSubnetHyperparams(netuid int) (SubnetHyperparamsResponse, error) {
+	path := fmt.Sprintf("/chain/subnet-hyperparameters/%d", netuid)
+	return getJSON[SubnetHyperparams](k.client, path)
+}
+
 // GetLatestBlock retrieves the latest block details from the chain.
 func (k *Kami) GetLatestBlock() (LatestBlockResponse, error) {
 	return getJSON[LatestBlock](k.client, "/chain/latest-block")
@@ -119,6 +127,11 @@ func (k *Kami) GetLatestBlock() (LatestBlockResponse, error) {
 // SetWeights sets the subnet weights and returns the extrinsic hash response.
 func (k *Kami) SetWeights(params SetWeightsParams) (ExtrinsicHashResponse, error) {
 	return postJSON[string](k.client, "/chain/set-weights", params)
+}
+
+// SetTimelockedWeights sets the subnet timelocked weights and returns the extrinsic hash response.
+func (k *Kami) SetTimelockedWeights(params SetTimelockedWeightsParams) (ExtrinsicHashResponse, error) {
+	return postJSON[string](k.client, "/chain/set-timelocked-weights", params)
 }
 
 // SignMessage signs an arbitrary message with the node's keypair.
