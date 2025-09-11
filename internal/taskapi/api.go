@@ -24,7 +24,7 @@ type TaskAPIInterface interface {
 
 	// GET requests
 	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
-	UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[any], error)
+	UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[TaskStatusUpdateResponse], error)
 }
 
 // TaskAPI is a REST client wrapper for the task service.
@@ -146,8 +146,8 @@ func (t *TaskAPI) GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse],
 	return out, nil
 }
 
-func (t *TaskAPI) UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[any], error) {
-	var out Response[any]
+func (t *TaskAPI) UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[TaskStatusUpdateResponse], error) {
+	var out Response[TaskStatusUpdateResponse]
 
 	vals := url.Values{}
 	vals.Set("status", status)
@@ -161,10 +161,10 @@ func (t *TaskAPI) UpdateTaskStatus(headers AuthHeaders, taskID, status string) (
 
 	resp, err := r.Put(fmt.Sprintf("/api/v1/validator/tasks/%s/status", taskID))
 	if err != nil {
-		return Response[any]{}, fmt.Errorf("update task status: %w", err)
+		return Response[TaskStatusUpdateResponse]{}, fmt.Errorf("update task status: %w", err)
 	}
 	if resp.IsError() {
-		return Response[any]{}, fmt.Errorf("update task status returned status %d: %s",
+		return Response[TaskStatusUpdateResponse]{}, fmt.Errorf("update task status returned status %d: %s",
 			resp.StatusCode(), resp.String())
 	}
 	return out, nil

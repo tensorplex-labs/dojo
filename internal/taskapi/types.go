@@ -24,7 +24,7 @@ type AuthHeaders struct {
 }
 
 // Response represents a generic API response structure.
-type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | any] struct {
+type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -76,6 +76,7 @@ type VoteData struct {
 	CreatedAt          string  `json:"created_at"`
 }
 
+// VoteTaskData represents the structure of a vote task
 type VoteTaskData struct {
 	ID              string           `json:"id"`
 	TaskType        string           `json:"task_type"`
@@ -87,7 +88,14 @@ type VoteTaskData struct {
 	Votes           []VoteData       `json:"votes"`
 }
 
+// VoteCompletion represents a single completion within a vote task
 type VoteCompletion struct {
 	ID                string `json:"id"`
 	ParticipantHotkey string `json:"participant_hotkey"`
+}
+
+// TaskStatusUpdateResponse represents the response data for a task status update.
+type TaskStatusUpdateResponse struct {
+	TaskID string `json:"task_id"`
+	Status string `json:"status"`
 }
