@@ -63,7 +63,7 @@ miner:
 
 validator:
 	-@docker cp validator:/app/scores/miner_scores.pt ./scores/miner_scores.pt || true
-	docker compose -f docker-compose.validator.yaml up -d validator
+	docker compose -f docker-compose.validator.yaml up -d validator --pull always
 
 validator-up-deps:
 	docker compose -f docker-compose.validator.yaml up -d --build synthetic-api postgres prisma-setup-vali
