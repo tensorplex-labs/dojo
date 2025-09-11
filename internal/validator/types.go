@@ -47,6 +47,8 @@ type CachedTasks struct {
 type ProcessedMiners struct {
 	sync.Mutex
 	uids []int64
+}
+
 const (
 	scoresFileName   string  = "scores.json"
 	decayFactor      float32 = 0.9

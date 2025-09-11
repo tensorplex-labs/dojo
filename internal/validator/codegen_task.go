@@ -48,11 +48,13 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 
 		validatorContent := completion.Answer.Responses[0].Completion.Files[0].Content
+		var taskMetadata taskapi.CodegenTaskMetadata
 		payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
 			TaskType: taskType,
 			ExpireAt: time.Now().Add(expireAt).Format(time.RFC3339),
-			Metadata: taskapi.CodegenTaskMetadata{Prompt: completion.Answer.Prompt},
 		}
+
+		taskMetadata.Prompt = synAPIQuestion.Prompt
 
 		taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent := v.maybeAugment(shouldDuelValidator, synAPIQuestion, selectedMinerUIDs, validatorContent)
 
@@ -67,7 +69,12 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		content := ""
 		if shouldDuelValidator {
 			content = validatorContent
+			taskMetadata.ValidatorDuel = true
+		} else {
+			taskMetadata.ValidatorDuel = false
 		}
+
+		payload.Metadata = taskMetadata
 
 		taskCreationResponse, err := v.TaskAPI.CreateCodegenTask(headers, payload, content)
 		if err != nil {
