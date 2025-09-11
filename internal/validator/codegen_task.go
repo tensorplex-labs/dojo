@@ -48,18 +48,18 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 
 		validatorContent := completion.Answer.Responses[0].Completion.Files[0].Content
+
+		taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent := v.maybeAugment(shouldDuelValidator, synAPIQuestion, selectedMinerUIDs, validatorContent)
+
 		payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
-			TaskType: taskType,
-			ExpireAt: time.Now().Add(expireAt).Format(time.RFC3339),
+			TaskType:  taskType,
+			ExpireAt:  time.Now().Add(expireAt).Format(time.RFC3339),
+			Assignees: v.buildAssignees(synAPIQuestion.Prompt, selectedMinerUIDs, shouldDuelValidator, taskAugmented, selectedAugmentedMiner, augmentedPrompt),
 			Metadata: taskapi.CodegenTaskMetadata{
 				Prompt:        synAPIQuestion.Prompt,
 				ValidatorDuel: shouldDuelValidator,
 			},
 		}
-
-		taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent := v.maybeAugment(shouldDuelValidator, synAPIQuestion, selectedMinerUIDs, validatorContent)
-
-		payload.Assignees = v.buildAssignees(synAPIQuestion.Prompt, selectedMinerUIDs, shouldDuelValidator, taskAugmented, selectedAugmentedMiner, augmentedPrompt)
 
 		headers, err := v.setupAuthHeaders()
 		if err != nil {
