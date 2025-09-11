@@ -137,7 +137,7 @@ func (v *Validator) maybeAugment(
 		}
 		taskAugmented = true
 	} else {
-		selectedAugmentedMiner = selectedMinerUIDs[time.Now().UnixNano()%int64(len(selectedMinerUIDs))]
+		selectedAugmentedMiner = selectedMinerUIDs[rand.Intn(len(selectedMinerUIDs))]
 		augmentedPrompt = augmentedCompletion.Answer.Prompt
 	}
 
