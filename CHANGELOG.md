@@ -1,3 +1,9 @@
+## [1.15.10](https://github.com/tensorplex-labs/dojo/compare/v1.15.9...v1.15.10) (2025-09-11)
+
+### Bug Fixes
+
+* bumped kami-client version with latest fix ([7b8a4a8](https://github.com/tensorplex-labs/dojo/commit/7b8a4a843d9323ac4a5934e65760d78d5124f423))
+
 ## [1.15.9](https://github.com/tensorplex-labs/dojo/compare/v1.15.8...v1.15.9) (2025-09-11)
 
 ## [1.15.8](https://github.com/tensorplex-labs/dojo/compare/v1.15.7...v1.15.8) (2025-09-08)
