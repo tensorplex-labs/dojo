@@ -1,3 +1,9 @@
+## [1.15.13](https://github.com/tensorplex-labs/dojo/compare/v1.15.12...v1.15.13) (2025-09-11)
+
+### Bug Fixes
+
+* update keypair model ([b95c0d9](https://github.com/tensorplex-labs/dojo/commit/b95c0d97af03bff8a0a42f5e6917516b1abe50d2))
+
 ## [1.15.12](https://github.com/tensorplex-labs/dojo/compare/v1.15.11...v1.15.12) (2025-09-11)
 
 ## [1.15.11](https://github.com/tensorplex-labs/dojo/compare/v1.15.10...v1.15.11) (2025-09-11)
