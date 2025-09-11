@@ -13,6 +13,6 @@ jobs:
       - name: Ghcr.io Cleanup Action
         uses: dataaxiom/ghcr-cleanup-action@v1.0.16
         with:
-          package: dojo-v2*
+          packages: dojo-v2*
           expand-packages: true
           token: ${{ secrets.PAT }}
