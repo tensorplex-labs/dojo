@@ -20,81 +20,79 @@ const (
 )
 
 func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners) {
-	if len(processedMiners.uids) >= len(activeMinerUIDs) {
-		log.Info().Msg("All miners have been processed")
-		return
-	}
+	for len(processedMiners.uids) < len(activeMinerUIDs) {
 
-	shouldDuelValidator := v.rollProbability(validatorDuelProbablity)
-	count := 2
-	if shouldDuelValidator {
-		count = 1
-	}
-	selectedMinerUIDs := v.pickRandomMiners(activeMinerUIDs, count, processedMiners)
+		shouldDuelValidator := v.rollProbability(validatorDuelProbablity)
+		count := 2
+		if shouldDuelValidator {
+			count = 1
+		}
+		selectedMinerUIDs := v.pickRandomMiners(activeMinerUIDs, count, processedMiners)
 
-	synAPIQuestion, err := v.SyntheticAPI.GetQuestion()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to get question from synthetic API")
-		return
-	}
-	log.Debug().Msgf("Received question: %s of id: %s", synAPIQuestion.Prompt, synAPIQuestion.QaID)
-	log.Debug().Msgf("Processing question with ID %s for duel %+v", synAPIQuestion.QaID, selectedMinerUIDs)
+		synAPIQuestion, err := v.SyntheticAPI.GetQuestion()
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get question from synthetic API")
+			return
+		}
+		log.Debug().Msgf("Received question: %s of id: %s", synAPIQuestion.Prompt, synAPIQuestion.QaID)
+		log.Debug().Msgf("Processing question with ID %s for duel %+v", synAPIQuestion.QaID, selectedMinerUIDs)
 
-	completion, err := v.SyntheticAPI.GetCodegenAnswer(synAPIQuestion.QaID)
-	if err != nil {
-		log.Error().Err(err).Msgf("failed to get answer for question ID %s", synAPIQuestion.QaID)
-		return
-	}
-	if !hasValidatorContent(completion) {
-		log.Error().Msgf("empty completion for question ID %s", synAPIQuestion.QaID)
-		return
-	}
-
-	validatorContent := completion.Answer.Responses[0].Completion.Files[0].Content
-	payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
-		TaskType: taskType,
-		ExpireAt: time.Now().Add(expireAt).Format(time.RFC3339),
-		Metadata: taskapi.CodegenTaskMetadata{Prompt: completion.Answer.Prompt},
-	}
-
-	taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent := v.maybeAugment(shouldDuelValidator, synAPIQuestion, selectedMinerUIDs, validatorContent)
-
-	payload.Assignees = v.buildAssignees(synAPIQuestion.Prompt, selectedMinerUIDs, shouldDuelValidator, taskAugmented, selectedAugmentedMiner, augmentedPrompt)
-
-	headers, err := v.setupAuthHeaders()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to sign message")
-		return
-	}
-
-	content := ""
-	if shouldDuelValidator {
-		content = validatorContent
-	}
-
-	taskCreationResponse, err := v.TaskAPI.CreateCodegenTask(headers, payload, content)
-	if err != nil {
-		log.Error().Err(err).Msgf("failed to create task for question with ID %s for %+v ", synAPIQuestion.QaID, selectedMinerUIDs)
-		return
-	}
-
-	if taskAugmented {
-		trapValue := v.ValidatorHotkey
-		if !shouldDuelValidator {
-			trapValue = v.MetagraphData.Metagraph.Hotkeys[selectedAugmentedMiner]
+		completion, err := v.SyntheticAPI.GetCodegenAnswer(synAPIQuestion.QaID)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed to get answer for question ID %s", synAPIQuestion.QaID)
+			return
+		}
+		if !hasValidatorContent(completion) {
+			log.Error().Msgf("empty completion for question ID %s", synAPIQuestion.QaID)
+			return
 		}
 
-		if err = v.Redis.Set(v.Ctx, fmt.Sprintf("trap:%s", taskCreationResponse.Data.TaskID), trapValue, 0); err != nil {
-			log.Error().Err(err).Msgf("failed to set trap for task ID %s", taskCreationResponse.Data.TaskID)
+		validatorContent := completion.Answer.Responses[0].Completion.Files[0].Content
+		payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
+			TaskType: taskType,
+			ExpireAt: time.Now().Add(expireAt).Format(time.RFC3339),
+			Metadata: taskapi.CodegenTaskMetadata{Prompt: completion.Answer.Prompt},
+		}
+
+		taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent := v.maybeAugment(shouldDuelValidator, synAPIQuestion, selectedMinerUIDs, validatorContent)
+
+		payload.Assignees = v.buildAssignees(synAPIQuestion.Prompt, selectedMinerUIDs, shouldDuelValidator, taskAugmented, selectedAugmentedMiner, augmentedPrompt)
+
+		headers, err := v.setupAuthHeaders()
+		if err != nil {
+			log.Error().Err(err).Msg("failed to sign message")
+			return
+		}
+
+		content := ""
+		if shouldDuelValidator {
+			content = validatorContent
+		}
+
+		taskCreationResponse, err := v.TaskAPI.CreateCodegenTask(headers, payload, content)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed to create task for question with ID %s for %+v ", synAPIQuestion.QaID, selectedMinerUIDs)
+			return
+		}
+
+		if taskAugmented {
+			trapValue := v.ValidatorHotkey
+			if !shouldDuelValidator {
+				trapValue = v.MetagraphData.Metagraph.Hotkeys[selectedAugmentedMiner]
+			}
+
+			if err = v.Redis.Set(v.Ctx, fmt.Sprintf("trap:%s", taskCreationResponse.Data.TaskID), trapValue, 0); err != nil {
+				log.Error().Err(err).Msgf("failed to set trap for task ID %s", taskCreationResponse.Data.TaskID)
+			} else {
+				log.Debug().Msgf("Set trap for task ID %s", taskCreationResponse.Data.TaskID)
+			}
+		}
+
+		if shouldDuelValidator {
+			log.Debug().Msgf("Created task for %d and validator\n", selectedMinerUIDs[0])
 		} else {
-			log.Debug().Msgf("Set trap for task ID %s", taskCreationResponse.Data.TaskID)
+			log.Debug().Msgf("Created task for %+v\n", selectedMinerUIDs)
 		}
-	}
-
-	if shouldDuelValidator {
-		log.Debug().Msgf("Created task for %d and validator\n", selectedMinerUIDs[0])
-	} else {
-		log.Debug().Msgf("Created task for %+v\n", selectedMinerUIDs)
 	}
 }
 
