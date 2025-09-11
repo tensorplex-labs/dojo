@@ -3,6 +3,7 @@
 package validator
 
 import (
+	"sync"
 	"time"
 
 	"github.com/tensorplex-labs/dojo/internal/kami"
@@ -39,4 +40,10 @@ type CachedTasks struct {
 	Question string `json:"question"`
 	QaID     string `json:"qa_id"`
 	AnsAugID string `json:"ans_aug_id"`
+}
+
+// ProcessedMiners keeps track of miners that have already been assigned tasks for particular round
+type ProcessedMiners struct {
+	sync.Mutex
+	uids []int64
 }

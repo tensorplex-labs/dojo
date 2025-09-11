@@ -6,9 +6,14 @@ import "mime/multipart"
 type CreateTasksRequest[T CodegenTaskMetadata] struct {
 	TaskType  string                  `form:"task_type" json:"task_type"`
 	Metadata  T                       `form:"metadata" json:"metadata"`
-	Assignees []string                `form:"assignees" json:"assignees"`
+	Assignees []AssigneeData          `form:"assignees" json:"assignees"`
 	ExpireAt  string                  `form:"expire_at" json:"expire_at"`
 	Files     []*multipart.FileHeader `form:"files" json:"files,omitempty"`
+}
+
+type AssigneeData struct {
+	Hotkey string `form:"hotkey" json:"hotkey"`
+	Prompt string `form:"prompt" json:"prompt"`
 }
 
 // AuthHeaders represents the authentication headers required for API requests.

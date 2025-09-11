@@ -24,6 +24,7 @@ type TaskAPIInterface interface {
 
 	// GET requests
 	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
+	UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[any], error)
 }
 
 // TaskAPI is a REST client wrapper for the task service.
@@ -58,22 +59,34 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 		return Response[CreateTaskResponse]{}, fmt.Errorf("marshal metadata: %w", err)
 	}
 
+	assigneeBytes, err := sonic.Marshal(req.Assignees)
+	if err != nil {
+		return Response[CreateTaskResponse]{}, fmt.Errorf("marshal assignees: %w", err)
+	}
+
 	vals := url.Values{}
 	vals.Set("task_type", req.TaskType)
 	vals.Set("metadata", string(metadataBytes))
-
-	for _, a := range req.Assignees {
-		vals.Add("assignees", a)
-	}
+	vals.Set("assignees", string(assigneeBytes))
 	vals.Set("expire_at", req.ExpireAt)
 
-	r := t.client.R().
-		SetHeader("X-Hotkey", headers.Hotkey).
-		SetHeader("X-Signature", headers.Signature).
-		SetHeader("X-Message", headers.Message).
-		SetFormDataFromValues(vals).
-		SetFileReader("files", "index.html", strings.NewReader(validatorCompletion)).
-		SetResult(&out)
+	var r *resty.Request
+	if validatorCompletion != "" {
+		r = t.client.R().
+			SetHeader("X-Hotkey", headers.Hotkey).
+			SetHeader("X-Signature", headers.Signature).
+			SetHeader("X-Message", headers.Message).
+			SetFormDataFromValues(vals).
+			SetFileReader("files", "index.html", strings.NewReader(validatorCompletion)).
+			SetResult(&out)
+	} else {
+		r = t.client.R().
+			SetHeader("X-Hotkey", headers.Hotkey).
+			SetHeader("X-Signature", headers.Signature).
+			SetHeader("X-Message", headers.Message).
+			SetFormDataFromValues(vals).
+			SetResult(&out)
+	}
 
 	resp, err := r.Post("/api/v1/validator/tasks")
 	if err != nil {
@@ -133,5 +146,29 @@ func (t *TaskAPI) GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse],
 			resp.StatusCode(), resp.String())
 	}
 
+	return out, nil
+}
+
+func (t *TaskAPI) UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[any], error) {
+	var out Response[any]
+
+	vals := url.Values{}
+	vals.Set("status", status)
+
+	r := t.client.R().
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
+		SetFormDataFromValues(vals).
+		SetResult(&out)
+
+	resp, err := r.Put(fmt.Sprintf("/api/v1/validator/tasks/%s/status", taskID))
+	if err != nil {
+		return Response[any]{}, fmt.Errorf("update task status: %w", err)
+	}
+	if resp.IsError() {
+		return Response[any]{}, fmt.Errorf("update task status returned status %d: %s",
+			resp.StatusCode(), resp.String())
+	}
 	return out, nil
 }
