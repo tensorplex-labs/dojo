@@ -29,6 +29,8 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 		selectedMinerUIDs := v.pickRandomMiners(activeMinerUIDs, count, processedMiners)
 
+		log.Info().Msgf("Selected miners for codegen task: %+v", selectedMinerUIDs)
+
 		synAPIQuestion, err := v.SyntheticAPI.GetQuestion()
 		if err != nil {
 			log.Error().Err(err).Msg("failed to get question from synthetic API")

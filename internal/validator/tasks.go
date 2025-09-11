@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/rs/zerolog/log"
 
@@ -76,13 +75,12 @@ func (v *Validator) sendTaskRound() {
 	}
 
 	active := len(v.MetagraphData.CurrentActiveMinerUids)
-	log.Info().Msg(fmt.Sprintf("Starting task round with %d tasks", active))
+	log.Info().Msg(fmt.Sprintf("Starting task round: miners active %d", active))
 
 	var processedMiners ProcessedMiners
 	v.processCodegenTask(v.MetagraphData.CurrentActiveMinerUids, &processedMiners)
 
 	log.Info().Msgf("Tasks generation completed")
-	os.Exit(1) // TODO: remove
 }
 
 func (v *Validator) canStartTaskRound(ctx context.Context) bool {
