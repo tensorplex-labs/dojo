@@ -1,3 +1,11 @@
+x-logging: &default-logging
+  options:
+    max-size: "50m"
+
+networks:
+  validator:
+    name: validator
+
 services:
   kami:
     container_name: kami
@@ -7,18 +15,92 @@ services:
       com.centurylinklabs.watchtower.enable: "true"
     env_file:
       - .env
-    # ports:
-    #   - 3000:3000
     expose:
-      - $KAMI_PORT
-    # logging: *default-logging
-    # volumes:
-      # - ${BITTENSOR_DIR}:${BITTENSOR_DIR}
-    # networks:
-    #   - subtensor
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://${KAMI_HOST}:${KAMI_PORT}/substrate/health"]
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://${KAMI_HOST}:${KAMI_PORT}/substrate/health",
+        ]
       interval: 10s
       timeout: 10s
       retries: 5
       start_period: 50s
+    logging: *default-logging
+    networks:
+      - validator
+
+  redis:
+    container_name: redis
+    image: redis/redis-stack-server:7.4.0-v0
+    env_file:
+      - .env
+    expose:
+      - 6379
+    command: >
+      sh -c '
+      if [ ! -z "$$REDIS_PASSWORD" ] && [ ! -z "$$REDIS_USERNAME" ]; then
+        redis-stack-server --dir /data --requirepass $$REDIS_PASSWORD --save 60 1 --appendonly yes &
+        sleep 2
+        redis-cli -a $$REDIS_PASSWORD ACL SETUSER $$REDIS_USERNAME on \>$$REDIS_PASSWORD allcommands allkeys
+        wait
+      else
+        redis-stack-server --dir /data --save 60 1 --appendonly yes;
+      fi'
+    healthcheck:
+      test: >
+        sh -c '
+        if [ ! -z "$$REDIS_PASSWORD" ]; then
+          redis-cli -a $$REDIS_PASSWORD ping;
+        else
+          redis-cli ping;
+        fi'
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - validator
+
+  validator:
+    container_name: dojo-validator
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      - kami
+      - redis
+      - synthetic-api
+    restart: on-failure
+    networks:
+      - validator
+
+  synthetic-api:
+    container_name: synthetic-api
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
+    restart: on-failure
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    env_file:
+      - .env
+    expose:
+      - 5003
+    networks:
+      - validator
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://synthetic-api:5003/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 50s
+    depends_on:
+      redis:
+        condition: service_healthy
+    # allow docker commands inside container
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging: *default-logging
