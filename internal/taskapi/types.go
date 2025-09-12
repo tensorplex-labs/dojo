@@ -14,6 +14,7 @@ type CreateTasksRequest[T CodegenTaskMetadata] struct {
 type AssigneeData struct {
 	Hotkey string `form:"hotkey" json:"hotkey"`
 	Prompt string `form:"prompt" json:"prompt"`
+	Role   string `form:"role" json:"role"`
 }
 
 // AuthHeaders represents the authentication headers required for API requests.
