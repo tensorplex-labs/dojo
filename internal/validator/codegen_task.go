@@ -14,8 +14,8 @@ import (
 
 const (
 	taskType                = "codeGen"
-	augmentedProbability    = int64(25)
-	validatorDuelProbablity = int64(60)
+	augmentedProbability    = int64(25) // 25% chance for traps!
+	validatorDuelProbablity = int64(60) // 60% chance to duel validator
 	expireAt                = 6 * time.Hour
 )
 
@@ -156,11 +156,22 @@ func (v *Validator) buildAssignees(
 		if !validatorDuel && taskAugmented && uid == selectedAugmentedMiner && len(augmentedPrompt) > 0 {
 			prompt = augmentedPrompt
 		}
+
 		assignees = append(assignees, taskapi.AssigneeData{
 			Hotkey: v.MetagraphData.Metagraph.Hotkeys[uid],
 			Prompt: prompt,
+			Role:   "miner",
 		})
 	}
+
+	if validatorDuel {
+		assignees = append(assignees, taskapi.AssigneeData{
+			Hotkey: v.ValidatorHotkey,
+			Prompt: basePrompt,
+			Role:   "validator",
+		})
+	}
+
 	return assignees
 }
 
