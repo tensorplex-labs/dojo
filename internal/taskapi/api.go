@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
@@ -42,7 +43,8 @@ func NewTaskAPI(cfg *config.TaskAPIEnvConfig) (*TaskAPI, error) {
 	client := resty.New().
 		SetBaseURL(cfg.TaskAPIUrl).
 		SetJSONMarshaler(sonic.Marshal).
-		SetJSONUnmarshaler(sonic.Unmarshal)
+		SetJSONUnmarshaler(sonic.Unmarshal).
+		SetTimeout(15 * time.Second)
 
 	return &TaskAPI{
 		cfg:    cfg,
@@ -86,7 +88,7 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 		r.SetFileReader("files", "index.html", strings.NewReader(validatorCompletion))
 	}
 
-	resp, err := r.Post("/api/v1/validator/tasks")
+	resp, err := r.Post("/validator/tasks")
 	if err != nil {
 		return Response[CreateTaskResponse]{}, fmt.Errorf("create task: %w", err)
 	}
@@ -115,7 +117,7 @@ func (t *TaskAPI) SubmitCompletion(headers AuthHeaders, taskID, completion strin
 		SetFormDataFromValues(vals).
 		SetResult(&out)
 
-	resp, err := r.Put(fmt.Sprintf("/api/v1/validator/tasks/%s/completions", taskID))
+	resp, err := r.Put(fmt.Sprintf("/validator/tasks/%s/completions", taskID))
 	if err != nil {
 		return Response[SubmitCompletionResponse]{}, fmt.Errorf("submit completion: %w", err)
 	}
@@ -134,7 +136,7 @@ func (t *TaskAPI) GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse],
 		SetHeader("X-Message", headers.Message).
 		SetResult(&out)
 
-	resp, err := r.Get("/api/v1/validator/tasks/expired")
+	resp, err := r.Get("/validator/tasks/expired")
 	if err != nil {
 		return Response[VotesResponse]{}, fmt.Errorf("get expired tasks: %w", err)
 	}
@@ -160,7 +162,7 @@ func (t *TaskAPI) UpdateTaskStatus(headers AuthHeaders, taskID, status string) (
 		SetFormDataFromValues(vals).
 		SetResult(&out)
 
-	resp, err := r.Put(fmt.Sprintf("/api/v1/validator/tasks/%s/status", taskID))
+	resp, err := r.Put(fmt.Sprintf("/validator/tasks/%s/status", taskID))
 	if err != nil {
 		return Response[TaskStatusUpdateResponse]{}, fmt.Errorf("update task status: %w", err)
 	}
