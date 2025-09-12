@@ -5,7 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/rs/zerolog/log"
 
 	"github.com/tensorplex-labs/dojo/internal/kami"
@@ -80,9 +85,50 @@ func (v *Validator) setupAuthHeaders() (taskapi.AuthHeaders, error) {
 	}, nil
 }
 
-// TODO implement version key
+func getCurrentVersion() (int, error) {
+	cmd := exec.Command("git", "describe", "--tags", "--abbrev=0")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	version := strings.TrimSpace(string(output))
+	return convertVersionToInt(version)
+}
+
+func convertVersionToInt(version string) (int, error) {
+	// Remove "v" prefix if present
+	version = strings.TrimPrefix(version, "v")
+
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return 0, fmt.Errorf("invalid version format: %s", version)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, fmt.Errorf("invalid major version: %s", parts[0])
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, fmt.Errorf("invalid minor version: %s", parts[1])
+	}
+
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return 0, fmt.Errorf("invalid patch version: %s", parts[2])
+	}
+
+	return (1000 * major) + (10 * minor) + patch, nil
+}
 
 func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
+	versionKey, err := getCurrentVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get current version: %w", err)
+	}
+
 	convertedUids, convertedWeights, err := chainutils.ConvertWeightsAndUidsForEmit(uids, weights)
 	if err != nil {
 		return fmt.Errorf("failed to convert weights and uids: %w", err)
@@ -142,11 +188,29 @@ func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 		Netuid:     v.ValidatorConfig.Netuid,
 		Dests:      convertedUids,
 		Weights:    convertedWeights,
-		VersionKey: 1,
+		VersionKey: versionKey,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set weights: %w", err)
 	}
 
 	return nil
+}
+
+func initializeScores(filename string) {
+	scoresFileDataInitialState := ScoresFileData{
+		Scores: make([]float64, uidCount),
+		Step:   0,
+	}
+
+	// overwrite the file with 0 scores and 0 step
+	jsonData, err := sonic.MarshalIndent(scoresFileDataInitialState, "", "  ")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to marshal scores file data")
+		return
+	}
+	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
+		log.Error().Err(err).Msg("failed to write scores to file")
+		return
+	}
 }

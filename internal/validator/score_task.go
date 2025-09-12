@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -29,7 +30,7 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 
 	if currentStep >= scoringStepLimit {
 		log.Info().Msg("Initializing scores")
-		v.initializeScores(scoresFileName)
+		initializeScores(scoresFileName)
 		currentStep = 0
 		latestScores = make([]float64, uidCount)
 	}
@@ -55,10 +56,11 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 
 	allTaskScores := v.calculateAllTaskScores(tasks)
 
-	// TODO: revisit later, just a quick way to backup and save the scores to a local file
-	if err := v.saveTaskScoresToFile(allTaskScores, scoreFileName); err != nil {
-		log.Error().Err(err).Msg("failed to save task scores")
-		return
+	if strings.ToLower(v.ValidatorConfig.Environment) != "prod" {
+		if err := v.saveTaskScoresToFile(allTaskScores, scoreFileName); err != nil {
+			log.Error().Err(err).Msg("failed to save task scores")
+			return
+		}
 	}
 
 	// TO REMOVE AFTER TESTING
@@ -142,7 +144,7 @@ func (v *Validator) calculateSingleTaskScore(task taskapi.VoteTaskData) map[stri
 		log.Info().Msgf("No discriminators found for task %s, skipping", task.ID)
 		return nil
 	}
-	// TODO: should we validate the votes?
+
 	return v.calculateScoresByType(task.ID, isTrap, discriminators, completionMaps)
 }
 
@@ -251,24 +253,6 @@ func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]flo
 
 	log.Info().Msgf("Successfully saved scores for %d tasks to %s", len(allTaskScores), filename)
 	return nil
-}
-
-func (v *Validator) initializeScores(filename string) {
-	scoresFileDataInitialState := ScoresFileData{
-		Scores: make([]float64, uidCount),
-		Step:   0,
-	}
-
-	// overwrite the file with 0 scores and 0 step
-	jsonData, err := sonic.MarshalIndent(scoresFileDataInitialState, "", "  ")
-	if err != nil {
-		log.Error().Err(err).Msg("failed to marshal scores file data")
-		return
-	}
-	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
-		log.Error().Err(err).Msg("failed to write scores to file")
-		return
-	}
 }
 
 func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, latestScores []float64) ([]float64, error) {

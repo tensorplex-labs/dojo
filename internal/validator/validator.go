@@ -62,9 +62,20 @@ func NewValidator(
 
 	scoresFile, err := os.ReadFile(scoresFileName)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to load scores from file")
-		return nil
+		if os.IsNotExist(err) {
+			log.Info().Msg("scores file not found, initializing with default scores")
+			initializeScores(scoresFileName)
+			scoresFile, err = os.ReadFile(scoresFileName)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to read newly created scores file")
+				return nil
+			}
+		} else {
+			log.Error().Err(err).Msg("failed to load scores from file")
+			return nil
+		}
 	}
+
 	var latestScoresFileData ScoresFileData
 	if err := sonic.Unmarshal(scoresFile, &latestScoresFileData); err != nil {
 		log.Error().Err(err).Msg("failed to unmarshal scores from file")
@@ -136,7 +147,7 @@ func (v *Validator) Start() {
 	})
 
 	go v.runTicker(v.Ctx, v.IntervalConfig.WeightSettingInterval, func() {
-		v.setWeights(v.LatestScores)
+		v.setWeights(v.LatestScores, v.LatestScoresStep)
 	})
 }
 

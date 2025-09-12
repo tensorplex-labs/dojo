@@ -145,8 +145,8 @@ func (v *Validator) checkCompletionExists(qaID string) bool {
 	return exists != ""
 }
 
-func (v *Validator) setWeights(scores []float64) {
-	if v.LatestScoresStep < scoringStepLimit {
+func (v *Validator) setWeights(scores []float64, latestScoresStep int) {
+	if latestScoresStep < scoringStepLimit {
 		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresStep, scoringStepLimit))
 		return
 	}
@@ -156,7 +156,6 @@ func (v *Validator) setWeights(scores []float64) {
 		uids[i] = int64(i)
 	}
 
-	// TODO: if we want to apply random transformations such as cubic transformation
 	weights := scores
 
 	if err := v.setWeightsOnChain(uids, weights); err != nil {
