@@ -45,7 +45,7 @@ type CachedTasks struct {
 
 // ProcessedMiners keeps track of miners that have already been assigned tasks for particular round
 type ProcessedMiners struct {
-	sync.Mutex
+	m    sync.Mutex
 	uids []int64
 }
 

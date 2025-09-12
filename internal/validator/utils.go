@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -86,7 +87,7 @@ func (v *Validator) setupAuthHeaders() (taskapi.AuthHeaders, error) {
 }
 
 func getCurrentVersion() (int, error) {
-	cmd := exec.Command("git", "describe", "--tags", "--abbrev=0")
+	cmd := exec.CommandContext(context.Background(), "git describe --tags --abbrev=0")
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, err
@@ -164,16 +165,16 @@ func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 		// 	v.ValidatorHotkey, // TODO: needs to be in bytes!
 		// )
 
-		commit_for_reveal := "test"
-		reveal_round := 0
+		commitForReveal := "test"
+		revealRound := 0
 
-		log.Info().Msgf("Commit for reveal: %s", hex.EncodeToString([]byte(commit_for_reveal)))
-		log.Info().Msgf("Reveal round: %d", reveal_round)
+		log.Info().Msgf("Commit for reveal: %s", hex.EncodeToString([]byte(commitForReveal)))
+		log.Info().Msgf("Reveal round: %d", revealRound)
 
 		_, err = v.Kami.SetTimelockedWeights(kami.SetTimelockedWeightsParams{
 			Netuid:              v.MetagraphData.Metagraph.Netuid,
-			Commit:              hex.EncodeToString([]byte(commit_for_reveal)),
-			RevealRound:         reveal_round,
+			Commit:              hex.EncodeToString([]byte(commitForReveal)),
+			RevealRound:         revealRound,
 			CommitRevealVersion: 4,
 		})
 		if err != nil {
@@ -181,7 +182,6 @@ func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 		}
 
 		return nil
-
 	}
 
 	_, err = v.Kami.SetWeights(kami.SetWeightsParams{
@@ -209,7 +209,7 @@ func initializeScores(filename string) {
 		log.Error().Err(err).Msg("failed to marshal scores file data")
 		return
 	}
-	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
+	if err := os.WriteFile(filename, jsonData, 0o600); err != nil {
 		log.Error().Err(err).Msg("failed to write scores to file")
 		return
 	}

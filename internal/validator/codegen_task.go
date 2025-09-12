@@ -1,8 +1,9 @@
 package validator
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"slices"
 	"time"
 
@@ -21,7 +22,6 @@ const (
 
 func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners) {
 	for len(processedMiners.uids) < len(activeMinerUIDs) {
-
 		shouldDuelValidator := v.rollProbability(validatorDuelProbablity)
 		count := 2
 		if shouldDuelValidator {
@@ -107,16 +107,33 @@ func hasValidatorContent(completion syntheticapi.GenerateAnswerResponse[syntheti
 		completion.Answer.Responses[0].Completion.Files[0].Content != ""
 }
 
+func cryptoIntn(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	maxBig := big.NewInt(int64(n))
+	r, err := rand.Int(rand.Reader, maxBig)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to generate crypto random int, defaulting to 0")
+		return 0
+	}
+	return int(r.Int64())
+}
+
 func (v *Validator) maybeAugment(
 	shouldDuelValidator bool,
 	syn syntheticapi.GenerateQuestionResponse,
 	selectedMinerUIDs []int64,
 	initialContent string,
-) (bool, int64, string, string) {
-	taskAugmented := false
-	var selectedAugmentedMiner int64
-	augmentedPrompt := ""
-	validatorContent := initialContent
+) (
+	taskAugmented bool,
+	selectedAugmentedMiner int64,
+	augmentedPrompt string,
+	validatorContent string,
+) {
+	taskAugmented = false
+	augmentedPrompt = ""
+	validatorContent = initialContent
 
 	if !v.shouldAugment(augmentedProbability) {
 		log.Debug().Msgf("Not using augmented answer for question ID %s", syn.QaID)
@@ -134,7 +151,7 @@ func (v *Validator) maybeAugment(
 			validatorContent = augmentedCompletion.Answer.Responses[0].Completion.Files[0].Content
 		}
 	} else {
-		selectedAugmentedMiner = selectedMinerUIDs[rand.Intn(len(selectedMinerUIDs))]
+		selectedAugmentedMiner = selectedMinerUIDs[cryptoIntn(len(selectedMinerUIDs))]
 		augmentedPrompt = augmentedCompletion.Answer.Prompt
 	}
 
@@ -153,7 +170,7 @@ func (v *Validator) buildAssignees(
 	var assignees []taskapi.AssigneeData
 	for _, uid := range selectedMinerUIDs {
 		prompt := basePrompt
-		if !validatorDuel && taskAugmented && uid == selectedAugmentedMiner && len(augmentedPrompt) > 0 {
+		if !validatorDuel && taskAugmented && uid == selectedAugmentedMiner && augmentedPrompt != "" {
 			prompt = augmentedPrompt
 		}
 
@@ -176,8 +193,8 @@ func (v *Validator) buildAssignees(
 }
 
 func (v *Validator) pickRandomMiners(activeMinerUIDs []int64, count int, processedMiners *ProcessedMiners) []int64 {
-	processedMiners.Lock()
-	defer processedMiners.Unlock()
+	processedMiners.m.Lock()
+	defer processedMiners.m.Unlock()
 
 	var availableMiners []int64
 	for _, uid := range activeMinerUIDs {
@@ -196,11 +213,11 @@ func (v *Validator) pickRandomMiners(activeMinerUIDs []int64, count int, process
 	}
 
 	selectedMiners := make([]int64, 0, count)
-	for range count {
-		index := rand.Intn(len(availableMiners))
+	for i := 0; i < count; i++ {
+		index := cryptoIntn(len(availableMiners))
 		selectedMiners = append(selectedMiners, availableMiners[index])
 		processedMiners.uids = append(processedMiners.uids, availableMiners[index])
-		availableMiners = slices.Delete(availableMiners, int(index), int(index)+1)
+		availableMiners = slices.Delete(availableMiners, index, index+1)
 		if len(availableMiners) == 0 {
 			break
 		}

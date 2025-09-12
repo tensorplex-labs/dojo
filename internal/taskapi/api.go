@@ -64,7 +64,8 @@ func (t *TaskAPI) CreateCodegenTask(headers AuthHeaders, req CreateTasksRequest[
 	vals.Set("metadata", string(metadataBytes))
 
 	for _, assignee := range req.Assignees {
-		assigneeBytes, err := sonic.Marshal(assignee)
+		var assigneeBytes []byte
+		assigneeBytes, err = sonic.Marshal(assignee)
 		if err != nil {
 			return Response[CreateTaskResponse]{}, fmt.Errorf("marshal assignee: %w", err)
 		}
