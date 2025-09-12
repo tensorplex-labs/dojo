@@ -11,8 +11,6 @@ import (
 )
 
 func (v *Validator) syncMetagraph() {
-	v.mu.Lock()
-
 	log.Info().Msg(fmt.Sprintf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid))
 	newMetagraph, err := v.Kami.GetMetagraph(v.ValidatorConfig.Netuid)
 	if err != nil {
@@ -39,25 +37,24 @@ func (v *Validator) syncMetagraph() {
 	}
 
 	log.Info().Msgf("Metagraph synced. Found %d active miners with uid: %v", len(currentActiveMiners), currentActiveMiners)
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	v.MetagraphData.Metagraph = newMetagraph.Data
 	v.MetagraphData.CurrentActiveMinerUids = currentActiveMiners
-
-	v.mu.Unlock()
 }
 
 func (v *Validator) syncBlock() {
-	v.mu.Lock()
-
 	log.Info().Msg(fmt.Sprintf("syncing latest block. current block : %d", v.LatestBlock))
 	newBlockResp, err := v.Kami.GetLatestBlock()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get latest block")
 		return
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	v.LatestBlock = int64(newBlockResp.Data.BlockNumber)
-	v.mu.Unlock()
 }
 
 func (v *Validator) startScoring() {
@@ -152,7 +149,7 @@ func (v *Validator) setWeights(scores []float64, latestScoresStep int) {
 	}
 
 	uids := make([]int64, uidCount)
-	for i := range uidCount {
+	for i := 0; i < uidCount; i++ {
 		uids[i] = int64(i)
 	}
 

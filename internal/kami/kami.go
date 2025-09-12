@@ -3,6 +3,7 @@ package kami
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-resty/resty/v2"
@@ -49,7 +50,8 @@ func NewKami(cfg *config.KamiEnvConfig) (*Kami, error) {
 	client := resty.New().
 		SetBaseURL(url).
 		SetJSONMarshaler(sonic.Marshal).
-		SetJSONUnmarshaler(sonic.Unmarshal)
+		SetJSONUnmarshaler(sonic.Unmarshal).
+		SetTimeout(15 * time.Second)
 
 	return &Kami{
 		client:        client,
