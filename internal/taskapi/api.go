@@ -133,7 +133,7 @@ func (t *TaskAPI) GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse],
 		SetHeader("X-Message", headers.Message).
 		SetResult(&out)
 
-	resp, err := r.Get("/api/v1/validator/votes/expired")
+	resp, err := r.Get("/api/v1/validator/tasks/expired")
 	if err != nil {
 		return Response[VotesResponse]{}, fmt.Errorf("get expired tasks: %w", err)
 	}
