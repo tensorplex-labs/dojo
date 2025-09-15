@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -16,7 +17,7 @@ import (
 
 const scoreFileName = "all_task_scores.json"
 
-// maps hotkeys to their completion id
+// CompletionMaps maps hotkeys to their completion id
 type CompletionMaps struct {
 	validator          map[string]string
 	generators         map[string]string
@@ -29,7 +30,7 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 
 	if currentStep >= scoringStepLimit {
 		log.Info().Msg("Initializing scores")
-		v.initializeScores(scoresFileName)
+		initializeScores(scoresFileName)
 		currentStep = 0
 		latestScores = make([]float64, uidCount)
 	}
@@ -55,10 +56,11 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 
 	allTaskScores := v.calculateAllTaskScores(tasks)
 
-	// TODO: revisit later, just a quick way to backup and save the scores to a local file
-	if err := v.saveTaskScoresToFile(allTaskScores, scoreFileName); err != nil {
-		log.Error().Err(err).Msg("failed to save task scores")
-		return
+	if !strings.EqualFold(v.ValidatorConfig.Environment, "prod") {
+		if err = v.saveTaskScoresToFile(allTaskScores, scoreFileName); err != nil {
+			log.Error().Err(err).Msg("failed to save task scores")
+			return
+		}
 	}
 
 	// TO REMOVE AFTER TESTING
@@ -74,11 +76,7 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 	// }
 	// log.Info().Msg("Successfully loaded scores from all_task_scores.json")
 
-	updatedScores, err := v.updateScores(allTaskScores, latestScores)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to update scores")
-		return
-	}
+	updatedScores := v.updateScores(allTaskScores, latestScores)
 
 	updatedScoresJSON, err := sonic.Marshal(ScoresFileData{
 		Scores: updatedScores,
@@ -89,7 +87,7 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 		return
 	}
 
-	if err := os.WriteFile(scoresFileName, updatedScoresJSON, 0o644); err != nil {
+	if err := os.WriteFile(scoresFileName, updatedScoresJSON, 0o600); err != nil {
 		log.Error().Err(err).Msg("failed to write scores.json")
 		return
 	}
@@ -113,7 +111,8 @@ func (v *Validator) fetchTasksToScore(headers taskapi.AuthHeaders) ([]taskapi.Vo
 func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[string]map[string]float64 {
 	allTaskScores := make(map[string]map[string]float64)
 
-	for _, task := range tasks {
+	for i := range tasks {
+		task := &tasks[i]
 		taskScores := v.calculateSingleTaskScore(task)
 		if len(taskScores) > 0 {
 			allTaskScores[task.ID] = taskScores
@@ -132,7 +131,7 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 	return allTaskScores
 }
 
-func (v *Validator) calculateSingleTaskScore(task taskapi.VoteTaskData) map[string]float64 {
+func (v *Validator) calculateSingleTaskScore(task *taskapi.VoteTaskData) map[string]float64 {
 	isTrap, negativeGeneratorHotkey := v.checkIfTrapTask(task.ID)
 
 	completionMaps := v.categorizeCompletions(task.Completions, isTrap, negativeGeneratorHotkey, task.ValidatorHotkey)
@@ -142,11 +141,11 @@ func (v *Validator) calculateSingleTaskScore(task taskapi.VoteTaskData) map[stri
 		log.Info().Msgf("No discriminators found for task %s, skipping", task.ID)
 		return nil
 	}
-	// TODO: should we validate the votes?
+
 	return v.calculateScoresByType(task.ID, isTrap, discriminators, completionMaps)
 }
 
-func (v *Validator) checkIfTrapTask(taskID string) (bool, string) {
+func (v *Validator) checkIfTrapTask(taskID string) (trapBool bool, hotkey string) {
 	trapRedisKey := fmt.Sprintf("trap:%s", taskID)
 
 	negativeGeneratorHotkey, err := v.Redis.Get(v.Ctx, trapRedisKey)
@@ -168,8 +167,13 @@ func (v *Validator) checkIfTrapTask(taskID string) (bool, string) {
 	return false, ""
 }
 
-func (v *Validator) categorizeCompletions(completions []taskapi.VoteCompletion, isTrap bool, negativeGeneratorHotkey, validatorHotkey string) CompletionMaps {
-	maps := CompletionMaps{
+func (v *Validator) categorizeCompletions(
+	completions []taskapi.VoteCompletion,
+	isTrap bool,
+	negativeGeneratorHotkey,
+	validatorHotkey string,
+) CompletionMaps {
+	completionMaps := CompletionMaps{
 		validator:          make(map[string]string),
 		generators:         make(map[string]string),
 		positiveGenerators: make(map[string]string),
@@ -179,20 +183,20 @@ func (v *Validator) categorizeCompletions(completions []taskapi.VoteCompletion, 
 	for _, completion := range completions {
 		if isTrap {
 			if completion.ParticipantHotkey == negativeGeneratorHotkey {
-				maps.negativeGenerators[completion.ParticipantHotkey] = completion.ID
+				completionMaps.negativeGenerators[completion.ParticipantHotkey] = completion.ID
 			} else {
-				maps.positiveGenerators[completion.ParticipantHotkey] = completion.ID
+				completionMaps.positiveGenerators[completion.ParticipantHotkey] = completion.ID
 			}
 		} else {
 			if completion.ParticipantHotkey == validatorHotkey {
-				maps.validator[completion.ParticipantHotkey] = completion.ID
+				completionMaps.validator[completion.ParticipantHotkey] = completion.ID
 			} else {
-				maps.generators[completion.ParticipantHotkey] = completion.ID
+				completionMaps.generators[completion.ParticipantHotkey] = completion.ID
 			}
 		}
 	}
 
-	return maps
+	return completionMaps
 }
 
 func (v *Validator) buildDiscriminatorsMap(votes []taskapi.VoteData) map[string]string {
@@ -205,7 +209,12 @@ func (v *Validator) buildDiscriminatorsMap(votes []taskapi.VoteData) map[string]
 	return discriminators
 }
 
-func (v *Validator) calculateScoresByType(taskID string, isTrap bool, discriminators map[string]string, completionMaps CompletionMaps) map[string]float64 {
+func (v *Validator) calculateScoresByType(
+	taskID string,
+	isTrap bool,
+	discriminators map[string]string,
+	completionMaps CompletionMaps,
+) map[string]float64 {
 	if isTrap {
 		log.Debug().Msgf("Calculating trap score for task %s", taskID)
 		return scoring.CalcTrapScores(discriminators, completionMaps.positiveGenerators, completionMaps.negativeGenerators)
@@ -220,15 +229,14 @@ func (v *Validator) calculateScoresByType(taskID string, isTrap bool, discrimina
 
 func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]float64, filename string) error {
 	var existingScores map[string]map[string]float64
-	existingData, err := os.ReadFile(filename)
-
+	existingData, err := os.ReadFile(filename) // #nosec G304
 	if err == nil {
 		if parseErr := json.Unmarshal(existingData, &existingScores); parseErr != nil {
 			log.Warn().Err(parseErr).Msg("Failed to parse existing scores file, will overwrite")
 			existingScores = make(map[string]map[string]float64)
 		} else {
 			backupName := fmt.Sprintf("%s.backup", filename)
-			if backupErr := os.WriteFile(backupName, existingData, 0o644); backupErr != nil {
+			if backupErr := os.WriteFile(backupName, existingData, 0o600); backupErr != nil {
 				log.Warn().Err(backupErr).Msg("Failed to create backup of existing scores file")
 			} else {
 				log.Info().Msgf("Created backup: %s", backupName)
@@ -245,7 +253,7 @@ func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]flo
 		return fmt.Errorf("failed to marshal task scores: %w", err)
 	}
 
-	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
+	if err := os.WriteFile(filename, jsonData, 0o600); err != nil {
 		return fmt.Errorf("failed to write scores to file: %w", err)
 	}
 
@@ -253,26 +261,8 @@ func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]flo
 	return nil
 }
 
-func (v *Validator) initializeScores(filename string) {
-	scoresFileDataInitialState := ScoresFileData{
-		Scores: make([]float64, uidCount),
-		Step:   0,
-	}
-
-	// overwrite the file with 0 scores and 0 step
-	jsonData, err := sonic.MarshalIndent(scoresFileDataInitialState, "", "  ")
-	if err != nil {
-		log.Error().Err(err).Msg("failed to marshal scores file data")
-		return
-	}
-	if err := os.WriteFile(filename, jsonData, 0o644); err != nil {
-		log.Error().Err(err).Msg("failed to write scores to file")
-		return
-	}
-}
-
-func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, latestScores []float64) ([]float64, error) {
-	updatedScores := latestScores
+func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, latestScores []float64) (updatedScores []float64) {
+	updatedScores = latestScores
 
 	hotkeyToUID := make(map[string]int)
 	for uid, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
@@ -289,5 +279,5 @@ func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, la
 		}
 	}
 
-	return updatedScores, nil
+	return updatedScores
 }

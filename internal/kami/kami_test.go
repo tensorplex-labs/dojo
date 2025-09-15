@@ -1,30 +1,47 @@
 package kami
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/tensorplex-labs/dojo/internal/config"
 )
 
-func newTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *Kami) {
+func newTestServer(t *testing.T, handler http.HandlerFunc) *Kami {
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
-	kc := &config.KamiEnvConfig{
-		KamiHost: ts.Listener.Addr().(*net.TCPAddr).IP.String(),
-		KamiPort: fmt.Sprint(ts.Listener.Addr().(*net.TCPAddr).Port),
+	kc := &config.KamiEnvConfig{}
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatalf("failed to parse test server url: %v", err)
 	}
+	host, port, splitErr := net.SplitHostPort(u.Host)
+	if splitErr != nil {
+		addr := ts.Listener.Addr().String()
+		host, port, splitErr = net.SplitHostPort(addr)
+		if splitErr != nil {
+			kc.KamiHost = "127.0.0.1"
+			kc.KamiPort = "0"
+		} else {
+			kc.KamiHost = host
+			kc.KamiPort = port
+		}
+	} else {
+		kc.KamiHost = host
+		kc.KamiPort = port
+	}
+
 	k, err := NewKami(kc)
 	if err != nil {
 		t.Fatalf("new kami: %v", err)
 	}
 	k.BaseURL = ts.URL
 	k.client.SetBaseURL(ts.URL)
-	return ts, k
+	return k
 }
 
 func TestNewKami_NilConfig(t *testing.T) {
@@ -35,7 +52,7 @@ func TestNewKami_NilConfig(t *testing.T) {
 }
 
 func TestServeAxon_Success(t *testing.T) {
-	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chain/serve-axon" || r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -57,7 +74,7 @@ func TestServeAxon_Success(t *testing.T) {
 }
 
 func TestServeAxon_HTTPError(t *testing.T) {
-	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		if _, err := w.Write([]byte("bad")); err != nil {
 			panic(err)
@@ -70,7 +87,7 @@ func TestServeAxon_HTTPError(t *testing.T) {
 }
 
 func TestServeAxon_ResponseErrorField(t *testing.T) {
-	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(`{"statusCode":200,"success":false,"data":"","error":{"msg":"boom"}}`)); err != nil {
@@ -98,14 +115,16 @@ func TestGetMetagraph_Success(t *testing.T) {
 		`"pruningScore":[],"lastUpdate":[],"emission":[],"dividends":[],"incentives":[],"consensus":[],"trust":[],"rank":[],` +
 		`"blockAtRegistration":[],"alphaStake":[],"taoStake":[],"totalStake":[],"taoDividendsPerHotkey":[],"alphaDividendsPerHotkey":[]},` +
 		`"error":null}`
-	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chain/subnet-metagraph/1" || r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(payload))
+		if _, err := w.Write([]byte(payload)); err != nil {
+			panic(err)
+		}
 	})
 
 	res, err := k.GetMetagraph(1)
@@ -118,7 +137,7 @@ func TestGetMetagraph_Success(t *testing.T) {
 }
 
 func TestGetLatestBlock_Success(t *testing.T) {
-	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chain/latest-block" || r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -140,7 +159,7 @@ func TestGetLatestBlock_Success(t *testing.T) {
 }
 
 func TestSetWeights_Success(t *testing.T) {
-	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chain/set-weights" || r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -162,7 +181,7 @@ func TestSetWeights_Success(t *testing.T) {
 }
 
 func TestSignVerifyAndKeyring_Success(t *testing.T) {
-	_, k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	k := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/substrate/sign-message/sign":
 			w.Header().Set("Content-Type", "application/json")

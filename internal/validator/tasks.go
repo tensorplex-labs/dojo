@@ -11,8 +11,6 @@ import (
 )
 
 func (v *Validator) syncMetagraph() {
-	v.mu.Lock()
-
 	log.Info().Msg(fmt.Sprintf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid))
 	newMetagraph, err := v.Kami.GetMetagraph(v.ValidatorConfig.Netuid)
 	if err != nil {
@@ -39,25 +37,24 @@ func (v *Validator) syncMetagraph() {
 	}
 
 	log.Info().Msgf("Metagraph synced. Found %d active miners with uid: %v", len(currentActiveMiners), currentActiveMiners)
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	v.MetagraphData.Metagraph = newMetagraph.Data
 	v.MetagraphData.CurrentActiveMinerUids = currentActiveMiners
-
-	v.mu.Unlock()
 }
 
 func (v *Validator) syncBlock() {
-	v.mu.Lock()
-
 	log.Info().Msg(fmt.Sprintf("syncing latest block. current block : %d", v.LatestBlock))
 	newBlockResp, err := v.Kami.GetLatestBlock()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get latest block")
 		return
 	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	v.LatestBlock = int64(newBlockResp.Data.BlockNumber)
-	v.mu.Unlock()
 }
 
 func (v *Validator) startScoring() {
@@ -145,18 +142,17 @@ func (v *Validator) checkCompletionExists(qaID string) bool {
 	return exists != ""
 }
 
-func (v *Validator) setWeights(scores []float64) {
-	if v.LatestScoresStep < scoringStepLimit {
+func (v *Validator) setWeights(scores []float64, latestScoresStep int) {
+	if latestScoresStep < scoringStepLimit {
 		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresStep, scoringStepLimit))
 		return
 	}
 
 	uids := make([]int64, uidCount)
-	for i := range uidCount {
+	for i := 0; i < uidCount; i++ {
 		uids[i] = int64(i)
 	}
 
-	// TODO: if we want to apply random transformations such as cubic transformation
 	weights := scores
 
 	if err := v.setWeightsOnChain(uids, weights); err != nil {
