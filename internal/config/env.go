@@ -105,10 +105,10 @@ var (
 	}
 	TestIntervalConfig = &IntervalConfig{
 		MetagraphInterval:     30 * time.Second,
-		TaskRoundInterval:     15 * time.Minute,
+		TaskRoundInterval:     5 * time.Minute,
 		BlockInterval:         12 * time.Second,
 		ScoringInterval:       5 * time.Minute,
-		WeightSettingInterval: 20 * time.Minute,
+		WeightSettingInterval: 10 * time.Minute,
 	}
 
 	ProdIntervalConfig = &IntervalConfig{
