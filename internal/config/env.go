@@ -103,7 +103,7 @@ var (
 		ScoringInterval:   10 * time.Second,
 		WeightSettingStep: 2,
 	}
-	TestIntervalConfig = &IntervalConfig{
+  TestIntervalConfig = &IntervalConfig{
 		MetagraphInterval: 30 * time.Second,
 		TaskRoundInterval: 15 * time.Minute,
 		BlockInterval:     12 * time.Second,
