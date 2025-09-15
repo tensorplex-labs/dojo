@@ -1,15 +1,11 @@
 package validator
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"os"
-	"os/exec"
-	"strconv"
-	"strings"
 
 	"github.com/bytedance/sonic"
 	"github.com/rs/zerolog/log"
@@ -86,49 +82,49 @@ func (v *Validator) setupAuthHeaders() (taskapi.AuthHeaders, error) {
 	}, nil
 }
 
-func getCurrentVersion() (int, error) {
-	cmd := exec.CommandContext(context.Background(), "git describe --tags --abbrev=0")
-	output, err := cmd.Output()
-	if err != nil {
-		return 0, err
-	}
+// func getCurrentVersion() (int, error) {
+// 	cmd := exec.CommandContext(context.Background(), "git describe --tags --abbrev=0")
+// 	output, err := cmd.Output()
+// 	if err != nil {
+// 		return 0, err
+// 	}
+//
+// 	version := strings.TrimSpace(string(output))
+// 	return convertVersionToInt(version)
+// }
 
-	version := strings.TrimSpace(string(output))
-	return convertVersionToInt(version)
-}
-
-func convertVersionToInt(version string) (int, error) {
-	// Remove "v" prefix if present
-	version = strings.TrimPrefix(version, "v")
-
-	parts := strings.Split(version, ".")
-	if len(parts) != 3 {
-		return 0, fmt.Errorf("invalid version format: %s", version)
-	}
-
-	major, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, fmt.Errorf("invalid major version: %s", parts[0])
-	}
-
-	minor, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0, fmt.Errorf("invalid minor version: %s", parts[1])
-	}
-
-	patch, err := strconv.Atoi(parts[2])
-	if err != nil {
-		return 0, fmt.Errorf("invalid patch version: %s", parts[2])
-	}
-
-	return (1000 * major) + (10 * minor) + patch, nil
-}
+// func convertVersionToInt(version string) (int, error) {
+// 	// Remove "v" prefix if present
+// 	version = strings.TrimPrefix(version, "v")
+//
+// 	parts := strings.Split(version, ".")
+// 	if len(parts) != 3 {
+// 		return 0, fmt.Errorf("invalid version format: %s", version)
+// 	}
+//
+// 	major, err := strconv.Atoi(parts[0])
+// 	if err != nil {
+// 		return 0, fmt.Errorf("invalid major version: %s", parts[0])
+// 	}
+//
+// 	minor, err := strconv.Atoi(parts[1])
+// 	if err != nil {
+// 		return 0, fmt.Errorf("invalid minor version: %s", parts[1])
+// 	}
+//
+// 	patch, err := strconv.Atoi(parts[2])
+// 	if err != nil {
+// 		return 0, fmt.Errorf("invalid patch version: %s", parts[2])
+// 	}
+//
+// 	return (1000 * major) + (10 * minor) + patch, nil
+// }
 
 func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
-	versionKey, err := getCurrentVersion()
-	if err != nil {
-		return fmt.Errorf("failed to get current version: %w", err)
-	}
+	// versionKey, err := getCurrentVersion()
+	// if err != nil {
+	// 	return fmt.Errorf("failed to get current version: %w", err)
+	// }
 
 	convertedUids, convertedWeights, err := chainutils.ConvertWeightsAndUidsForEmit(uids, weights)
 	if err != nil {
@@ -185,10 +181,11 @@ func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 	}
 
 	_, err = v.Kami.SetWeights(kami.SetWeightsParams{
-		Netuid:     v.ValidatorConfig.Netuid,
-		Dests:      convertedUids,
-		Weights:    convertedWeights,
-		VersionKey: versionKey,
+		Netuid:  v.ValidatorConfig.Netuid,
+		Dests:   convertedUids,
+		Weights: convertedWeights,
+		// VersionKey: versionKey,
+		VersionKey: 1,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set weights: %w", err)
