@@ -6,7 +6,9 @@ import (
 )
 
 const (
-	U16MAX = 65535
+	U16MAX     = 65535
+	BurnUID    = 158
+	BurnWeight = 80
 )
 
 func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUids, convertedWeights []int, err error) {
@@ -17,7 +19,9 @@ func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUid
 		return []int{}, []int{}, nil
 	}
 
-	maxWeight := 0.0
+	maxWeightForNormalization := 0.0
+	totalWeightForNormalization := 0.0
+
 	for i, w := range weights {
 		if w < 0 {
 			return nil, nil, fmt.Errorf("weights cannot be negative: %v", weights)
@@ -25,23 +29,36 @@ func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUid
 		if uids[i] < 0 {
 			return nil, nil, fmt.Errorf("uids cannot be negative: %v", uids)
 		}
-		if w > maxWeight {
-			maxWeight = w
+
+		if uids[i] != BurnUID {
+			if w > maxWeightForNormalization {
+				maxWeightForNormalization = w
+			}
+			totalWeightForNormalization += w
 		}
 	}
 
-	if maxWeight == 0 {
+	if totalWeightForNormalization == 0 {
 		return []int{}, []int{}, nil
 	}
 
 	weightUids := make([]int, 0, len(uids))
 	weightVals := make([]int, 0, len(weights))
 
-	for i, w := range weights {
-		uint16Val := int(math.Round((w / maxWeight) * float64(U16MAX)))
+	for i, uid := range uids {
+		var finalWeight float64
 
+		if uid == BurnUID {
+			finalWeight = BurnWeight / 100.0
+		} else {
+			normalizedWeight := weights[i] / maxWeightForNormalization
+			proportionalShare := normalizedWeight / (totalWeightForNormalization / maxWeightForNormalization)
+			finalWeight = proportionalShare * (1 - BurnWeight/100.0)
+		}
+
+		uint16Val := int(math.Round(finalWeight * float64(U16MAX)))
 		if uint16Val > 0 {
-			weightUids = append(weightUids, int(uids[i]))
+			weightUids = append(weightUids, int(uid))
 			weightVals = append(weightVals, uint16Val)
 		}
 	}

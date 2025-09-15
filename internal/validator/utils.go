@@ -119,10 +119,10 @@ func convertVersionToInt(version string) (int, error) {
 }
 
 func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
-	// versionKey, err := getCurrentVersion()
-	// if err != nil {
-	// 	return fmt.Errorf("failed to get current version: %w", err)
-	// }
+	versionKey, err := getCurrentVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get current version: %w", err)
+	}
 
 	convertedUids, convertedWeights, err := chainutils.ConvertWeightsAndUidsForEmit(uids, weights)
 	if err != nil {
@@ -178,16 +178,17 @@ func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 		return nil
 	}
 
-	_, err = v.Kami.SetWeights(kami.SetWeightsParams{
-		Netuid:  v.ValidatorConfig.Netuid,
-		Dests:   convertedUids,
-		Weights: convertedWeights,
-		// VersionKey: versionKey,
-		VersionKey: 1,
+	setWeightsExtrinsicHashResponse, err := v.Kami.SetWeights(kami.SetWeightsParams{
+		Netuid:     v.ValidatorConfig.Netuid,
+		Dests:      convertedUids,
+		Weights:    convertedWeights,
+		VersionKey: versionKey,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set weights: %w", err)
 	}
+
+	log.Info().Msg("Successfully set weights on chain with extrinsic hash: " + setWeightsExtrinsicHashResponse.Data)
 
 	return nil
 }
