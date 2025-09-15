@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/bytedance/sonic"
 	"github.com/rs/zerolog/log"
@@ -82,43 +84,39 @@ func (v *Validator) setupAuthHeaders() (taskapi.AuthHeaders, error) {
 	}, nil
 }
 
-// func getCurrentVersion() (int, error) {
-// 	cmd := exec.CommandContext(context.Background(), "git describe --tags --abbrev=0")
-// 	output, err := cmd.Output()
-// 	if err != nil {
-// 		return 0, err
-// 	}
-//
-// 	version := strings.TrimSpace(string(output))
-// 	return convertVersionToInt(version)
-// }
+func getCurrentVersion() (int, error) {
+	// TODO: implement after we have done the release taggings properly
+	output := "v0.0.1"
 
-// func convertVersionToInt(version string) (int, error) {
-// 	// Remove "v" prefix if present
-// 	version = strings.TrimPrefix(version, "v")
-//
-// 	parts := strings.Split(version, ".")
-// 	if len(parts) != 3 {
-// 		return 0, fmt.Errorf("invalid version format: %s", version)
-// 	}
-//
-// 	major, err := strconv.Atoi(parts[0])
-// 	if err != nil {
-// 		return 0, fmt.Errorf("invalid major version: %s", parts[0])
-// 	}
-//
-// 	minor, err := strconv.Atoi(parts[1])
-// 	if err != nil {
-// 		return 0, fmt.Errorf("invalid minor version: %s", parts[1])
-// 	}
-//
-// 	patch, err := strconv.Atoi(parts[2])
-// 	if err != nil {
-// 		return 0, fmt.Errorf("invalid patch version: %s", parts[2])
-// 	}
-//
-// 	return (1000 * major) + (10 * minor) + patch, nil
-// }
+	version := strings.TrimSpace(output)
+	return convertVersionToInt(version)
+}
+
+func convertVersionToInt(version string) (int, error) {
+	version = strings.TrimPrefix(version, "v")
+
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return 0, fmt.Errorf("invalid version format: %s", version)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, fmt.Errorf("invalid major version: %s", parts[0])
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, fmt.Errorf("invalid minor version: %s", parts[1])
+	}
+
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil {
+		return 0, fmt.Errorf("invalid patch version: %s", parts[2])
+	}
+
+	return (1000 * major) + (10 * minor) + patch, nil
+}
 
 func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 	// versionKey, err := getCurrentVersion()

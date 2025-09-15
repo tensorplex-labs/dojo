@@ -50,10 +50,9 @@ type ProcessedMiners struct {
 }
 
 const (
-	scoresFileName   string  = "scores.json"
-	decayFactor      float32 = 0.9
-	uidCount         int     = 256
-	scoringStepLimit int     = 4
+	scoresFileName string  = "scores.json"
+	decayFactor    float32 = 0.9
+	uidCount       int     = 256
 )
 
 type ScoresFileData struct {

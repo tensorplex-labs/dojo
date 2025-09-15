@@ -28,7 +28,7 @@ type CompletionMaps struct {
 func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep int) {
 	currentStep := latestScoresStep
 
-	if currentStep >= scoringStepLimit {
+	if currentStep >= v.IntervalConfig.WeightSettingStep {
 		log.Info().Msg("Initializing scores")
 		initializeScores(scoresFileName)
 		currentStep = 0
