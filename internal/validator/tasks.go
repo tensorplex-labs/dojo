@@ -143,8 +143,8 @@ func (v *Validator) checkCompletionExists(qaID string) bool {
 }
 
 func (v *Validator) setWeights(scores []float64, latestScoresStep int) {
-	if latestScoresStep < scoringStepLimit {
-		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresStep, scoringStepLimit))
+	if latestScoresStep < v.IntervalConfig.WeightSettingStep {
+		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresStep, v.IntervalConfig.WeightSettingStep))
 		return
 	}
 

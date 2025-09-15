@@ -1,13 +1,11 @@
 package validator
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -87,18 +85,14 @@ func (v *Validator) setupAuthHeaders() (taskapi.AuthHeaders, error) {
 }
 
 func getCurrentVersion() (int, error) {
-	cmd := exec.CommandContext(context.Background(), "git describe --tags --abbrev=0")
-	output, err := cmd.Output()
-	if err != nil {
-		return 0, err
-	}
+	// TODO: implement after we have done the release taggings properly
+	output := "v0.0.1"
 
-	version := strings.TrimSpace(string(output))
+	version := strings.TrimSpace(output)
 	return convertVersionToInt(version)
 }
 
 func convertVersionToInt(version string) (int, error) {
-	// Remove "v" prefix if present
 	version = strings.TrimPrefix(version, "v")
 
 	parts := strings.Split(version, ".")
