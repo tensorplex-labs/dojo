@@ -80,8 +80,8 @@ services:
       - validator
 
   synthetic-api:
-    container_name: synthetic-api
-    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
+    container_name: synthetic-gen
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-gen:latest
     restart: on-failure
     labels:
       com.centurylinklabs.watchtower.enable: "true"
