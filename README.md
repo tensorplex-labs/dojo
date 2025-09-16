@@ -49,11 +49,7 @@ REDIS_DB=0
 OPENROUTER_API_KEY=YOUR_OPENROUTER_KEY
 SYNTHETIC_API_URL=http://synthetic-api:5003/
 
-LANGFUSE_SECRET_KEY=
-LANGFUSE_PUBLIC_KEY=
-LANGFUSE_HOST="https://us.cloud.langfuse.com" # 🇺🇸 US region
-
-TASK_API_URL=http://dojo.network/api/v1/
+TASK_API_URL=https://dev.dojo.network/api/v1/ # https://dojo.network/api/v1 - mainnet
 
 ENVIRONMENT=production # Can be dev | test | prod. Difference being the intervals!
 ```
