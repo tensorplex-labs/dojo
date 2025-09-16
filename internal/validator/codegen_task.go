@@ -36,6 +36,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 			log.Error().Err(err).Msg("failed to get question from synthetic API")
 			return
 		}
+
 		log.Debug().Msgf("Received question: %s of id: %s", synAPIQuestion.Prompt, synAPIQuestion.QaID)
 		log.Debug().Msgf("Processing question with ID %s for duel %+v", synAPIQuestion.QaID, selectedMinerUIDs)
 
@@ -94,9 +95,9 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 
 		if shouldDuelValidator {
-			log.Debug().Msgf("Created task for %d and validator\n", selectedMinerUIDs[0])
+			log.Info().Msgf("Created task for %d and validator\n", selectedMinerUIDs[0])
 		} else {
-			log.Debug().Msgf("Created task for %+v\n", selectedMinerUIDs)
+			log.Info().Msgf("Created task for %+v\n", selectedMinerUIDs)
 		}
 	}
 }

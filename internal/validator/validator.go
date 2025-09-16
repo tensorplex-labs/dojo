@@ -82,6 +82,8 @@ func NewValidator(
 		return nil
 	}
 
+	log.Info().Msgf("Loaded latest scores from file: step %d, scores %+v", latestScoresFileData.Step, latestScoresFileData.Scores)
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)

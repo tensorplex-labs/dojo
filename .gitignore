@@ -6,3 +6,4 @@
 cmd/tests/*
 
 all_task_scores.json
+scores.json
