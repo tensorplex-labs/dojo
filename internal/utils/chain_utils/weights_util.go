@@ -15,8 +15,8 @@ func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUid
 	if len(uids) != len(weights) {
 		return nil, nil, fmt.Errorf("uids and weights must have the same length, got %d and %d", len(uids), len(weights))
 	}
-	if len(uids) == 0 {
-		return []int{}, []int{}, nil
+	if len(uids) == 0 || len(weights) == 0 {
+		return []int{}, []int{}, fmt.Errorf("uids or weights cannot be empty")
 	}
 
 	maxWeightForNormalization := 0.0
