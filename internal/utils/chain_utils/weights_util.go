@@ -39,7 +39,7 @@ func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUid
 	}
 
 	if totalWeightForNormalization == 0 {
-		return []int{}, []int{}, nil
+		return []int{}, []int{}, fmt.Errorf("no weights to set")
 	}
 
 	weightUids := make([]int, 0, len(uids))
