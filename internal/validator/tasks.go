@@ -149,7 +149,7 @@ func (v *Validator) setWeights(scores []float64, latestScoresStep int) {
 	}
 
 	uids := make([]int64, uidCount)
-	for i := 0; i < uidCount; i++ {
+	for i := range uids {
 		uids[i] = int64(i)
 	}
 
