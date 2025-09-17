@@ -21,7 +21,7 @@ jobs:
 
     strategy:
       matrix:
-        app: ${{ fromJson(needs.read_matrix.outputs.matrix).app }}
+        app: ${{ fromJson(inputs.matrix).app }}
       max-parallel: 6
     steps:
       - name: Download binary artifacts
@@ -56,7 +56,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.11.1
         with:
-          platforms: ${{ join(fromJson(needs.read_matrix.outputs.matrix).platform, ',') }}
+          platforms: ${{ join(fromJson(inputs.matrix).platform, ',') }}
 
       - name: Build and Publish
         uses: docker/build-push-action@v6.18.0
@@ -65,7 +65,7 @@ jobs:
           annotations: ${{ steps.meta.outputs.annotations }}
           tags: ${{ steps.meta.outputs.tags }}
           push: true
-          platforms: ${{ join(fromJson(needs.read_matrix.outputs.matrix).platform, ',') }}
+          platforms: ${{ join(fromJson(inputs.matrix).platform, ',') }}
           build-contexts: |
             binaries=./dist
           build-args: |

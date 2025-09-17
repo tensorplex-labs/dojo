@@ -25,13 +25,34 @@ jobs:
         with:
           release-type: go
 
-  build:
-    name: Build Binaries
+  read_matrix:
+    name: Read Build Matrix
     needs: release
+    if: ${{ needs.release.outputs.release_created }}
+    uses: ./.github/workflows/read-matrix.yaml
+
+  build_binaries:
+    name: Build Binaries
+    needs:
+      - release
+      - read_matrix
     if: ${{ needs.release.outputs.release_created }}
     uses: ./.github/workflows/build-binaries.yaml
     with:
       tag_name: ${{ needs.release.outputs.tag_name }}
+      matrix: ${{ needs.read_matrix.outputs.matrix }}
+
+  build_docker_images:
+    name: Build Docker Images
+    needs:
+      - release
+      - read_matrix
+      - build_binaries
+    if: ${{ needs.release.outputs.release_created }}
+    uses: ./.github/workflows/docker-build.yaml
+    with:
+      tag_name: ${{ needs.release.outputs.tag_name }}
+      matrix: ${{ needs.read_matrix.outputs.matrix }}
 
   upload_artifacts:
     name: Upload Artifacts to Release
@@ -40,7 +61,7 @@ jobs:
       image: maniator/gh:v2.79.0
     needs:
       - release
-      - build
+      - build_binaries
     if: ${{ needs.release.outputs.release_created }}
     steps:
       - name: Download all build artifacts
