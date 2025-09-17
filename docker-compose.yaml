@@ -78,8 +78,8 @@ services:
       - synthetic-gen
     restart: on-failure
     volumes:
-      - .env:/app/.env
-      - scores.json:/app/scores.json
+      - ./.env:/app/.env
+      - ./scores.json:/app/scores.json
     networks:
       - validator
 
