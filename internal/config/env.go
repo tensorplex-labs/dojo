@@ -43,8 +43,8 @@ type WalletEnvConfig struct {
 // KamiEnvConfig contains Kami service target and keys.
 type KamiEnvConfig struct {
 	WalletEnvConfig
-	SubtensorNetwork string `env:"SUBTENSOR_NETWORK" envDefault:"test"`
-	KamiHost         string `env:"KAMI_HOST" envDefault:"127.0.0.1"`
+	SubtensorNetwork string `env:"SUBTENSOR_NETWORK" envDefault:"finney"`
+	KamiHost         string `env:"KAMI_HOST" envDefault:"kami"`
 	KamiPort         string `env:"KAMI_PORT" envDefault:"3000"`
 }
 
@@ -62,7 +62,7 @@ type ClientEnvConfig struct {
 
 // RedisEnvConfig configures Redis connection.
 type RedisEnvConfig struct {
-	RedisHost     string `env:"REDIS_HOST" envDefault:"127.0.0.1"`
+	RedisHost     string `env:"REDIS_HOST" envDefault:"redis"`
 	RedisPort     int    `env:"REDIS_PORT" envDefault:"6379"`
 	RedisPassword string `env:"REDIS_PASSWORD" envDefault:"password"`
 	RedisDB       int    `env:"REDIS_DB" envDefault:"0"`
@@ -72,19 +72,19 @@ type RedisEnvConfig struct {
 // SyntheticAPIEnvConfig configures synthetic API access.
 type SyntheticAPIEnvConfig struct {
 	OpenrouterAPIKey string `env:"OPENROUTER_API_KEY"`
-	SyntheticAPIUrl  string `env:"SYNTHETIC_API_URL" envDefault:"localhost:5003"`
+	SyntheticAPIUrl  string `env:"SYNTHETIC_API_URL" envDefault:"synthetic-gen:5003"`
 }
 
 // TaskAPIEnvConfig configures task API access.
 type TaskAPIEnvConfig struct {
-	TaskAPIUrl string `env:"TASK_API_URL" envDefault:"localhost:5004"`
+	TaskAPIUrl string `env:"TASK_API_URL" envDefault:"https://dojo.network/api/v1"`
 }
 
 // ValidatorEnvConfig configures validator runtime.
 type ValidatorEnvConfig struct {
 	ChainEnvConfig
 	ClientEnvConfig
-	Environment string `env:"ENVIRONMENT" envDefault:"dev"`
+	Environment string `env:"ENVIRONMENT" envDefault:"prod"`
 }
 
 type IntervalConfig struct {
