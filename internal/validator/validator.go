@@ -1,58 +1,104 @@
+// Package validator implements the validator runtime: metagraph sync, task
+// orchestration, and communication with external services.
 package validator
 
 import (
 	"context"
+	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/rs/zerolog/log"
+
 	"github.com/tensorplex-labs/dojo/internal/config"
 	"github.com/tensorplex-labs/dojo/internal/kami"
-	"github.com/tensorplex-labs/dojo/internal/synapse"
 	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
+	"github.com/tensorplex-labs/dojo/internal/taskapi"
 	"github.com/tensorplex-labs/dojo/internal/utils/redis"
 )
 
+// Validator coordinates task rounds and on-chain state for a subnet.
 type Validator struct {
 	Kami         kami.KamiInterface
-	TaskPool     any // placeholder for task pool if needed
-	Client       *synapse.Client
+	TaskAPI      taskapi.TaskAPIInterface // TaskAPIInterface is used to interact with the task API
 	Redis        redis.RedisInterface
-	SyntheticApi syntheticapi.SyntheticApiInterface
+	SyntheticAPI syntheticapi.SyntheticAPIInterface
 
 	// Chain global state
-	LatestBlock     int64
-	MetagraphData   MetagraphData
-	ValidatorHotkey string
+	LatestBlock      int64
+	MetagraphData    MetagraphData
+	ValidatorHotkey  string
+	LatestScores     []float64
+	LatestScoresStep int
 
-	IntervalConfig  *IntervalConfig            // used for heartbeat and task round intervals
+	IntervalConfig  *config.IntervalConfig     // used for heartbeat and task round intervals
 	ValidatorConfig *config.ValidatorEnvConfig // configuration for the validator
 
 	Ctx    context.Context
 	Cancel context.CancelFunc
 	Wg     sync.WaitGroup
 
-	mu sync.Mutex // mutex to protect shared data
+	mu               sync.Mutex  // mutex to protect shared data
+	taskRoundRunning atomic.Bool // atomic flag to indicate if a task round is currently running
 }
 
-func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskPool any, redis redis.RedisInterface, syntheticApi syntheticapi.SyntheticApiInterface) *Validator {
-	intervalConfig := &IntervalConfig{
-		MetagraphInterval: 30 * time.Second,
-		TaskRoundInterval: 15 * time.Minute,
-		BlockInterval:     12 * time.Second,
+// NewValidator constructs a Validator with intervals based on environment.
+func NewValidator(
+	cfg *config.ValidatorEnvConfig,
+	k kami.KamiInterface,
+	taskAPI taskapi.TaskAPIInterface,
+	r redis.RedisInterface,
+	s syntheticapi.SyntheticAPIInterface,
+) *Validator {
+	intervalConfig := config.NewIntervalConfig(cfg.Environment)
+
+	keyringData, err := k.GetKeyringPair()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get validator hotkey")
+		return nil
 	}
+
+	scoresFile, err := os.ReadFile(scoresFileName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Info().Msg("scores file not found, initializing with default scores")
+			initializeScores(scoresFileName)
+			scoresFile, err = os.ReadFile(scoresFileName)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to read newly created scores file")
+				return nil
+			}
+		} else {
+			log.Error().Err(err).Msg("failed to load scores from file")
+			return nil
+		}
+	}
+
+	var latestScoresFileData ScoresFileData
+	if err := sonic.Unmarshal(scoresFile, &latestScoresFileData); err != nil {
+		log.Error().Err(err).Msg("failed to unmarshal scores from file")
+		return nil
+	}
+
+	log.Info().Msgf("Loaded latest scores from file: step %d, scores %+v", latestScoresFileData.Step, latestScoresFileData.Scores)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &Validator{
-		Kami:         kami,
-		TaskPool:     taskPool,
-		Redis:        redis,
-		SyntheticApi: syntheticApi,
+	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)
 
-		LatestBlock:     0,               // will be updated during block processing
-		MetagraphData:   MetagraphData{}, // initialize with empty data
-		ValidatorHotkey: "",              // will be set after fetching from Kami
+	return &Validator{
+		Kami:         k,
+		TaskAPI:      taskAPI,
+		Redis:        r,
+		SyntheticAPI: s,
+
+		LatestBlock:      0,
+		MetagraphData:    MetagraphData{},
+		ValidatorHotkey:  keyringData.Data.KeyringPair.Address,
+		LatestScores:     latestScoresFileData.Scores,
+		LatestScoresStep: latestScoresFileData.Step,
 
 		IntervalConfig:  intervalConfig,
 		ValidatorConfig: cfg,
@@ -61,7 +107,7 @@ func NewValidator(cfg *config.ValidatorEnvConfig, kami kami.KamiInterface, taskP
 		Cancel: cancel,
 		Wg:     sync.WaitGroup{},
 
-		mu: sync.Mutex{}, // initialize mutex
+		mu: sync.Mutex{},
 	}
 }
 
@@ -83,16 +129,11 @@ func (v *Validator) runTicker(ctx context.Context, d time.Duration, fn func()) {
 	}
 }
 
+// Start initializes validator hotkey and kicks off periodic routines.
 func (v *Validator) Start() {
-	_, err := v.Kami.GetKeyringPair()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to get validator hotkey")
-		return
-	}
-
-	v.Wg.Add(3)
+	v.Wg.Add(4)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {
-		v.sendTaskRound(v.Ctx, v.Client, v.ValidatorHotkey)
+		v.sendTaskRound()
 	})
 
 	go v.runTicker(v.Ctx, v.IntervalConfig.MetagraphInterval, func() {
@@ -102,8 +143,14 @@ func (v *Validator) Start() {
 	go v.runTicker(v.Ctx, v.IntervalConfig.BlockInterval, func() {
 		v.syncBlock()
 	})
+
+	go v.runTicker(v.Ctx, v.IntervalConfig.ScoringInterval, func() {
+		v.startScoring()
+		v.setWeights(v.LatestScores, v.LatestScoresStep)
+	})
 }
 
+// Stop cancels background routines and waits for them to finish.
 func (v *Validator) Stop() {
 	if v.Cancel != nil {
 		v.Cancel()

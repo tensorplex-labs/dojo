@@ -1,14 +1,11 @@
+// Package chainutils/check_stake.go contains stake checking logic
 package chainutils
 
 import (
 	"os"
 )
 
-func CheckIfMiner(alphaStake float64, rootStake float64) (bool, error) {
-	if alphaStake <= 0 || rootStake <= 0 {
-		return false, nil
-	}
-
+func CheckIfMiner(alphaStake, rootStake float64) (bool, error) {
 	effectiveRootStake := rootStake * 0.18
 
 	effectiveStake := alphaStake + effectiveRootStake
@@ -19,8 +16,5 @@ func CheckIfMiner(alphaStake float64, rootStake float64) (bool, error) {
 		stakeFilter = 10000 // Production environment threshold
 	}
 
-	if effectiveStake < stakeFilter {
-		return true, nil
-	}
-	return false, nil
+	return effectiveStake < stakeFilter, nil
 }

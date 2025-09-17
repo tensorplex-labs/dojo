@@ -1,40 +1,97 @@
+// Package scoring contains logic to execute and calculate scoring
 package scoring
 
-import (
-	"gonum.org/v1/gonum/mat"
-)
+func CalcPvPScores(discriminators, generators map[string]string) (scores map[string]float64) {
+	/*
+		@param discriminators: map of discriminator addresses to their votes. A 'vote' is represented by the unique ID of selected code output.
+		@param generators: map of generator addresses to their generated output ID.
+		@return scores: map of addresses to their scores
 
-// Process all scoring stages
-func ProcessMinerRawScoresWithGroundTruth(minerRawScores *mat.Dense, gt GroundTruthRank, cubicParams CubicParams) ProcessedMinerScoreMatrix {
-	// Stage 0: Sort and Min-Max GroundTruth
-	sorted_gt := PrepareGroundTruth(gt)
-	minMaxScaledGroundTruth := MinMaxScale(sorted_gt)
+		- discriminators receive 1 / totalDiscriminators score irrespective of their vote
+		- generators receive num_votes * 1 / totalDiscriminators score
+	*/
+	scores = make(map[string]float64)
 
-	// Stage 1: Min-Max scaling
-	minMaxScores := MinMaxScaleOnMatrix(minerRawScores)
-
-	// Stage 2: Cosine similarity with ground truth (range [-1, 1])
-	cosineSimilarity := CalculateCosineSimilarityOnMatrix(minMaxScores, minMaxScaledGroundTruth)
-
-	// Stage 3: Transform cosine similarity to range [0, 1]
-	transformedCosineSimilarity := TransformToRange01(cosineSimilarity)
-
-	// Stage 4: L1 normalization to sum=1
-	normalizedCosineSimilarity := L1Normalize(transformedCosineSimilarity)
-
-	// Stage 5: Apply cubic reward transformation
-	cubicTransformedRewards := ApplyCubicTransformation(normalizedCosineSimilarity, cubicParams.Scaling, cubicParams.Translation, cubicParams.Offset)
-
-	// Stage 6: Min-Max scaling
-	minMaxScaledCubicTransformedRewards := MinMaxScale(cubicTransformedRewards)
-
-	// Stage 7: L1 normalization to sum=1
-	normalizedMinMaxScaledCubicTransformedRewards := L1Normalize(minMaxScaledCubicTransformedRewards)
-
-	return ProcessedMinerScoreMatrix{
-		MinMaxMinerScores:                     minMaxScores,
-		CosineSimilarityMinerScores:           cosineSimilarity,
-		NormalisedCosineSimilarityMinerScores: normalizedCosineSimilarity,
-		CubicRewardMinerScores:                normalizedMinMaxScaledCubicTransformedRewards,
+	// 1. tally votes + calculate discriminator scores
+	totalDiscriminators := len(discriminators)
+	voteCounts := make(map[string]int)
+	for addr, vote := range discriminators {
+		scores[addr] = 1.0 / float64(totalDiscriminators)
+		voteCounts[vote]++
 	}
+
+	// 2. calculate generator scores
+	for addr, id := range generators {
+		scores[addr] = float64(voteCounts[id]) * (1.0 / float64(totalDiscriminators))
+	}
+
+	return scores
+}
+
+func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[string]string) (scores map[string]float64) {
+	/*
+		@param discriminators: map of discriminator addresses to their votes. A 'vote' is represented by the unique ID of selected code output.
+		@param positiveGenerators: map of generator addresses to the superior output ID.
+		@param negativeGenerators: map of generator addresses to the inferior output ID.
+		@return scores: map of addresses to their scores
+
+		- generators receive no scores
+		- discriminators that vote correctly receive no scores
+		- discriminators that vote for the 'trap' output receive -1 score
+	*/
+
+	scores = make(map[string]float64)
+
+	negativeOutputs := make(map[string]bool)
+	for _, outputID := range negativeGenerators {
+		negativeOutputs[outputID] = true
+	}
+
+	for addr, vote := range discriminators {
+		if negativeOutputs[vote] {
+			scores[addr] = -1.0
+		}
+	}
+
+	return scores
+}
+
+func CalcPvVScores(discriminators, generators, validators map[string]string) (scores map[string]float64) {
+	/*
+		@param discriminators: map of discriminator addresses to their votes. A 'vote' is represented by the unique ID of selected code output.
+		@param generators: map of generator addresses to their generated output ID.
+		@param validators: map of validator addresses to their generated output ID.
+		@return scores: map of addresses to their scores
+
+		- discriminator that voted for validator output gets 1/ totalDiscriminators score
+		- discriminator that voted for generator output gets nothing
+		- generator gains  1 - num_votes * 1/ totalDiscriminators
+	*/
+
+	scores = make(map[string]float64)
+	validatorOutputs := make(map[string]bool)
+	for _, outputID := range validators {
+		validatorOutputs[outputID] = true
+	}
+
+	// tally votes
+	voteCounts := make(map[string]int)
+	for _, vote := range discriminators {
+		voteCounts[vote]++
+	}
+
+	// calculate discriminator scores
+	totalDiscriminators := len(discriminators)
+	for addr, vote := range discriminators {
+		if validatorOutputs[vote] {
+			scores[addr] = 1.0 / float64(totalDiscriminators)
+		}
+	}
+
+	// calculate generator scores
+	for addr, outputID := range generators {
+		scores[addr] = float64(voteCounts[outputID]) * (1.0 / float64(totalDiscriminators))
+	}
+
+	return scores
 }

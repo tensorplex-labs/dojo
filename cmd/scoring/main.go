@@ -2,63 +2,81 @@ package main
 
 import (
 	"fmt"
-	"math/rand/v2"
 
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
 	"github.com/tensorplex-labs/dojo/internal/scoring"
 	"github.com/tensorplex-labs/dojo/internal/utils/logger"
-	"gonum.org/v1/gonum/mat"
 )
 
 func main() {
 	logger.Init()
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	// Example: 10 miners for better visualization
-	numMiners := 10
-	numScores := 4
-	randomData := make([]float64, numMiners*numScores)
-	for i := range randomData {
-		randomData[i] = rand.Float64() * 100
+	testCalcPvPScores()
+	testCalcTrapScores()
+	testCalcPvVScores()
+}
+
+func testCalcPvPScores() {
+	log.Info().Msg("--- Testing CalcPvPScores ---")
+	generators := map[string]string{
+		"g1": "out1",
+		"g2": "out2",
+	}
+	discriminators := map[string]string{
+		"d1": "out1",
+		"d2": "out1",
+		"d3": "out1",
+		"d4": "out2",
+		"d5": "out2",
 	}
 
-	testMatrix := mat.NewDense(numMiners, numScores, randomData)
-	gt := scoring.GroundTruthRank([]float64{1, 2, 3, 4})
+	scores := scoring.CalcPvPScores(discriminators, generators)
+	for addr, score := range scores {
+		fmt.Printf("Address: %s, Score: %f\n", addr, score)
+	}
+}
 
-	pipeline := scoring.CubicScoringPipeline(
-		scoring.WithScaling(0.009),
-		scoring.WithTranslation(6.0),
-		// scoring.WithOffset(3.0),
-	)
-	processed := pipeline.Process(testMatrix, gt)
+func testCalcTrapScores() {
+	log.Info().Msg("--- Testing CalcTrapScores ---")
+	positiveGenerators := map[string]string{
+		"pg1": "p_out",
+	}
+	negativeGenerators := map[string]string{
+		"ng1": "n_out",
+	}
+	discriminators := map[string]string{
+		"d1": "p_out",
+		"d2": "p_out",
+		"d3": "p_out",
+		"d4": "n_out",
+		"d5": "n_out",
+	}
 
-	// Plot the cubic reward scores
-	logger.Sugar().Infow("Cubic Reward Scores")
-	scoring.PlotMinerScoresTerminal(processed.CubicRewardMinerScores, "Cubic Reward Scores")
+	scores := scoring.CalcTrapScores(discriminators, positiveGenerators, negativeGenerators)
+	for addr, score := range scores {
+		fmt.Printf("Address: %s, Score: %f\n", addr, score)
+	}
+}
 
-	logger.Sugar().
-		Infow("Raw Scores Stats", "number of miners", numMiners, "number of score responses", numScores)
-	fmt.Printf(
-		"Raw Scores Matrix:\n  %.2f\n",
-		mat.Formatted(testMatrix, mat.Prefix("  "), mat.Squeeze()),
-	)
+func testCalcPvVScores() {
+	log.Info().Msg("--- Testing CalcPvVScores ---")
+	validators := map[string]string{
+		"v1": "out1",
+	}
+	generators := map[string]string{
+		"g1": "out2", // Output is another generator's completion to test implementation
+	}
+	discriminators := map[string]string{
+		"d1": "out1", // Vote for a validator's completion
+		"d2": "out1", // Vote for a validator's completion
+		"d3": "out2", // Vote for a generator's completion
+		"d4": "out1",
+		"d5": "out1",
+	}
 
-	logger.Sugar().
-		Infow("Min-Max Scaled Scores", "number of miners", numMiners, "number of score responses", numScores)
-	fmt.Printf(
-		"Min-Max Scaled Scores Matrix:\n  %.2f\n",
-		mat.Formatted(processed.MinMaxMinerScores, mat.Prefix("  "), mat.Squeeze()),
-	)
-
-	logger.Sugar().Infow("Raw Cosine Similarity")
-	scoring.PlotMinerScoresTerminal(processed.CosineSimilarityMinerScores, "Raw Cosine Similarity")
-
-	logger.Sugar().Infow("Normalized Cosine Similarity")
-	scoring.PlotMinerScoresTerminal(
-		processed.NormalisedCosineSimilarityMinerScores,
-		"Normalized Cosine Similarity",
-	)
-
-	logger.Sugar().Infow("Final Cubic Reward Scores")
-	scoring.PlotMinerScoresTerminal(processed.CubicRewardMinerScores, "Final Cubic Reward Scores")
+	scores := scoring.CalcPvVScores(discriminators, generators, validators)
+	for addr, score := range scores {
+		fmt.Printf("Address: %s, Score: %f\n", addr, score)
+	}
 }

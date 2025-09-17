@@ -1,13 +1,6 @@
 name: Docker Build and Push
 
 on:
-  # push:
-  #   branches:
-  #     - dev
-  #     - staging
-  #     - main
-  #   tags:
-  #     - 'v*'
   workflow_run:
     workflows: ["Build Go Binaries"]
     types:
@@ -39,7 +32,7 @@ jobs:
     needs: read_matrix
     name: Build (${{ matrix.app.name }})
     runs-on: arc-runner-set
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -90,7 +83,6 @@ jobs:
           platforms: ${{ join(fromJson(needs.read_matrix.outputs.matrix).platform, ',') }}
 
       - name: Build and Publish
-        if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v6.18.0
         with:
           labels: ${{ steps.meta.outputs.labels }}
