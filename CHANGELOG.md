@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/tensorplex-labs/dojo-v2/compare/v1.5.1...v1.5.2) (2025-09-17)
+
+
+### Bug Fixes
+
+* revert dockerfile, added name for release ci ([b5d6af5](https://github.com/tensorplex-labs/dojo-v2/commit/b5d6af5091743eb3eda1a28c5d296760c32026e5))
+
 ## [1.5.1](https://github.com/tensorplex-labs/dojo-v2/compare/v1.5.0...v1.5.1) (2025-09-17)
 
 
