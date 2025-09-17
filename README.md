@@ -51,6 +51,11 @@ REDIS_DB=0
 
 OPENROUTER_API_KEY=YOUR_OPENROUTER_KEY # https://openrouter.ai
 
+# You can leave the langfuse value as is, if you do not want to see the logging trace of the llm calls
+LANGFUSE_SECRET_KEY=
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_HOST="https://us.cloud.langfuse.com" # 🇺🇸 US region
+
 TASK_API_URL=https://dojo.network/api/v1/ # testnet: https://dev.dojo.network/api/v1
 
 DOJO_LOKI_URL= # DOJO TEAM WILL PROVIDE
