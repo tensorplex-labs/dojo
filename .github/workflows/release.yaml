@@ -24,12 +24,6 @@ jobs:
         with:
           release-type: go
 
-      - name: Debug release-please outputs
-        if: always()
-        run: |
-          echo "Release-please outputs:"
-          echo '${{ toJSON(steps.release.outputs) }}'
-
   build:
     name: Build Binaries
     needs: release
@@ -51,8 +45,12 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: show artifacts files
+        run: ls -R release-artifacts
+
       - name: Upload artifacts to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release upload ${{ needs.release.outputs.tag_name }} release-artifacts/*/*
