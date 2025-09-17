@@ -21,7 +21,7 @@ jobs:
         with:
           release-type: go
         env:
-          github_token: ${{ secrets.PAT }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
@@ -39,4 +39,4 @@ jobs:
           files: |
             dist/*
         env:
-          github_token: ${{ secrets.PAT }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
