@@ -75,6 +75,9 @@ jobs:
 
   build_image:
     name: Build Image
+    permissions:
+      packages: write
+      contents: read
     uses: ./.github/workflows/docker-build.yaml
     needs:
       - build
