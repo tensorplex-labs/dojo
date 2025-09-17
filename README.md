@@ -1,7 +1,5 @@
 # Dojo v2
 
-Dojo is a Go toolkit for building and running a Bittensor-style subnet stack. It includes a validator node, client SDKs for external services (Kami, Synthetic API, Task API), optional Redis integration, and a scoring pipeline demo.
-
 ## Incentives Mechanism
 
 ## Miner
@@ -22,7 +20,7 @@ Start mining at [Testnet](https://testnet.dojo.network) | [Mainnet](https://dojo
 
 ### Validator Guide
 
-1. Clone and env
+1. Clone `.env.example` to `.env`
 
 ```bash
 # Copy the .env.exmaple to .env
@@ -33,25 +31,14 @@ BITTENSOR_DIR=~/.bittensor
 WALLET_COLDKEY=YOUR_COLDKEY_NAME
 WALLET_HOTKEY= YOUR_HOTKEY_NAME
 
-KAMI_HOST=kami
-KAMI_PORT=8882
 
-NETUID=98 # 52 for mainnet
+NETUID=52 # 98 for testnet
 
-SUBTENSOR_NETWORK=wss://test.finney.opentensor.ai:443 # mainnet
-
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_USERNAME=YOUR_REDIS_USERNAME
-REDIS_PASSWORD=YOUR_REDIS_PASSWORD
-REDIS_DB=0
+SUBTENSOR_NETWORK=finney # optional: replace with your custom node or `test` for testnet
 
 OPENROUTER_API_KEY=YOUR_OPENROUTER_KEY
-SYNTHETIC_API_URL=http://synthetic-api:5003/
 
-TASK_API_URL=https://dev.dojo.network/api/v1/ # https://dojo.network/api/v1 - mainnet
-
-ENVIRONMENT=production # Can be dev | test | prod. Difference being the intervals!
+TASK_API_URL=https://dojo.network/api/v1/ # testnet: https://dev.dojo.network/api/v1
 ```
 
 2. Start the compose stack
