@@ -6,6 +6,9 @@ networks:
   validator:
     name: validator
 
+volumes:
+  redis-volume:
+
 services:
   kami:
     container_name: kami
@@ -63,6 +66,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    volumes:
+      - redis-validator-volume:/data
     logging: *default-logging
     networks:
       - validator
