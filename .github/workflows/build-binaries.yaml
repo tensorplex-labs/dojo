@@ -1,13 +1,14 @@
 name: Build Go Binaries
 
 on:
+  workflow_call:
   push:
     branches:
       - dev
       - staging
       - main
-    tags:
-      - 'v*'
+    # tags:
+    #   - 'v*'
   # pull_request:
   #   branches:
   #     - dev

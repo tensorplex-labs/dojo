@@ -2,17 +2,49 @@ name: Create Release
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
 
 jobs:
   release:
     runs-on: arc-runner-set
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4.3.0
+        id: release
         with:
           release-type: go
+
+  build:
+    name: Build Binaries
+    needs: release
+    if: needs.release.outputs.release_created
+    uses: ./.github/workflows/build-binaries.yaml
+
+  upload_artifacts:
+    name: Upload Artifacts to Release
+    runs-on: arc-runner-set
+    needs:
+      - release
+      - build
+    if: needs.release.outputs.release_created
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Upload artifacts to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ needs.release.outputs.tag_name }} release-artifacts/*/*
