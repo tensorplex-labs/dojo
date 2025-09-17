@@ -11,19 +11,17 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+    permissions:
+      pull-requests: write
+      actions: read
+      deployments: write
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
           release-type: go
         env:
-          github_token: ${{ secrets.github_token }}
-
-  build-and-attach:
-    needs: release
-    if: ${{ needs.release.outputs.release_created == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
+          github_token: ${{ secrets.PAT }}
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
@@ -41,4 +39,4 @@ jobs:
           files: |
             dist/*
         env:
-          github_token: ${{ secrets.github_token }}
+          github_token: ${{ secrets.PAT }}
