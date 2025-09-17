@@ -2,7 +2,7 @@ name: GHCR Cleanup
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 16 * * *" # UTC Time!
+    - cron: "0 16 * * 0" # UTC Time!
 jobs:
   cleanup_ghcr:
     name: Cleanup untagged images
