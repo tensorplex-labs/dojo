@@ -24,10 +24,16 @@ jobs:
         with:
           release-type: go
 
+      - name: Debug release-please outputs
+        if: always()
+        run: |
+          echo "Release-please outputs:"
+          echo '${{ toJSON(steps.release.outputs) }}'
+
   build:
     name: Build Binaries
     needs: release
-    if: needs.release.outputs.release_created == 'true'
+    if: ${{ needs.release.outputs.release_created }}
     uses: ./.github/workflows/build-binaries.yaml
 
   upload_artifacts:
@@ -36,7 +42,7 @@ jobs:
     needs:
       - release
       - build
-    if: needs.release.outputs.release_created == 'true'
+    if: ${{ needs.release.outputs.release_created }}
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
