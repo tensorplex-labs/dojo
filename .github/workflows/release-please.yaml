@@ -17,7 +17,7 @@ jobs:
       deployments: write
       contents: write
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v4.3.0
         id: release
         with:
           release-type: go
