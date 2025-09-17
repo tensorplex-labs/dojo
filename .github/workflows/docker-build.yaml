@@ -30,8 +30,6 @@ jobs:
           pattern: ${{ matrix.app.name }}-linux-*
           path: dist
           merge-multiple: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Login to ghcr
         uses: docker/login-action@v3
