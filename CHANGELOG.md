@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.3.0...v1.4.0) (2025-09-17)
+
+
+### Features
+
+* test release ([13562e1](https://github.com/tensorplex-labs/dojo-v2/commit/13562e1d23f13fc2ea4b9f03e82c0ec3882f4147))
+
 ## [1.3.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.2.0...v1.3.0) (2025-09-17)
 
 
