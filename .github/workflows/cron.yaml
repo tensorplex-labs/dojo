@@ -16,4 +16,4 @@ jobs:
           packages: '^dojo-v2(/.*)?$'
           expand-packages: true
           use-regex: true
-          token: ${{ secrets.PAT }}
+          token: ${{ secrets.CLEANUP_TOKEN }}
