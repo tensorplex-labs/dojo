@@ -29,7 +29,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 		selectedMinerUIDs := v.pickRandomMiners(activeMinerUIDs, count, processedMiners)
 
-		log.Info().Msgf("Selected miners for codegen task: %+v", selectedMinerUIDs)
+		log.Debug().Msgf("Selected miners for codegen task: %+v", selectedMinerUIDs)
 
 		synAPIQuestion, err := v.SyntheticAPI.GetQuestion()
 		if err != nil {
@@ -95,10 +95,12 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 
 		if shouldDuelValidator {
-			log.Info().Msgf("Created task for %d and validator\n", selectedMinerUIDs[0])
+			log.Debug().Msgf("Created task for %d and validator\n", selectedMinerUIDs[0])
 		} else {
-			log.Info().Msgf("Created task for %+v\n", selectedMinerUIDs)
+			log.Debug().Msgf("Created task for %+v\n", selectedMinerUIDs)
 		}
+
+		log.Info().Msgf("Processed miners so far: %d/%d\n", len(processedMiners.uids), len(activeMinerUIDs))
 	}
 }
 
