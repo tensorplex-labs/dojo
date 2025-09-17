@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.5.2](https://github.com/tensorplex-labs/dojo-v2/compare/v1.5.1...v1.5.2) (2025-09-17)
+
+
+### Bug Fixes
+
+* revert dockerfile, added name for release ci ([b5d6af5](https://github.com/tensorplex-labs/dojo-v2/commit/b5d6af5091743eb3eda1a28c5d296760c32026e5))
+
+## [1.5.1](https://github.com/tensorplex-labs/dojo-v2/compare/v1.5.0...v1.5.1) (2025-09-17)
+
+
+### Bug Fixes
+
+* docker build ([0189b85](https://github.com/tensorplex-labs/dojo-v2/commit/0189b857849faadc155b98b19e8d551e58fbbfa7))
+
+## [1.5.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.4.0...v1.5.0) (2025-09-17)
+
+
+### Features
+
+* test release ([5de1c93](https://github.com/tensorplex-labs/dojo-v2/commit/5de1c931dfeccf1a752293660be196d1cdf0ce7c))
+* workflow revamp ([c7fdc0b](https://github.com/tensorplex-labs/dojo-v2/commit/c7fdc0b153232a400c1bcfcea88d816ed457165a))
+
+
+### Bug Fixes
+
+* workflow perms ([7e4fc49](https://github.com/tensorplex-labs/dojo-v2/commit/7e4fc491c6056053384ff411074704fddc349ed9))
+* workflows perms ([eb1963f](https://github.com/tensorplex-labs/dojo-v2/commit/eb1963fb7743d6f10b2bd391c961dbf56aa1f585))
+
+## [1.4.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.3.0...v1.4.0) (2025-09-17)
+
+
+### Features
+
+* test release ([13562e1](https://github.com/tensorplex-labs/dojo-v2/commit/13562e1d23f13fc2ea4b9f03e82c0ec3882f4147))
+
+## [1.3.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.2.0...v1.3.0) (2025-09-17)
+
+
+### Features
+
+* test release ([c436002](https://github.com/tensorplex-labs/dojo-v2/commit/c4360027393dcefed62e96781b4ceb96bb28ee1a))
+
 ## [1.2.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.1.0...v1.2.0) (2025-09-17)
 
 

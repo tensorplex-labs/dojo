@@ -2,36 +2,22 @@ name: Build Go Binaries
 
 on:
   workflow_call:
-  push:
-    branches:
-      - dev
-      - staging
+    inputs:
+      tag_name:
+        required: false
+        type: string
+      matrix:
+        required: true
+        type: string
 
 jobs:
-  read_matrix:
-    runs-on: arc-runner-set
-    outputs:
-      matrix: ${{ steps.read_matrix.outputs.matrix }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Read matrix from file
-        id: read_matrix
-        uses: actions/github-script@v7.0.1
-        with:
-          script: |
-            const fs = require('fs');
-            const matrix = fs.readFileSync('.github/matrix-config.json', 'utf8');
-            core.setOutput('matrix', matrix);
-
   build:
-    needs: read_matrix
     name: Build ${{ matrix.app.name }} (${{ matrix.platform }})
     runs-on: arc-runner-set
     strategy:
       matrix:
-        app: ${{ fromJson(needs.read_matrix.outputs.matrix).app }}
-        platform: ${{ fromJson(needs.read_matrix.outputs.matrix).platform }}
+        app: ${{ fromJson(inputs.matrix).app }}
+        platform: ${{ fromJson(inputs.matrix).platform }}
       max-parallel: 6
 
     steps:

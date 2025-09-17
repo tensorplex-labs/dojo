@@ -1,0 +1,33 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+
+jobs:
+  read_matrix:
+    name: Read Build Matrix
+    uses: ./.github/workflows/read-matrix.yaml
+
+  build_binaries:
+    name: Build Binaries
+    needs:
+      - read_matrix
+    uses: ./.github/workflows/build-binaries.yaml
+    with:
+      matrix: ${{ needs.read_matrix.outputs.matrix }}
+
+  build_docker_images:
+    name: Build Docker Images
+    needs:
+      - read_matrix
+      - build_binaries
+    uses: ./.github/workflows/docker-build.yaml
+    permissions:
+      packages: write
+      contents: read
+      actions: read
+    with:
+      matrix: ${{ needs.read_matrix.outputs.matrix }}

@@ -10,10 +10,12 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  packages: write
   actions: read
 
 jobs:
   release:
+    name: Run Release
     runs-on: arc-runner-set
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -24,24 +26,43 @@ jobs:
         with:
           release-type: go
 
-      - name: Debug release-please outputs
-        if: always()
-        run: |
-          echo "Release-please outputs:"
-          echo '${{ toJSON(steps.release.outputs) }}'
-
-  build:
-    name: Build Binaries
+  read_matrix:
+    name: Read Build Matrix
     needs: release
     if: ${{ needs.release.outputs.release_created }}
+    uses: ./.github/workflows/read-matrix.yaml
+
+  build_binaries:
+    name: Build Binaries
+    needs:
+      - release
+      - read_matrix
+    if: ${{ needs.release.outputs.release_created }}
     uses: ./.github/workflows/build-binaries.yaml
+    with:
+      tag_name: ${{ needs.release.outputs.tag_name }}
+      matrix: ${{ needs.read_matrix.outputs.matrix }}
+
+  build_docker_images:
+    name: Build Docker Images
+    needs:
+      - release
+      - read_matrix
+      - build_binaries
+    if: ${{ needs.release.outputs.release_created }}
+    uses: ./.github/workflows/docker-build.yaml
+    with:
+      tag_name: ${{ needs.release.outputs.tag_name }}
+      matrix: ${{ needs.read_matrix.outputs.matrix }}
 
   upload_artifacts:
     name: Upload Artifacts to Release
     runs-on: arc-runner-set
+    container:
+      image: maniator/gh:v2.79.0
     needs:
       - release
-      - build
+      - build_binaries
     if: ${{ needs.release.outputs.release_created }}
     steps:
       - name: Download all build artifacts
@@ -52,5 +73,6 @@ jobs:
       - name: Upload artifacts to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release upload ${{ needs.release.outputs.tag_name }} release-artifacts/*/*
