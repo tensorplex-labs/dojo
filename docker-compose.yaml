@@ -67,7 +67,7 @@ services:
       timeout: 5s
       retries: 5
     volumes:
-      - redis-validator-volume:/data
+      - redis-volume:/data
     logging: *default-logging
     networks:
       - validator
