@@ -1,41 +1,19 @@
 name: Docker Build and Push
 
 on:
-  workflow_run:
-    workflows: ["Build Go Binaries"]
-    types:
-      - completed
-    branches:
-      - dev
-      - staging
-      # - main
-  release:
-    types:
-      - published
+  workflow_call:
+    inputs:
+      matrix:
+        required: true
+        type: string
+      tag_name:
+        required: false
+        type: string
 
 jobs:
-  read_matrix:
-    runs-on: arc-runner-set
-    outputs:
-      matrix: ${{ steps.read_matrix.outputs.matrix }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Read matrix from file
-        id: read_matrix
-        uses: actions/github-script@v7.0.1
-        with:
-          script: |
-            const fs = require('fs');
-            const matrix = fs.readFileSync('.github/matrix-config.json', 'utf8');
-            core.setOutput('matrix', matrix);
-
   docker_publish:
-    needs: read_matrix
     name: Build (${{ matrix.app.name }})
     runs-on: arc-runner-set
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -47,18 +25,13 @@ jobs:
       max-parallel: 6
     steps:
       - name: Download binary artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.1.8
         with:
           pattern: ${{ matrix.app.name }}-linux-*
           path: dist
           merge-multiple: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
-
-      - name: List available binaries
-        run: |
-          echo "Available binaries:"
-          ls -la dist/
 
       - name: Login to ghcr
         uses: docker/login-action@v3
@@ -73,9 +46,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.app.name }}
           tags: |
-            type=raw,value=${{ github.ref_name }},enable=${{ github.ref_type == 'branch' }}
-            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=raw,value=${{ github.ref_name }},enable=${{ inputs.tag_name == '' && github.ref_type == 'branch' }}
+            type=raw,value=${{ inputs.tag_name }},enable=${{ inputs.tag_name != '' }}
+            type=raw,value=latest,enable=${{ inputs.tag_name != '' }}
 
       - name: Docker Setup QEMU
         uses: docker/setup-qemu-action@v3.6.0

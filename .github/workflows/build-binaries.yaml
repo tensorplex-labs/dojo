@@ -2,6 +2,10 @@ name: Build Go Binaries
 
 on:
   workflow_call:
+    inputs:
+      tag_name:
+        required: false
+        type: string
   push:
     branches:
       - dev
@@ -68,3 +72,13 @@ jobs:
           name: ${{ matrix.app.name }}-${{ steps.parse_platform.outputs.os }}-${{ steps.parse_platform.outputs.arch }}
           path: dist/${{ matrix.app.name }}-${{ steps.parse_platform.outputs.os }}-${{ steps.parse_platform.outputs.arch }}
           retention-days: 1
+
+  build_image:
+    name: Build Image
+    uses: ./.github/workflows/docker-build.yaml
+    needs:
+      - build
+      - read_matrix
+    with:
+      matrix: ${{ needs.read_matrix.outputs.matrix }}
+      tag_name: ${{ inputs.tag_name }}

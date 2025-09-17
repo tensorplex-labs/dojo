@@ -29,6 +29,8 @@ jobs:
     needs: release
     if: ${{ needs.release.outputs.release_created }}
     uses: ./.github/workflows/build-binaries.yaml
+    with:
+      tag_name: ${{ needs.release.outputs.tag_name }}
 
   upload_artifacts:
     name: Upload Artifacts to Release
@@ -44,9 +46,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
-
-      - name: show artifacts files
-        run: ls -R release-artifacts
 
       - name: Upload artifacts to GitHub Release
         env:
