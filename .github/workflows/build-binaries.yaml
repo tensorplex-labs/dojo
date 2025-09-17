@@ -78,6 +78,7 @@ jobs:
     permissions:
       packages: write
       contents: read
+      actions: read
     uses: ./.github/workflows/docker-build.yaml
     needs:
       - build
