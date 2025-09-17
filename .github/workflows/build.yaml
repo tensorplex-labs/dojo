@@ -8,7 +8,10 @@ on:
     branches:
       - dev
       - staging
-      - main
+      # - main
+  release:
+    types:
+      - published
 
 jobs:
   read_matrix:
@@ -70,9 +73,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.app.name }}
           tags: |
-            type=raw,value=latest,enable=${{ github.event.workflow_run.head_branch == 'main' }}
-            type=raw,value=${{ github.event.workflow_run.head_branch }},enable=${{ github.event.workflow_run.head_branch != 'main' }}
-            type=ref,event=tag
+            type=raw,value=${{ github.ref_name }},enable=${{ github.ref_type == 'branch' }}
+            type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.action == 'published' }}
 
       - name: Docker Setup QEMU
         uses: docker/setup-qemu-action@v3.6.0

@@ -12,17 +12,17 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     permissions:
+      contents: write
+      issues: write
       pull-requests: write
       actions: read
       deployments: write
-      contents: write
     steps:
       - uses: googleapis/release-please-action@v4.3.0
         id: release
         with:
+          # token: ${{ secrets.PR_TOKEN }}
           release-type: go
-        env:
-          token: ${{ secrets.PR_TOKEN }}
 
       - uses: actions/checkout@v4
 
