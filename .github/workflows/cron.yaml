@@ -1,4 +1,5 @@
 name: GHCR Cleanup
+
 on:
   workflow_dispatch:
   schedule:
