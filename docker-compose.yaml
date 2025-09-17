@@ -16,6 +16,7 @@ services:
     env_file:
       - .env
     expose:
+      - 3000
     healthcheck:
       test:
         [
@@ -28,6 +29,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 50s
+    volumes:
+      - ${BITTENSOR_DIR}:${BITTENSOR_DIR}
     logging: *default-logging
     networks:
       - validator
@@ -66,20 +69,20 @@ services:
 
   validator:
     container_name: dojo-validator
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/tensorplex-labs/dojo-v2/validator:dev
     env_file:
       - .env
     depends_on:
       - kami
       - redis
-      - synthetic-api
+      - synthetic-gen
     restart: on-failure
+    volumes:
+      - .env:/app/.env
     networks:
       - validator
 
-  synthetic-api:
+  synthetic-gen:
     container_name: synthetic-gen
     image: ghcr.io/tensorplex-labs/dojo-synthetic-gen:latest
     restart: on-failure
@@ -92,7 +95,7 @@ services:
     networks:
       - validator
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://synthetic-api:5003/health"]
+      test: ["CMD", "curl", "-f", "http://synthetic-gen:5003/health"]
       interval: 10s
       timeout: 10s
       retries: 5
