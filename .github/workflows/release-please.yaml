@@ -21,8 +21,8 @@ jobs:
         id: release
         with:
           release-type: go
-        # env:
-        #   token: ${{ secrets.PR_TOKEN }}
+        env:
+          token: ${{ secrets.PR_TOKEN }}
 
       - uses: actions/checkout@v4
 
