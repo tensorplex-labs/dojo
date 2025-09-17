@@ -52,6 +52,9 @@ REDIS_DB=0
 OPENROUTER_API_KEY=YOUR_OPENROUTER_KEY # https://openrouter.ai
 
 TASK_API_URL=https://dojo.network/api/v1/ # testnet: https://dev.dojo.network/api/v1
+
+DOJO_LOKI_URL= # DOJO TEAM WILL PROVIDE
+VALIDATOR_HOTKEY=YOUR_VALIDATOR_HOTKEY
 ```
 
 2. Start the compose stack
