@@ -1,0 +1,9 @@
+{
+  "app": [
+    {
+      "name": "validator",
+      "path": "validator"
+    }
+  ],
+  "platform": ["linux/amd64", "linux/arm64"]
+}

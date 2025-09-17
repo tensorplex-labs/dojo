@@ -1,0 +1,25 @@
+name: Read Build Matrix
+
+on:
+  workflow_call:
+    outputs:
+      matrix:
+        description: "The build matrix as a JSON string"
+        value: ${{ jobs.read_matrix.outputs.matrix }}
+
+jobs:
+  read_matrix:
+    runs-on: arc-runner-set
+    outputs:
+      matrix: ${{ steps.read_matrix.outputs.matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Read matrix from file
+        id: read_matrix
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const matrix = fs.readFileSync('.github/matrix-config.json', 'utf8');
+            core.setOutput('matrix', matrix);

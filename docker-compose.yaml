@@ -1,0 +1,124 @@
+x-logging: &default-logging
+  options:
+    max-size: "50m"
+
+networks:
+  validator:
+    name: validator
+
+volumes:
+  redis-volume:
+
+services:
+  kami:
+    container_name: kami
+    restart: on-failure
+    image: ghcr.io/tensorplex-labs/kami:main
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    env_file:
+      - .env
+    expose:
+      - 3000
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://${KAMI_HOST}:${KAMI_PORT}/substrate/health",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 50s
+    volumes:
+      - ${BITTENSOR_DIR}:${BITTENSOR_DIR}
+    logging: *default-logging
+    networks:
+      - validator
+
+  redis:
+    container_name: redis
+    image: redis/redis-stack-server:7.4.0-v0
+    env_file:
+      - .env
+    expose:
+      - 6379
+    command: >
+      sh -c '
+      if [ ! -z "$$REDIS_PASSWORD" ] && [ ! -z "$$REDIS_USERNAME" ]; then
+        redis-stack-server --dir /data --requirepass $$REDIS_PASSWORD --save 60 1 --appendonly yes &
+        sleep 2
+        redis-cli -a $$REDIS_PASSWORD ACL SETUSER $$REDIS_USERNAME on \>$$REDIS_PASSWORD allcommands allkeys
+        wait
+      else
+        redis-stack-server --dir /data --save 60 1 --appendonly yes;
+      fi'
+    healthcheck:
+      test: >
+        sh -c '
+        if [ ! -z "$$REDIS_PASSWORD" ]; then
+          redis-cli -a $$REDIS_PASSWORD ping;
+        else
+          redis-cli ping;
+        fi'
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis-volume:/data
+    logging: *default-logging
+    networks:
+      - validator
+
+  validator:
+    container_name: dojo-validator
+    image: ghcr.io/tensorplex-labs/dojo-v2/validator:latest
+    env_file:
+      - .env
+    depends_on:
+      - kami
+      - redis
+      - synthetic-gen
+    restart: on-failure
+    volumes:
+      - ./.env:/app/.env
+      - ./scores.json:/app/scores.json
+    networks:
+      - validator
+    logging:
+      driver: loki
+      options:
+        mode: non-blocking
+        loki-url: "https://${DOJO_LOKI_URL}"
+        loki-external-labels: "validator=${VALIDATOR_HOTKEY}"
+        # disable loki's default of not saving to a file, so we have persistence
+        no-file: 0
+        max-size: "50m"
+
+  synthetic-gen:
+    container_name: synthetic-gen
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-gen:latest
+    restart: on-failure
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    env_file:
+      - .env
+    expose:
+      - 5003
+    networks:
+      - validator
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://synthetic-gen:5003/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 50s
+    depends_on:
+      redis:
+        condition: service_healthy
+    # allow docker commands inside container
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging: *default-logging

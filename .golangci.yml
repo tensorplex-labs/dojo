@@ -1,0 +1,110 @@
+# golangci-lint configuration for dojo (v2)
+version: 2
+
+run:
+  go: "1.24"
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - funlen
+    - goconst
+    - gocritic
+    - gocyclo
+    - goprintffuncname
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+  settings:
+    govet:
+      enable:
+        - shadow
+    staticcheck:
+      checks: ["all"]
+    revive:
+      rules: []
+    gocritic:
+      enabled-tags: [diagnostic, experimental, opinionated, performance, style]
+      disabled-checks:
+        [dupImport, ifElseChain, octalLiteral, whyNoLint, commentedOutCode]
+    funlen:
+      lines: 100
+      statements: 50
+    gocyclo:
+      min-complexity: 15
+    cyclop:
+      max-complexity: 15
+    lll:
+      line-length: 120
+    unused:
+      check-exported: false
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    depguard:
+      rules:
+        cmd:
+          files:
+            - "cmd/**"
+          allow:
+            - $gostd
+            - github.com/tensorplex-labs/dojo/...
+            - github.com/bytedance/sonic
+            - github.com/go-resty/resty/v2
+            - github.com/gofiber/fiber/v3
+            - github.com/joho/godotenv
+            - github.com/klauspost/compress/zstd
+            - github.com/redis/rueidis
+            - github.com/rs/zerolog
+            - github.com/rs/zerolog/pkgerrors
+            - go.uber.org/zap
+            - gonum.org/v1/gonum/...
+        internal:
+          files:
+            - "internal/**"
+          allow:
+            - $gostd
+            - github.com/tensorplex-labs/dojo/...
+            - github.com/bytedance/sonic
+            - github.com/go-resty/resty/v2
+            - github.com/gofiber/fiber/v3
+            - github.com/joho/godotenv
+            - github.com/klauspost/compress/zstd
+            - github.com/redis/rueidis
+            - github.com/rs/zerolog
+            - github.com/rs/zerolog/pkgerrors
+            - go.uber.org/zap
+            - gonum.org/v1/gonum/...
+
+formatters:
+  enable:
+    - gci
+    - goimports
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/tensorplex-labs/dojo)
+        - blank
+        - dot
+    goimports:
+      local-prefixes: github.com/tensorplex-labs/dojo
+    gofumpt:
+      extra-rules: true
