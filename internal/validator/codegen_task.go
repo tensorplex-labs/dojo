@@ -18,7 +18,6 @@ const (
 	taskType                = "codeGen"
 	augmentedProbability    = int64(25) // 25% chance for traps!
 	validatorDuelProbablity = int64(60) // 60% chance to duel validator
-	expireAt                = 6 * time.Hour
 )
 
 func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners) {
@@ -57,7 +56,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 
 		payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
 			TaskType:  taskType,
-			ExpireAt:  time.Now().Add(expireAt).Format(time.RFC3339),
+			ExpireAt:  time.Now().Add(v.IntervalConfig.TaskRoundInterval).Format(time.RFC3339),
 			Assignees: v.buildAssignees(synAPIQuestion.Prompt, selectedMinerUIDs, shouldDuelValidator, taskAugmented, selectedAugmentedMiner, augmentedPrompt),
 			Metadata: taskapi.CodegenTaskMetadata{
 				Prompt:        synAPIQuestion.Prompt,
