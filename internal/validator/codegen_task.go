@@ -113,12 +113,6 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 	}
 }
 
-func hasValidatorContent(completion syntheticapi.CodegenAnswer) bool {
-	return len(completion.Responses) > 0 &&
-		len(completion.Responses[0].Completion.Files) > 0 &&
-		completion.Responses[0].Completion.Files[0].Content != ""
-}
-
 func cryptoIntn(n int) int {
 	if n <= 0 {
 		return 0
