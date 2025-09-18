@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/rs/zerolog/log"
 
 	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
@@ -29,7 +30,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 		selectedMinerUIDs := v.pickRandomMiners(activeMinerUIDs, count, processedMiners)
 
-		log.Info().Msgf("Selected miners for codegen task: %+v", selectedMinerUIDs)
+		log.Debug().Msgf("Selected miners for codegen task: %+v", selectedMinerUIDs)
 
 		synAPIQuestion, err := v.SyntheticAPI.GetQuestion()
 		if err != nil {
@@ -40,17 +41,17 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		log.Debug().Msgf("Received question: %s of id: %s", synAPIQuestion.Prompt, synAPIQuestion.QaID)
 		log.Debug().Msgf("Processing question with ID %s for duel %+v", synAPIQuestion.QaID, selectedMinerUIDs)
 
-		completion, err := v.SyntheticAPI.GetCodegenAnswer(synAPIQuestion.QaID)
+		completionRaw, err := v.Redis.Get(v.Ctx, fmt.Sprintf("synthetic:answers:%s", synAPIQuestion.QaID))
 		if err != nil {
-			log.Error().Err(err).Msgf("failed to get answer for question ID %s", synAPIQuestion.QaID)
-			return
-		}
-		if !hasValidatorContent(completion) {
-			log.Error().Msgf("empty completion for question ID %s", synAPIQuestion.QaID)
+			log.Error().Err(err).Msgf("failed to get answer content from redis for question ID %s", synAPIQuestion.QaID)
 			return
 		}
 
-		validatorContent := completion.Answer.Responses[0].Completion.Files[0].Content
+		var completion syntheticapi.CodegenAnswer
+		if err = sonic.Unmarshal([]byte(completionRaw), &completion); err != nil {
+			log.Error().Err(err).Msgf("failed to unmarshal answer content from redis for %s", synAPIQuestion.QaID)
+		}
+		validatorContent := completion.Responses[0].Completion.Files[0].Content
 
 		taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent := v.maybeAugment(shouldDuelValidator, synAPIQuestion, selectedMinerUIDs, validatorContent)
 
@@ -95,17 +96,28 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 
 		if shouldDuelValidator {
-			log.Info().Msgf("Created task for %d and validator\n", selectedMinerUIDs[0])
+			log.Debug().Msgf("Created task for %d and validator\n", selectedMinerUIDs[0])
 		} else {
-			log.Info().Msgf("Created task for %+v\n", selectedMinerUIDs)
+			log.Debug().Msgf("Created task for %+v\n", selectedMinerUIDs)
 		}
+
+		ok, err := v.SyntheticAPI.PopQA(synAPIQuestion.QaID)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed to pop question with ID %s", synAPIQuestion.QaID)
+		}
+
+		if !ok {
+			log.Error().Msgf("failed to pop question with ID %s", synAPIQuestion.QaID)
+		}
+
+		log.Info().Msgf("Processed miners so far: %d/%d\n", len(processedMiners.uids), len(activeMinerUIDs))
 	}
 }
 
-func hasValidatorContent(completion syntheticapi.GenerateAnswerResponse[syntheticapi.CodegenAnswer]) bool {
-	return len(completion.Answer.Responses) > 0 &&
-		len(completion.Answer.Responses[0].Completion.Files) > 0 &&
-		completion.Answer.Responses[0].Completion.Files[0].Content != ""
+func hasValidatorContent(completion syntheticapi.CodegenAnswer) bool {
+	return len(completion.Responses) > 0 &&
+		len(completion.Responses[0].Completion.Files) > 0 &&
+		completion.Responses[0].Completion.Files[0].Content != ""
 }
 
 func cryptoIntn(n int) int {
@@ -141,19 +153,25 @@ func (v *Validator) maybeAugment(
 		return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent
 	}
 
-	augmentedCompletion, err := v.SyntheticAPI.GetCodegenAnswer(syn.AnsAugID)
+	augmentedCompletionRaw, err := v.Redis.Get(v.Ctx, fmt.Sprintf("synthetic:answers:%s", syn.AnsAugID))
 	if err != nil {
 		log.Error().Err(err).Msgf("failed to get augmented answer for question ID %s", syn.QaID)
 	}
 
+	var augmentedCompletion syntheticapi.CodegenAnswer
+	if err = sonic.Unmarshal([]byte(augmentedCompletionRaw), &augmentedCompletion); err != nil {
+		log.Error().Err(err).Msgf("failed to unmarshal augmented answer for question ID %s", syn.QaID)
+		return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent
+	}
+
 	if shouldDuelValidator {
-		if len(augmentedCompletion.Answer.Responses) > 0 || len(augmentedCompletion.Answer.Responses[0].Completion.Files) > 0 {
+		if len(augmentedCompletion.Responses) > 0 || len(augmentedCompletion.Responses[0].Completion.Files) > 0 {
 			log.Debug().Msgf("Using augmented answer for question ID %s", syn.QaID)
-			validatorContent = augmentedCompletion.Answer.Responses[0].Completion.Files[0].Content
+			validatorContent = augmentedCompletion.Responses[0].Completion.Files[0].Content
 		}
 	} else {
 		selectedAugmentedMiner = selectedMinerUIDs[cryptoIntn(len(selectedMinerUIDs))]
-		augmentedPrompt = augmentedCompletion.Answer.Prompt
+		augmentedPrompt = augmentedCompletion.Prompt
 	}
 
 	taskAugmented = true
