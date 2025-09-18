@@ -101,7 +101,7 @@ var (
 		MetagraphInterval:  5 * time.Second,
 		TaskRoundInterval:  10 * time.Second,
 		BlockInterval:      2 * time.Second,
-		ScoringInterval:    10 * time.Second,
+		ScoringInterval:    5 * time.Minute,
 		WeightSettingStep:  2,
 		TaskExpiryDuration: 10 * time.Minute,
 	}
@@ -110,7 +110,7 @@ var (
 		TaskRoundInterval:  15 * time.Minute,
 		BlockInterval:      12 * time.Second,
 		ScoringInterval:    5 * time.Minute,
-		WeightSettingStep:  2,
+		WeightSettingStep:  4,
 		TaskExpiryDuration: 2 * time.Hour,
 	}
 

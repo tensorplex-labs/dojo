@@ -122,8 +122,8 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 				return nil
 			}
 
-			if _, err := v.TaskAPI.UpdateTaskStatus(headers, task.ID, "SCORED"); err != nil {
-				log.Error().Err(err).Msgf("failed to update task status to SCORED for task %s", task.ID)
+			if _, err := v.TaskAPI.UpdateTaskStatus(headers, task.ID, "scored"); err != nil {
+				log.Error().Err(err).Msgf("failed to update task status to scored for task %s", task.ID)
 			}
 		}
 	}
