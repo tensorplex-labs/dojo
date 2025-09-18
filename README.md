@@ -28,7 +28,12 @@ btcli s register --network test --netuid 98
 
 ### Validator Guide
 
-1. Clone `.env.example` to `.env`
+1. Clone `scores_example.json` to `scores.json`
+```bash
+cp .cores_example.json scores.json
+```
+
+2. Clone `.env.example` to `.env`
 
 ```bash
 # Copy the .env.exmaple to .env
@@ -62,7 +67,7 @@ DOJO_LOKI_URL= # DOJO TEAM WILL PROVIDE
 VALIDATOR_HOTKEY=YOUR_VALIDATOR_HOTKEY
 ```
 
-2. Start the compose stack
+3. Start the compose stack
 
 ```bash
 docker compose up -d

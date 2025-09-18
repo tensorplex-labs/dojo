@@ -18,7 +18,6 @@ const (
 	taskType                = "codeGen"
 	augmentedProbability    = int64(25) // 25% chance for traps!
 	validatorDuelProbablity = int64(60) // 60% chance to duel validator
-	expireAt                = 6 * time.Hour
 )
 
 func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners) {
@@ -57,7 +56,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 
 		payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
 			TaskType:  taskType,
-			ExpireAt:  time.Now().Add(expireAt).Format(time.RFC3339),
+			ExpireAt:  time.Now().Add(v.IntervalConfig.TaskExpiryDuration).Format(time.RFC3339),
 			Assignees: v.buildAssignees(synAPIQuestion.Prompt, selectedMinerUIDs, shouldDuelValidator, taskAugmented, selectedAugmentedMiner, augmentedPrompt),
 			Metadata: taskapi.CodegenTaskMetadata{
 				Prompt:        synAPIQuestion.Prompt,
@@ -112,12 +111,6 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 
 		log.Info().Msgf("Processed miners so far: %d/%d\n", len(processedMiners.uids), len(activeMinerUIDs))
 	}
-}
-
-func hasValidatorContent(completion syntheticapi.CodegenAnswer) bool {
-	return len(completion.Responses) > 0 &&
-		len(completion.Responses[0].Completion.Files) > 0 &&
-		completion.Responses[0].Completion.Files[0].Content != ""
 }
 
 func cryptoIntn(n int) int {
