@@ -40,7 +40,7 @@ type SyntheticAPIInterface interface {
 	GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error)
 	GetQuestionAugment(baseQuestion string, numAugments int) (AugmentQuestionResponse, error)
 	OrderAnswer(question string) (OrderAnswerResponse, error)
-	PopQA(qaID string) (string, error)
+	PopQA(qaID string) (bool, error)
 }
 
 // SyntheticAPI wraps a REST client for the synthetic service.
