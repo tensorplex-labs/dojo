@@ -40,6 +40,7 @@ type SyntheticAPIInterface interface {
 	GetCodegenAnswer(qaID string) (GenerateAnswerResponse[CodegenAnswer], error)
 	GetQuestionAugment(baseQuestion string, numAugments int) (AugmentQuestionResponse, error)
 	OrderAnswer(question string) (OrderAnswerResponse, error)
+	PopQA(qaID string) (bool, error)
 }
 
 // SyntheticAPI wraps a REST client for the synthetic service.
@@ -190,4 +191,31 @@ func (s *SyntheticAPI) OrderAnswer(question string) (OrderAnswerResponse, error)
 		return OrderAnswerResponse{}, fmt.Errorf("order-answer api returned success=false")
 	}
 	return out, nil
+}
+
+func (s *SyntheticAPI) PopQA(qaID string) (succes bool, err error) {
+	if qaID == "" {
+		return false, fmt.Errorf("qaID cannot be empty")
+	}
+	payload := map[string]string{"qa_id": qaID}
+
+	type raw map[string]json.RawMessage
+	var r raw
+	resp, err := s.postJSON("/api/pop-qa", payload, &r)
+	if err != nil {
+		return false, fmt.Errorf("pop-qa: %w", err)
+	}
+	if resp.IsError() {
+		return false, fmt.Errorf("pop-qa status %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	var ok bool
+	if err := decodePossiblyStringified(r["success"], &ok); err != nil {
+		return false, fmt.Errorf("pop-qa decode success: %w", err)
+	}
+	if !ok {
+		return false, fmt.Errorf("pop-qa api returned success=false")
+	}
+
+	return ok, nil
 }
