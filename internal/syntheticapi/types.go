@@ -15,12 +15,6 @@ type GenerateAnswerResponse[T CodegenAnswer] struct {
 	Answer  T    `json:"answer"`
 }
 
-// GenerateAugmentedAnswerResponse is the response for an augmented codegen answer.
-type GenerateAugmentedAnswerResponse[T CodegenAnswer] struct {
-	Success bool `json:"success"`
-	AnsID   T    `json:"ans_id"`
-}
-
 // AugmentQuestionResponse contains augmented IDs for a base question.
 type AugmentQuestionResponse struct {
 	Success  bool     `json:"success"`
