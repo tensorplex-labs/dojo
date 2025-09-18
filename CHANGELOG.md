@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.2](https://github.com/tensorplex-labs/dojo-v2/compare/v1.0.1...v1.0.2) (2025-09-18)
+
+
+### Bug Fixes
+
+* add modifiable config for task expiry ([ae89801](https://github.com/tensorplex-labs/dojo-v2/commit/ae898011789fcfaa9a87ecfd912aa33029d8689b))
+* add modifiable config for task expiry ([ae89801](https://github.com/tensorplex-labs/dojo-v2/commit/ae898011789fcfaa9a87ecfd912aa33029d8689b))
+* fix the typo of specifying the round interval ([72e4c7d](https://github.com/tensorplex-labs/dojo-v2/commit/72e4c7d86cb89f411e85bd8c680a2c7061245ee4))
+* further shorten task expiry to 10mins ([f2701ff](https://github.com/tensorplex-labs/dojo-v2/commit/f2701ff615926feea5c3d570649dc15130172ee4))
+* hotfix for enum fix in task update api and changed scoring interval for dev ([584acc5](https://github.com/tensorplex-labs/dojo-v2/commit/584acc5ecb818485cdb10431f65841490f2c92b5))
+* testnet release ([2cf69c6](https://github.com/tensorplex-labs/dojo-v2/commit/2cf69c65b2156e4eb77c3d2d15a748589733d9d1))
+* testnet release ([2cf69c6](https://github.com/tensorplex-labs/dojo-v2/commit/2cf69c65b2156e4eb77c3d2d15a748589733d9d1))
+
 ## [1.0.1](https://github.com/tensorplex-labs/dojo-v2/compare/v1.0.0...v1.0.1) (2025-09-18)
 
 
