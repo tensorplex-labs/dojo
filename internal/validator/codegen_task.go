@@ -100,6 +100,15 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 			log.Debug().Msgf("Created task for %+v\n", selectedMinerUIDs)
 		}
 
+		ok, err := v.SyntheticAPI.PopQA(synAPIQuestion.QaID)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed to pop question with ID %s", synAPIQuestion.QaID)
+		}
+
+		if !ok {
+			log.Error().Msgf("failed to pop question with ID %s", synAPIQuestion.QaID)
+		}
+
 		log.Info().Msgf("Processed miners so far: %d/%d\n", len(processedMiners.uids), len(activeMinerUIDs))
 	}
 }
