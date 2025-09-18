@@ -56,7 +56,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 
 		payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
 			TaskType:  taskType,
-			ExpireAt:  time.Now().Add(v.IntervalConfig.TaskRoundInterval).Format(time.RFC3339),
+			ExpireAt:  time.Now().Add(v.IntervalConfig.TaskExpiryDuration).Format(time.RFC3339),
 			Assignees: v.buildAssignees(synAPIQuestion.Prompt, selectedMinerUIDs, shouldDuelValidator, taskAugmented, selectedAugmentedMiner, augmentedPrompt),
 			Metadata: taskapi.CodegenTaskMetadata{
 				Prompt:        synAPIQuestion.Prompt,
