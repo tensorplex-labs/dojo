@@ -144,7 +144,7 @@ func (v *Validator) Start() {
 
 	go v.runTicker(v.Ctx, v.IntervalConfig.ScoringInterval, func() {
 		v.startScoring()
-		v.setWeights(v.LatestScoresData.Scores, v.LatestScoresData.Step)
+		v.setWeights(v.LatestScoresData)
 	})
 }
 

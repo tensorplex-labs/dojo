@@ -146,18 +146,18 @@ func (v *Validator) checkCompletionExists(qaID string) bool {
 	return exists != ""
 }
 
-func (v *Validator) setWeights(scores []float64, latestScoresStep int) {
-	if latestScoresStep < v.IntervalConfig.WeightSettingStep {
+func (v *Validator) setWeights(latestScoresData ScoresFileData) {
+	if latestScoresData.Step < v.IntervalConfig.WeightSettingStep {
 		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresData.Step, v.IntervalConfig.WeightSettingStep))
 		return
 	}
 
-	uids := make([]int64, len(scores))
+	uids := make([]int64, len(latestScoresData.Scores))
 	for i := range uids {
 		uids[i] = int64(i)
 	}
 
-	weights := scores
+	weights := latestScoresData.Scores
 
 	if err := v.setWeightsOnChain(uids, weights); err != nil {
 		log.Error().Err(err).Msg("failed to set weights")
