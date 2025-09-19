@@ -55,7 +55,7 @@ const (
 	uidCount       int     = 256
 )
 
-type ScoresFileData struct {
+type ScoresData struct {
 	Scores  []float64 `json:"scores"`
 	Step    int       `json:"step"`
 	Hotkeys []string  `json:"hotkeys"`

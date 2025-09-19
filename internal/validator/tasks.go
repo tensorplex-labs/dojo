@@ -146,7 +146,7 @@ func (v *Validator) checkCompletionExists(qaID string) bool {
 	return exists != ""
 }
 
-func (v *Validator) setWeights(latestScoresData ScoresFileData) {
+func (v *Validator) setWeights(latestScoresData ScoresData) {
 	if latestScoresData.Step < v.IntervalConfig.WeightSettingStep {
 		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresData.Step, v.IntervalConfig.WeightSettingStep))
 		return

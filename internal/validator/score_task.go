@@ -25,7 +25,7 @@ type CompletionMaps struct {
 	negativeGenerators map[string]string
 }
 
-func (v *Validator) processTasksToScore(latestScoresData ScoresFileData) {
+func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 	if latestScoresData.Step >= v.IntervalConfig.WeightSettingStep {
 		log.Info().Msg("Initializing scores")
 		initializeScores(scoresFileName)
@@ -35,7 +35,7 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresFileData) {
 			log.Error().Err(err).Msg("failed to read scores file")
 			return
 		}
-		var latestScoresFileData ScoresFileData
+		var latestScoresFileData ScoresData
 		if err := sonic.Unmarshal(scoresFile, &latestScoresFileData); err != nil {
 			log.Error().Err(err).Msg("failed to unmarshal scores from file")
 			return
@@ -265,7 +265,7 @@ func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]flo
 	return nil
 }
 
-func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, latestScoresData ScoresFileData) (updatedScoresData ScoresFileData) {
+func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, latestScoresData ScoresData) (updatedScoresData ScoresData) {
 	currentHotkeyToUID := make(map[string]int)
 	for uid, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
 		currentHotkeyToUID[hotkey] = uid

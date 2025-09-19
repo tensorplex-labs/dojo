@@ -194,7 +194,7 @@ func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 }
 
 func initializeScores(filename string) {
-	scoresFileDataInitialState := ScoresFileData{
+	scoresFileDataInitialState := ScoresData{
 		Scores:  []float64{},
 		Step:    0,
 		Hotkeys: []string{},
