@@ -22,7 +22,7 @@ func main() {
 	log.Info().Msg("Starting validator...")
 
 	if err := godotenv.Load(); err != nil {
-		log.Debug().Msg(".env not loaded; continuing with existing environment")
+		log.Info().Msg(".env not loaded; continuing with existing environment")
 	}
 
 	cfg, err := config.LoadConfig()

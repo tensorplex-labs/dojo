@@ -4,6 +4,7 @@ package logger
 import (
 	"flag"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
@@ -29,15 +30,34 @@ func initLogger() {
 	info := flag.Bool("info", false, "sets log level to info (default)")
 	flag.Parse()
 
+	environment := strings.ToLower(os.Getenv("ENVIRONMENT"))
+	if environment == "" {
+		environment = "prod"
+	}
+
 	// Set default to Info level
-	logLevel := zerolog.InfoLevel
+	var logLevel zerolog.Level
+	switch environment {
+	case "dev", "test":
+		logLevel = zerolog.TraceLevel
+		log.Info().Str("environment", environment).Msg("Development/Test environment detected - enabling all log levels")
+	case "prod":
+		logLevel = zerolog.InfoLevel
+		log.Info().Str("environment", environment).Msg("Production environment detected - enabling info level and above")
+	default:
+		logLevel = zerolog.InfoLevel
+		log.Warn().Str("environment", environment).Msg("Unknown environment - defaulting to production log level (info and above)")
+	}
 
 	if *debug {
 		logLevel = zerolog.DebugLevel
+		log.Info().Msg("Debug flag detected - overriding environment log level")
 	} else if *trace {
 		logLevel = zerolog.TraceLevel
+		log.Info().Msg("Trace flag detected - overriding environment log level")
 	} else if *info {
 		logLevel = zerolog.InfoLevel
+		log.Info().Msg("Info flag detected - overriding environment log level")
 	}
 
 	// Apply the log level globally
@@ -46,11 +66,11 @@ func initLogger() {
 	// Log the current level
 	switch logLevel {
 	case zerolog.DebugLevel:
-		log.Debug().Msg("Debug mode enabled")
+		log.Debug().Str("environment", environment).Msg("Debug logging enabled")
 	case zerolog.TraceLevel:
-		log.Trace().Msg("Trace mode enabled")
+		log.Trace().Str("environment", environment).Msg("Trace logging enabled")
 	case zerolog.InfoLevel:
-		log.Info().Msg("Info mode enabled")
+		log.Info().Str("environment", environment).Msg("Info logging enabled")
 	}
 }
 
