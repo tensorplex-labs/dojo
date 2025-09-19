@@ -30,8 +30,7 @@ type Validator struct {
 	LatestBlock      int64
 	MetagraphData    MetagraphData
 	ValidatorHotkey  string
-	LatestScores     []float64
-	LatestScoresStep int
+	LatestScoresData ScoresData
 
 	IntervalConfig  *config.IntervalConfig     // used for heartbeat and task round intervals
 	ValidatorConfig *config.ValidatorEnvConfig // configuration for the validator
@@ -76,13 +75,13 @@ func NewValidator(
 		}
 	}
 
-	var latestScoresFileData ScoresFileData
-	if err := sonic.Unmarshal(scoresFile, &latestScoresFileData); err != nil {
+	var latestScoresData ScoresData
+	if err := sonic.Unmarshal(scoresFile, &latestScoresData); err != nil {
 		log.Error().Err(err).Msg("failed to unmarshal scores from file")
 		return nil
 	}
 
-	log.Info().Msgf("Loaded latest scores from file: step %d, scores %+v", latestScoresFileData.Step, latestScoresFileData.Scores)
+	log.Info().Msgf("Loaded latest scores from file: step %d, scores %+v", latestScoresData.Step, latestScoresData.Scores)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -97,8 +96,7 @@ func NewValidator(
 		LatestBlock:      0,
 		MetagraphData:    MetagraphData{},
 		ValidatorHotkey:  keyringData.Data.KeyringPair.Address,
-		LatestScores:     latestScoresFileData.Scores,
-		LatestScoresStep: latestScoresFileData.Step,
+		LatestScoresData: latestScoresData,
 
 		IntervalConfig:  intervalConfig,
 		ValidatorConfig: cfg,
@@ -146,7 +144,7 @@ func (v *Validator) Start() {
 
 	go v.runTicker(v.Ctx, v.IntervalConfig.ScoringInterval, func() {
 		v.startScoring()
-		v.setWeights(v.LatestScores, v.LatestScoresStep)
+		v.setWeights(v.LatestScoresData)
 	})
 }
 
