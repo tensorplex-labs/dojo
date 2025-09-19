@@ -58,7 +58,11 @@ func (v *Validator) syncBlock() {
 }
 
 func (v *Validator) startScoring() {
-	v.processTasksToScore(v.LatestScores, v.LatestScoresStep)
+	if v.MetagraphData.Metagraph.Hotkeys == nil {
+		log.Info().Msg("metagraph hotkeys is nil, skipping scoring for this step")
+		return
+	}
+	v.processTasksToScore(v.LatestScoresData)
 }
 
 func (v *Validator) sendTaskRound() {
@@ -144,11 +148,11 @@ func (v *Validator) checkCompletionExists(qaID string) bool {
 
 func (v *Validator) setWeights(scores []float64, latestScoresStep int) {
 	if latestScoresStep < v.IntervalConfig.WeightSettingStep {
-		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresStep, v.IntervalConfig.WeightSettingStep))
+		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresData.Step, v.IntervalConfig.WeightSettingStep))
 		return
 	}
 
-	uids := make([]int64, uidCount)
+	uids := make([]int64, len(scores))
 	for i := range uids {
 		uids[i] = int64(i)
 	}

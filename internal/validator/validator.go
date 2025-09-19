@@ -30,8 +30,7 @@ type Validator struct {
 	LatestBlock      int64
 	MetagraphData    MetagraphData
 	ValidatorHotkey  string
-	LatestScores     []float64
-	LatestScoresStep int
+	LatestScoresData ScoresFileData
 
 	IntervalConfig  *config.IntervalConfig     // used for heartbeat and task round intervals
 	ValidatorConfig *config.ValidatorEnvConfig // configuration for the validator
@@ -97,8 +96,7 @@ func NewValidator(
 		LatestBlock:      0,
 		MetagraphData:    MetagraphData{},
 		ValidatorHotkey:  keyringData.Data.KeyringPair.Address,
-		LatestScores:     latestScoresFileData.Scores,
-		LatestScoresStep: latestScoresFileData.Step,
+		LatestScoresData: latestScoresFileData,
 
 		IntervalConfig:  intervalConfig,
 		ValidatorConfig: cfg,
@@ -146,7 +144,7 @@ func (v *Validator) Start() {
 
 	go v.runTicker(v.Ctx, v.IntervalConfig.ScoringInterval, func() {
 		v.startScoring()
-		v.setWeights(v.LatestScores, v.LatestScoresStep)
+		v.setWeights(v.LatestScoresData.Scores, v.LatestScoresData.Step)
 	})
 }
 

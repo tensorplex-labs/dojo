@@ -56,6 +56,7 @@ const (
 )
 
 type ScoresFileData struct {
-	Scores []float64 `json:"scores"`
-	Step   int       `json:"step"`
+	Scores  []float64 `json:"scores"`
+	Step    int       `json:"step"`
+	Hotkeys []string  `json:"hotkeys"`
 }

@@ -25,16 +25,23 @@ type CompletionMaps struct {
 	negativeGenerators map[string]string
 }
 
-func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep int) {
-	currentStep := latestScoresStep
-
-	if currentStep >= v.IntervalConfig.WeightSettingStep {
+func (v *Validator) processTasksToScore(latestScoresData ScoresFileData) {
+	if latestScoresData.Step >= v.IntervalConfig.WeightSettingStep {
 		log.Info().Msg("Initializing scores")
 		initializeScores(scoresFileName)
-		currentStep = 0
-		latestScores = make([]float64, uidCount)
-	}
 
+		scoresFile, err := os.ReadFile(scoresFileName)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to read scores file")
+			return
+		}
+		var latestScoresFileData ScoresFileData
+		if err := sonic.Unmarshal(scoresFile, &latestScoresFileData); err != nil {
+			log.Error().Err(err).Msg("failed to unmarshal scores from file")
+			return
+		}
+		latestScoresData = latestScoresFileData
+	}
 	startTime := time.Now()
 
 	headers, err := v.setupAuthHeaders()
@@ -63,7 +70,8 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 		}
 	}
 
-	// TO REMOVE AFTER TESTING
+	// TODO: Convert below into a proper testing setup
+	// allTaskScores := make(map[string]map[string]float64)
 	// allTaskScoresData, err := os.ReadFile("all_task_scores.json")
 	// if err != nil {
 	// 	log.Error().Err(err).Msg("failed to read all_task_scores.json")
@@ -76,12 +84,9 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 	// }
 	// log.Info().Msg("Successfully loaded scores from all_task_scores.json")
 
-	updatedScores := v.updateScores(allTaskScores, latestScores)
+	updatedScoresData := v.updateScores(allTaskScores, latestScoresData)
 
-	updatedScoresJSON, err := sonic.Marshal(ScoresFileData{
-		Scores: updatedScores,
-		Step:   currentStep + 1,
-	})
+	updatedScoresJSON, err := sonic.Marshal(updatedScoresData)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to marshal updated scores")
 		return
@@ -93,8 +98,7 @@ func (v *Validator) processTasksToScore(latestScores []float64, latestScoresStep
 	}
 	log.Info().Msg("Successfully saved updated scores to scores.json")
 
-	v.LatestScores = updatedScores
-	v.LatestScoresStep = currentStep + 1
+	v.LatestScoresData = updatedScoresData
 	log.Info().Msgf("Processed %d tasks in %v", len(allTaskScores), time.Since(startTime))
 }
 
@@ -261,23 +265,49 @@ func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]flo
 	return nil
 }
 
-func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, latestScores []float64) (updatedScores []float64) {
-	updatedScores = latestScores
-
-	hotkeyToUID := make(map[string]int)
+func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, latestScoresData ScoresFileData) (updatedScoresData ScoresFileData) {
+	currentHotkeyToUID := make(map[string]int)
 	for uid, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
-		hotkeyToUID[hotkey] = uid
+		currentHotkeyToUID[hotkey] = uid
+	}
+
+	updatedScoresData = latestScoresData
+
+	maxLen := max(len(v.MetagraphData.Metagraph.Hotkeys), len(latestScoresData.Hotkeys))
+
+	for i := range maxLen {
+		if i < len(v.MetagraphData.Metagraph.Hotkeys) {
+			currentHotkey := v.MetagraphData.Metagraph.Hotkeys[i]
+
+			if i < len(latestScoresData.Hotkeys) {
+				if latestScoresData.Hotkeys[i] != currentHotkey {
+					log.Debug().Msgf("UID %d: hotkey changed from %s to %s, resetting score %.2f to 0",
+						i, latestScoresData.Hotkeys[i], currentHotkey, updatedScoresData.Scores[i])
+					updatedScoresData.Hotkeys[i] = currentHotkey
+					updatedScoresData.Scores[i] = 0
+				}
+			} else {
+				log.Info().Msgf("New UID %d with hotkey %s", i, currentHotkey)
+				updatedScoresData.Hotkeys = append(updatedScoresData.Hotkeys, currentHotkey)
+				updatedScoresData.Scores = append(updatedScoresData.Scores, 0)
+			}
+		} else {
+			updatedScoresData.Hotkeys[i] = ""
+			updatedScoresData.Scores[i] = 0
+		}
 	}
 
 	for taskID, taskScores := range allTaskScores {
 		for hotkey, score := range taskScores {
-			if uid, exists := hotkeyToUID[hotkey]; exists {
-				updatedScores[uid] += score
+			if uid, exists := currentHotkeyToUID[hotkey]; exists {
+				updatedScoresData.Scores[uid] += score
 			} else {
 				log.Warn().Str("hotkey", hotkey).Str("taskID", taskID).Msg("hotkey not found in metagraph")
 			}
 		}
 	}
 
-	return updatedScores
+	updatedScoresData.Step += 1
+
+	return updatedScoresData
 }
