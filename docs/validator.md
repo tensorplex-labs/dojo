@@ -1,15 +1,6 @@
 
 # Validator Setup
 
-## Requirements
-
-- Go 1.24.3
-- Make
-- Redis (optional; validator cache)
-- Docker (optional; for container builds)
-
-## Validator Guide
-
 1. Clone `.env.example` to `.env`
 
 ```bash
