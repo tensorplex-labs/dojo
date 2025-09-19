@@ -10,8 +10,8 @@ func CheckIfMiner(alphaStake, rootStake float64) (bool, error) {
 
 	effectiveStake := alphaStake + effectiveRootStake
 	var stakeFilter float64
-	if os.Getenv("ENVIRONMENT") == "test" {
-		stakeFilter = 1000 // Test environment threshold
+	if os.Getenv("ENVIRONMENT") != "prod" {
+		stakeFilter = 1000 // dev/test environment threshold
 	} else {
 		stakeFilter = 10000 // Production environment threshold
 	}
