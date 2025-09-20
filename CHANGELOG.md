@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.3](https://github.com/tensorplex-labs/dojo-v2/compare/v1.0.2...v1.0.3) (2025-09-20)
+
+
+### Bug Fixes
+
+* scoring bug and some docs update for clarity ([28d6fc7](https://github.com/tensorplex-labs/dojo-v2/commit/28d6fc723a6f2bd4c1c948099ca2ccd9871f0112))
+* scoring bug and some docs update for clarity ([28d6fc7](https://github.com/tensorplex-labs/dojo-v2/commit/28d6fc723a6f2bd4c1c948099ca2ccd9871f0112))
+
 ## [1.0.2](https://github.com/tensorplex-labs/dojo-v2/compare/v1.0.1...v1.0.2) (2025-09-18)
 
 
