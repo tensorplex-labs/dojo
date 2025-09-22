@@ -13,7 +13,7 @@ services:
   kami:
     container_name: kami
     restart: on-failure
-    image: ghcr.io/tensorplex-labs/kami:main
+    image: ghcr.io/tensorplex-labs/kami:latest
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     env_file:
