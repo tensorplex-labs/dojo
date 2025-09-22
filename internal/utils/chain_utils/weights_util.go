@@ -8,7 +8,7 @@ import (
 const (
 	U16MAX     = 65535
 	BurnUID    = 158
-	BurnWeight = 80
+	BurnWeight = 95
 )
 
 func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUids, convertedWeights []int, err error) {

@@ -74,7 +74,7 @@ services:
 
   validator:
     container_name: dojo-validator
-    image: ghcr.io/tensorplex-labs/dojo-v2/validator:dev
+    image: ghcr.io/tensorplex-labs/dojo/validator:dev
     env_file:
       - .env
     depends_on:
