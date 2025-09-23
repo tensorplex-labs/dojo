@@ -1,14 +1,20 @@
 
 # Validator Setup
 
-1. Clone `.env.example` to `.env`
+1. Clone `scores_example.json` to `scores.json`
+
+```bash
+cp scores_example.json scores.json
+```
+
+2. Clone `.env.example` to `.env`
 
 ```bash
 # Copy the .env.exmaple to .env
 cp .env.example .env
 ```
 
-2.  Edit the following!
+3.  Edit the following!
 
 ```bash
 BITTENSOR_DIR=~/.bittensor
@@ -36,7 +42,7 @@ DOJO_LOKI_URL= # DOJO TEAM WILL PROVIDE
 VALIDATOR_HOTKEY=YOUR_VALIDATOR_HOTKEY
 ```
 
-3. Start the compose stack
+4. Start the compose stack
 
 ```bash
 docker compose up -d
