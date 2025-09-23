@@ -1,4 +1,3 @@
-
 # Validator Setup
 
 1. Clone `scores_example.json` to `scores.json`
@@ -42,8 +41,12 @@ DOJO_LOKI_URL= # DOJO TEAM WILL PROVIDE
 VALIDATOR_HOTKEY=YOUR_VALIDATOR_HOTKEY
 ```
 
-4. Start the compose stack
+4. Pull loki plugin and start the compose stack
 
 ```bash
+# Pull loki plugin
+docker plugin install grafana/loki-docker-driver:3.3.2-amd64 --alias loki --grant-all-permissions
+
+# Start the compose stack
 docker compose up -d
 ```
