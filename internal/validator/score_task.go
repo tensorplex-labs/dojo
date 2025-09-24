@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -98,8 +99,38 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 	}
 	log.Info().Msg("Successfully saved updated scores to scores.json")
 
+	v.updateAllTaskStatus(allTaskScores)
+
 	v.LatestScoresData = updatedScoresData
 	log.Info().Msgf("Processed %d tasks in %v", len(allTaskScores), time.Since(startTime))
+}
+
+func (v *Validator) updateAllTaskStatus(allTaskScores map[string]map[string]float64) {
+	semaphore := make(chan struct{}, 10)
+
+	var wg sync.WaitGroup
+
+	for taskID := range allTaskScores {
+		wg.Add(1)
+		semaphore <- struct{}{}
+		go func(taskID string) {
+			defer wg.Done()
+			defer func() { <-semaphore }()
+			v.updateTaskStatus(taskID)
+		}(taskID)
+	}
+}
+
+func (v *Validator) updateTaskStatus(taskID string) {
+	log.Info().Msgf("Update task status to scored for task %s", taskID)
+	headers, err := v.setupAuthHeaders()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to setup authentication")
+		return
+	}
+	if _, err := v.TaskAPI.UpdateTaskStatus(headers, taskID, "scored"); err != nil {
+		log.Error().Err(err).Msgf("failed to update task status to scored for task %s", taskID)
+	}
 }
 
 func (v *Validator) fetchTasksToScore(headers taskapi.AuthHeaders) ([]taskapi.VoteTaskData, error) {
@@ -120,15 +151,6 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 		taskScores := v.calculateSingleTaskScore(task)
 		if len(taskScores) > 0 {
 			allTaskScores[task.ID] = taskScores
-			headers, err := v.setupAuthHeaders()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to setup authentication")
-				return nil
-			}
-
-			if _, err := v.TaskAPI.UpdateTaskStatus(headers, task.ID, "scored"); err != nil {
-				log.Error().Err(err).Msgf("failed to update task status to scored for task %s", task.ID)
-			}
 		}
 	}
 
