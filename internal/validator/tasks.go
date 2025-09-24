@@ -19,8 +19,7 @@ func (v *Validator) syncMetagraph() {
 	}
 
 	var currentActiveMiners []int64
-	for uid, axon := range newMetagraph.Data.Axons {
-		hotkey := newMetagraph.Data.Hotkeys[uid]
+	for uid, hotkey := range newMetagraph.Data.Hotkeys {
 		rootStake := newMetagraph.Data.TaoStake[uid]
 		alphaStake := newMetagraph.Data.AlphaStake[uid]
 
@@ -32,7 +31,7 @@ func (v *Validator) syncMetagraph() {
 		}
 		if miner {
 			currentActiveMiners = append(currentActiveMiners, int64(uid))
-			log.Debug().Msgf("Found active miner UID %d at %s:%d", uid, axon.IP, axon.Port)
+			log.Debug().Msgf("Found active miner UID %d of %s", uid, hotkey)
 		}
 	}
 
