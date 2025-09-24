@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/tensorplex-labs/dojo/compare/v1.1.2...v1.2.0) (2025-09-24)
+
+
+### Features
+
+* incr. task and scoring interval ([d91838e](https://github.com/tensorplex-labs/dojo/commit/d91838e791ecc96d16d49afd93189a3e4e86288f))
+
 ## [1.1.2](https://github.com/tensorplex-labs/dojo/compare/v1.1.1...v1.1.2) (2025-09-24)
 
 
