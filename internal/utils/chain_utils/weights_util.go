@@ -3,6 +3,8 @@ package chainutils
 import (
 	"fmt"
 	"math"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -45,15 +47,20 @@ func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUid
 	weightUids := make([]int, 0, len(uids))
 	weightVals := make([]int, 0, len(weights))
 
+	preBurnUids := make([]int, 0, len(uids))
+	preBurnVals := make([]int, 0, len(weights))
+
 	for i, uid := range uids {
-		var finalWeight float64
+		var finalWeight, preBurnWeight float64
 
 		if uid == BurnUID {
 			finalWeight = BurnWeight / 100.0
+			preBurnWeight = 0.0
 		} else {
 			normalizedWeight := weights[i] / maxWeightForNormalization
 			proportionalShare := normalizedWeight / (totalWeightForNormalization / maxWeightForNormalization)
 			finalWeight = proportionalShare * (1 - BurnWeight/100.0)
+			preBurnWeight = proportionalShare
 		}
 
 		uint16Val := int(math.Round(finalWeight * float64(U16MAX)))
@@ -61,7 +68,15 @@ func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUid
 			weightUids = append(weightUids, int(uid))
 			weightVals = append(weightVals, uint16Val)
 		}
+
+		preBurnUInt16Val := int(math.Round(preBurnWeight * float64(U16MAX)))
+		if preBurnUInt16Val > 0 {
+			preBurnUids = append(preBurnUids, int(uid))
+			preBurnVals = append(preBurnVals, preBurnUInt16Val)
+		}
 	}
+
+	log.Info().Msgf("Pre burn weights: uids: %v, weights: %v", preBurnUids, preBurnVals)
 
 	return weightUids, weightVals, nil
 }
