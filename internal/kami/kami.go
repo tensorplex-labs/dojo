@@ -15,12 +15,7 @@ import (
 
 // Kami is a client wrapper for the Kami HTTP API.
 type Kami struct {
-	client        *resty.Client
-	Host          string
-	Port          string
-	WalletHotkey  string
-	WalletColdkey string
-	BaseURL       string
+	client *resty.Client
 }
 
 // NewKami creates a new Kami client using the provided environment configuration.
@@ -37,14 +32,7 @@ func NewKami(cfg *config.KamiEnvConfig) (*Kami, error) {
 		SetJSONUnmarshaler(sonic.Unmarshal).
 		SetTimeout(15 * time.Second)
 
-	return &Kami{
-		client:        client,
-		Host:          cfg.KamiHost,
-		Port:          cfg.KamiPort,
-		WalletHotkey:  cfg.WalletHotkey,
-		WalletColdkey: cfg.WalltetColdkey,
-		BaseURL:       url,
-	}, nil
+	return &Kami{client: client}, nil
 }
 
 func postJSON[T any](client *resty.Client, path string, body any) (validator.SubtensorResponse[T], error) {

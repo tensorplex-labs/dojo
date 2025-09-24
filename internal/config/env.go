@@ -12,8 +12,6 @@ type AppConfig struct {
 	ChainEnvConfig
 	WalletEnvConfig
 	KamiEnvConfig
-	ServerEnvConfig
-	ClientEnvConfig
 	RedisEnvConfig
 	SyntheticAPIEnvConfig
 	TaskAPIEnvConfig
@@ -42,22 +40,8 @@ type WalletEnvConfig struct {
 
 // KamiEnvConfig contains Kami service target and keys.
 type KamiEnvConfig struct {
-	WalletEnvConfig
-	SubtensorNetwork string `env:"SUBTENSOR_NETWORK" envDefault:"finney"`
-	KamiHost         string `env:"KAMI_HOST" envDefault:"kami"`
-	KamiPort         string `env:"KAMI_PORT" envDefault:"3000"`
-}
-
-// ServerEnvConfig configures the server.
-type ServerEnvConfig struct {
-	Address       string `env:"AXON_IP" envDefault:"127.0.0.1"`
-	Port          int    `env:"AXON_PORT" envDefault:"8080"`
-	BodySizeLimit int    `env:"SERVER_BODY_LIMIT" envDefault:"1048576"`
-}
-
-// ClientEnvConfig configures the client.
-type ClientEnvConfig struct {
-	ClientTimeout time.Duration `env:"CLIENT_TIMEOUT" envDefault:"30s"`
+	KamiHost string `env:"KAMI_HOST" envDefault:"kami"`
+	KamiPort string `env:"KAMI_PORT" envDefault:"3000"`
 }
 
 // RedisEnvConfig configures Redis connection.
@@ -83,7 +67,6 @@ type TaskAPIEnvConfig struct {
 // ValidatorEnvConfig configures validator runtime.
 type ValidatorEnvConfig struct {
 	ChainEnvConfig
-	ClientEnvConfig
 	Environment string `env:"ENVIRONMENT" envDefault:"prod"`
 }
 
