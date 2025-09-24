@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/tensorplex-labs/dojo/compare/v1.1.0...v1.1.1) (2025-09-24)
+
+
+### Bug Fixes
+
+* show preburn weights and map active miners by hotkeys instead of axons ([aca40f4](https://github.com/tensorplex-labs/dojo/commit/aca40f44f2b8aef8845078f48a5468755ca4e073))
+* show preburn weights and map active miners by hotkeys instead of axons ([aca40f4](https://github.com/tensorplex-labs/dojo/commit/aca40f44f2b8aef8845078f48a5468755ca4e073))
+
 ## [1.1.0](https://github.com/tensorplex-labs/dojo/compare/v1.0.3...v1.1.0) (2025-09-24)
 
 
