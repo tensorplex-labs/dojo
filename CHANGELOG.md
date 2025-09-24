@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/tensorplex-labs/dojo/compare/v1.0.3...v1.1.0) (2025-09-24)
+
+
+### Features
+
+* set burn to 95% ([ce53694](https://github.com/tensorplex-labs/dojo/commit/ce53694bb050423909cce7d34859d0c2df1f7832))
+
 ## [1.0.3](https://github.com/tensorplex-labs/dojo-v2/compare/v1.0.2...v1.0.3) (2025-09-20)
 
 
