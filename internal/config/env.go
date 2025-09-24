@@ -113,13 +113,12 @@ var (
 		WeightSettingStep:  4,
 		TaskExpiryDuration: 2 * time.Hour,
 	}
-
 	ProdIntervalConfig = &IntervalConfig{
 		MetagraphInterval:  30 * time.Second,
 		TaskRoundInterval:  3 * time.Hour,
 		BlockInterval:      12 * time.Second,
-		ScoringInterval:    1 * time.Hour,
-		WeightSettingStep:  3,
+		ScoringInterval:    15 * time.Minute,
+		WeightSettingStep:  4,
 		TaskExpiryDuration: 6 * time.Hour,
 	}
 )
