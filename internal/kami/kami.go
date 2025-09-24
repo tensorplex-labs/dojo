@@ -1,4 +1,4 @@
-// Package kami provides a client for interacting with the Kami service.
+// Package kami provides a Bittensor subtensor client which relies on Kami as the RPC endpoint.
 package kami
 
 import (
@@ -10,25 +10,9 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/tensorplex-labs/dojo/internal/config"
+	"github.com/tensorplex-labs/dojo/internal/validator"
 )
 
-// KamiInterface defines the methods implemented by the Kami service client
-// Use this interface in callers to allow easy mocking and testing
-//
-
-type KamiInterface interface {
-	ServeAxon(ServeAxonParams) (ExtrinsicHashResponse, error)
-	GetMetagraph(netuid int) (SubnetMetagraphResponse, error)
-	GetSubnetHyperparams(netuid int) (SubnetHyperparamsResponse, error)
-	SetWeights(SetWeightsParams) (ExtrinsicHashResponse, error)
-	SignMessage(SignMessageParams) (SignMessageResponse, error)
-	VerifyMessage(VerifyMessageParams) (VerifyMessageResponse, error)
-	GetKeyringPair() (KeyringPairInfoResponse, error)
-	GetLatestBlock() (LatestBlockResponse, error)
-	SetTimelockedWeights(SetTimelockedWeightsParams) (ExtrinsicHashResponse, error)
-}
-
-// Kami is a client wrapper for the Kami HTTP API.
 // Kami is a client wrapper for the Kami HTTP API.
 type Kami struct {
 	client        *resty.Client
@@ -63,90 +47,85 @@ func NewKami(cfg *config.KamiEnvConfig) (*Kami, error) {
 	}, nil
 }
 
-func postJSON[T any](client *resty.Client, path string, body any) (KamiResponse[T], error) {
-	var result KamiResponse[T]
+func postJSON[T any](client *resty.Client, path string, body any) (validator.SubtensorResponse[T], error) {
+	var result validator.SubtensorResponse[T]
 	resp, err := client.R().
 		SetBody(body).
 		SetResult(&result).
 		Post(path)
 	if err != nil {
 		log.Error().Err(err).Str("path", path).Msg("post request failed")
-		return KamiResponse[T]{}, fmt.Errorf("post %s: %w", path, err)
+		return validator.SubtensorResponse[T]{}, fmt.Errorf("post %s: %w", path, err)
 	}
 	if resp.IsError() {
 		log.Error().Int("status", resp.StatusCode()).Str("body", resp.String()).Str("path", path).Msg("post non-2xx")
-		return KamiResponse[T]{}, fmt.Errorf("request returned status %d: %s", resp.StatusCode(), resp.String())
+		return validator.SubtensorResponse[T]{}, fmt.Errorf("request returned status %d: %s", resp.StatusCode(), resp.String())
 	}
 	if result.Error != nil {
 		log.Error().Interface("error", result.Error).Str("path", path).Msg("response contains error")
-		return KamiResponse[T]{}, fmt.Errorf("response error: %v", result.Error)
+		return validator.SubtensorResponse[T]{}, fmt.Errorf("response error: %v", result.Error)
 	}
 	return result, nil
 }
 
-func getJSON[T any](client *resty.Client, path string) (KamiResponse[T], error) {
-	var result KamiResponse[T]
+func getJSON[T any](client *resty.Client, path string) (validator.SubtensorResponse[T], error) {
+	var result validator.SubtensorResponse[T]
 	resp, err := client.R().
 		SetResult(&result).
 		Get(path)
 	if err != nil {
 		log.Error().Err(err).Str("path", path).Msg("get request failed")
-		return KamiResponse[T]{}, fmt.Errorf("get %s: %w", path, err)
+		return validator.SubtensorResponse[T]{}, fmt.Errorf("get %s: %w", path, err)
 	}
 	if resp.IsError() {
 		log.Error().Int("status", resp.StatusCode()).Str("body", resp.String()).Str("path", path).Msg("get non-2xx")
-		return KamiResponse[T]{}, fmt.Errorf("request returned status %d: %s", resp.StatusCode(), resp.String())
+		return validator.SubtensorResponse[T]{}, fmt.Errorf("request returned status %d: %s", resp.StatusCode(), resp.String())
 	}
 	if result.Error != nil {
 		log.Error().Interface("error", result.Error).Str("path", path).Msg("response contains error")
-		return KamiResponse[T]{}, fmt.Errorf("response error: %v", result.Error)
+		return validator.SubtensorResponse[T]{}, fmt.Errorf("response error: %v", result.Error)
 	}
 	return result, nil
 }
 
-// ServeAxon registers an axon on-chain and returns the extrinsic hash response.
-func (k *Kami) ServeAxon(payload ServeAxonParams) (ExtrinsicHashResponse, error) {
-	return postJSON[string](k.client, "/chain/serve-axon", payload)
-}
-
 // GetMetagraph fetches the subnet metagraph for the given netuid.
-func (k *Kami) GetMetagraph(netuid int) (SubnetMetagraphResponse, error) {
+func (k *Kami) GetMetagraph(netuid int) (validator.SubnetMetagraphResponse, error) {
 	path := fmt.Sprintf("/chain/subnet-metagraph/%d", netuid)
-	return getJSON[SubnetMetagraph](k.client, path)
+	return getJSON[validator.SubnetMetagraph](k.client, path)
 }
 
 // GetSubnetHyperparams fetches the subnet hyperparams for the given netuid.
-func (k *Kami) GetSubnetHyperparams(netuid int) (SubnetHyperparamsResponse, error) {
+func (k *Kami) GetSubnetHyperparams(netuid int) (validator.SubnetHyperparamsResponse, error) {
 	path := fmt.Sprintf("/chain/subnet-hyperparameters/%d", netuid)
-	return getJSON[SubnetHyperparams](k.client, path)
+	return getJSON[validator.SubnetHyperparams](k.client, path)
 }
 
 // GetLatestBlock retrieves the latest block details from the chain.
-func (k *Kami) GetLatestBlock() (LatestBlockResponse, error) {
-	return getJSON[LatestBlock](k.client, "/chain/latest-block")
+func (k *Kami) GetLatestBlock() (validator.LatestBlockResponse, error) {
+	return getJSON[validator.LatestBlock](k.client, "/chain/latest-block")
 }
 
 // SetWeights sets the subnet weights and returns the extrinsic hash response.
-func (k *Kami) SetWeights(params SetWeightsParams) (ExtrinsicHashResponse, error) {
+func (k *Kami) SetWeights(params validator.SetWeightsParams) (validator.ExtrinsicHashResponse, error) {
 	return postJSON[string](k.client, "/chain/set-weights", params)
 }
 
 // SetTimelockedWeights sets the subnet timelocked weights and returns the extrinsic hash response.
-func (k *Kami) SetTimelockedWeights(params SetTimelockedWeightsParams) (ExtrinsicHashResponse, error) {
+func (k *Kami) SetTimelockedWeights(params validator.SetTimelockedWeightsParams) (validator.ExtrinsicHashResponse, error) {
 	return postJSON[string](k.client, "/chain/set-timelocked-weights", params)
 }
 
 // SignMessage signs an arbitrary message with the node's keypair.
-func (k *Kami) SignMessage(params SignMessageParams) (SignMessageResponse, error) {
-	return postJSON[SignMessage](k.client, "/substrate/sign-message/sign", params)
+func (k *Kami) SignMessage(params validator.SignMessageParams) (validator.SignMessageResponse, error) {
+	return postJSON[validator.SignMessage](k.client, "/substrate/sign-message/sign", params)
 }
 
 // VerifyMessage verifies a signed message against a signee address.
-func (k *Kami) VerifyMessage(params VerifyMessageParams) (VerifyMessageResponse, error) {
-	return postJSON[VerifyMessage](k.client, "/substrate/sign-message/verify", params)
+func (k *Kami) VerifyMessage(params validator.VerifyMessageParams) (validator.VerifyMessageResponse, error) {
+	return postJSON[validator.VerifyMessage](k.client, "/substrate/sign-message/verify", params)
 }
 
 // GetKeyringPair returns information about the node's keyring pair.
-func (k *Kami) GetKeyringPair() (KeyringPairInfoResponse, error) {
-	return getJSON[KeyringPairInfo](k.client, "/substrate/keyring-pair-info")
+func (k *Kami) GetKeyringPair() (validator.KeyringPairInfoResponse, error) {
+	return getJSON[validator.KeyringPairInfo](k.client, "/substrate/keyring-pair-info")
 }

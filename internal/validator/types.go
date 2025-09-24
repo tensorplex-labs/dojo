@@ -5,8 +5,6 @@ package validator
 import (
 	"sync"
 	"time"
-
-	"github.com/tensorplex-labs/dojo/internal/kami"
 )
 
 // IntervalConfig groups ticker intervals used by the validator runtime.
@@ -20,7 +18,7 @@ type IntervalConfig struct {
 
 // MetagraphData holds the current subnet metagraph and derived runtime data.
 type MetagraphData struct {
-	Metagraph              kami.SubnetMetagraph
+	Metagraph              SubnetMetagraph
 	Interval               IntervalConfig
 	CurrentActiveMinerUids []int64
 }

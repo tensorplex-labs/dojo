@@ -12,7 +12,7 @@ import (
 
 func (v *Validator) syncMetagraph() {
 	log.Info().Msg(fmt.Sprintf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid))
-	newMetagraph, err := v.Kami.GetMetagraph(v.ValidatorConfig.Netuid)
+	newMetagraph, err := v.SubtensorClient.GetMetagraph(v.ValidatorConfig.Netuid)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get metagraph")
 		return
@@ -46,7 +46,7 @@ func (v *Validator) syncMetagraph() {
 
 func (v *Validator) syncBlock() {
 	log.Info().Msg(fmt.Sprintf("syncing latest block. current block : %d", v.LatestBlock))
-	newBlockResp, err := v.Kami.GetLatestBlock()
+	newBlockResp, err := v.SubtensorClient.GetLatestBlock()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get latest block")
 		return

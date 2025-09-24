@@ -13,7 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/tensorplex-labs/dojo/internal/config"
-	"github.com/tensorplex-labs/dojo/internal/kami"
 	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
 	"github.com/tensorplex-labs/dojo/internal/utils/redis"
@@ -21,10 +20,10 @@ import (
 
 // Validator coordinates task rounds and on-chain state for a subnet.
 type Validator struct {
-	Kami         kami.KamiInterface
-	TaskAPI      taskapi.TaskAPIInterface // TaskAPIInterface is used to interact with the task API
-	Redis        redis.RedisInterface
-	SyntheticAPI syntheticapi.SyntheticAPIInterface
+	SubtensorClient SubtensorClient
+	TaskAPI         taskapi.TaskAPIInterface // TaskAPIInterface is used to interact with the task API
+	Redis           redis.RedisInterface
+	SyntheticAPI    syntheticapi.SyntheticAPIInterface
 
 	// Chain global state
 	LatestBlock      int64
@@ -46,14 +45,14 @@ type Validator struct {
 // NewValidator constructs a Validator with intervals based on environment.
 func NewValidator(
 	cfg *config.ValidatorEnvConfig,
-	k kami.KamiInterface,
+	subtensorClient SubtensorClient,
 	taskAPI taskapi.TaskAPIInterface,
 	r redis.RedisInterface,
 	s syntheticapi.SyntheticAPIInterface,
 ) *Validator {
 	intervalConfig := config.NewIntervalConfig(cfg.Environment)
 
-	keyringData, err := k.GetKeyringPair()
+	keyringData, err := subtensorClient.GetKeyringPair()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get validator hotkey")
 		return nil
@@ -88,10 +87,10 @@ func NewValidator(
 	log.Info().Msgf("Validator hotkey %s loaded!", keyringData.Data.KeyringPair.Address)
 
 	return &Validator{
-		Kami:         k,
-		TaskAPI:      taskAPI,
-		Redis:        r,
-		SyntheticAPI: s,
+		SubtensorClient: subtensorClient,
+		TaskAPI:         taskAPI,
+		Redis:           r,
+		SyntheticAPI:    s,
 
 		LatestBlock:      0,
 		MetagraphData:    MetagraphData{},

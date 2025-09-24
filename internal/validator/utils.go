@@ -12,7 +12,6 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/rs/zerolog/log"
 
-	"github.com/tensorplex-labs/dojo/internal/kami"
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
 	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
 )
@@ -52,13 +51,13 @@ func (v *Validator) randomStringToSign() (string, error) {
 }
 
 func (v *Validator) signMessage(message string) (string, error) {
-	if v.Kami == nil {
+	if v.SubtensorClient == nil {
 		return "", fmt.Errorf("kami client is not initialized")
 	}
 
-	params := kami.SignMessageParams{Message: message}
+	params := SignMessageParams{Message: message}
 
-	resp, err := v.Kami.SignMessage(params)
+	resp, err := v.SubtensorClient.SignMessage(params)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign message: %w", err)
 	}
@@ -131,7 +130,7 @@ func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 
 	log.Info().Msgf("Setting weights on chain: uids: %v, weights: %v", convertedUids, convertedWeights)
 
-	subnetHyperparams, err := v.Kami.GetSubnetHyperparams(v.MetagraphData.Metagraph.Netuid)
+	subnetHyperparams, err := v.SubtensorClient.GetSubnetHyperparams(v.MetagraphData.Metagraph.Netuid)
 	if err != nil {
 		return fmt.Errorf("failed to get subnet hyperparams: %w", err)
 	}
@@ -165,7 +164,7 @@ func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 		log.Info().Msgf("Commit for reveal: %s", hex.EncodeToString([]byte(commitForReveal)))
 		log.Info().Msgf("Reveal round: %d", revealRound)
 
-		_, err = v.Kami.SetTimelockedWeights(kami.SetTimelockedWeightsParams{
+		_, err = v.SubtensorClient.SetTimelockedWeights(SetTimelockedWeightsParams{
 			Netuid:              v.MetagraphData.Metagraph.Netuid,
 			Commit:              hex.EncodeToString([]byte(commitForReveal)),
 			RevealRound:         revealRound,
@@ -178,7 +177,7 @@ func (v *Validator) setWeightsOnChain(uids []int64, weights []float64) error {
 		return nil
 	}
 
-	setWeightsExtrinsicHashResponse, err := v.Kami.SetWeights(kami.SetWeightsParams{
+	setWeightsExtrinsicHashResponse, err := v.SubtensorClient.SetWeights(SetWeightsParams{
 		Netuid:     v.ValidatorConfig.Netuid,
 		Dests:      convertedUids,
 		Weights:    convertedWeights,
