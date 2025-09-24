@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/tensorplex-labs/dojo/compare/v1.1.1...v1.1.2) (2025-09-24)
+
+
+### Bug Fixes
+
+* typo in env example file ([c890e1c](https://github.com/tensorplex-labs/dojo/commit/c890e1c51392345b26d20eb152295944f3a608eb))
+
 ## [1.1.1](https://github.com/tensorplex-labs/dojo/compare/v1.1.0...v1.1.1) (2025-09-24)
 
 
