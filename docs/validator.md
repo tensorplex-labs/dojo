@@ -41,7 +41,17 @@ DOJO_LOKI_URL= # DOJO TEAM WILL PROVIDE
 VALIDATOR_HOTKEY=YOUR_VALIDATOR_HOTKEY
 ```
 
-4. Pull loki plugin and start the compose stack
+4. Start the local subtensor node
+
+```bash
+# Start the compose for subtensor base on your machine architecture type
+docker compose -f  docker-compose.subtensor.yaml up -d [mainnet-lite-<amd64|arm64> | testnet-lite-<amd64|arm64>]
+
+# e.g. for amd64
+docker compose -f  docker-compose.subtensor.yaml up -d mainnet-lite-amd64
+```
+
+5. Pull loki plugin and start the compose stack
 
 ```bash
 # Pull loki plugin
