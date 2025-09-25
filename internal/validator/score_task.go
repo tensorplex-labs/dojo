@@ -304,7 +304,7 @@ func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, la
 			if uid, exists := currentHotkeyToUID[hotkey]; exists {
 				updatedScoresData.Scores[uid] += score
 			} else {
-				log.Warn().Str("hotkey", hotkey).Str("taskID", taskID).Msg("hotkey not found in metagraph")
+				log.Debug().Str("hotkey", hotkey).Str("taskID", taskID).Msg("hotkey not found in metagraph")
 			}
 		}
 	}
