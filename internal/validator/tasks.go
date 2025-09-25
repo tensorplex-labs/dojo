@@ -156,7 +156,7 @@ func (v *Validator) setWeights(latestScoresData ScoresData) {
 		uids[i] = int64(i)
 	}
 
-	weights := latestScoresData.Scores
+	weights := chainutils.ClampNegativeWeights(latestScoresData.Scores)
 
 	if err := v.setWeightsOnChain(uids, weights); err != nil {
 		log.Error().Err(err).Msg("failed to set weights")

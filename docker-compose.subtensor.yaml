@@ -1,0 +1,88 @@
+volumes:
+  mainnet-lite-volume:
+  testnet-lite-volume:
+
+networks:
+  validator:
+    name: validator
+
+services:
+  common-amd64: &common-amd64
+    image: ghcr.io/opentensor/subtensor:v3.2.7@sha256:d0f1f77847fa28962b2e99277670f5cf0abf160fd972584411de8c3b738bec20
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: subtensor
+    cpu_count: 4
+    mem_limit: 40000000000
+    memswap_limit: 80000000000
+    networks:
+      - validator
+    ports:
+      # NOTE: uncomment these when you want to expose them
+      # - "9944:9944"
+      - "30333:30333"
+      # - "9933:9933"
+    expose:
+      - "9944"
+      - "30333"
+      - "9933"
+    environment:
+      - CARGO_HOME=/var/www/node-subtensor/.cargo
+    logging:
+      options:
+        max-size: "100m"
+
+  mainnet-lite-amd64:
+    <<: *common-amd64
+    container_name: subtensor-mainnet-lite
+    volumes:
+      - mainnet-lite-volume:/data
+    command: --base-path /data --chain ./chainspecs/raw_spec_finney.json --rpc-external --rpc-cors all --no-mdns --in-peers 500 --out-peers 500 --bootnodes /dns/bootnode.finney.chain.opentensor.ai/tcp/30333/ws/p2p/12D3KooWRwbMb85RWnT8DSXSYMWQtuDwh4LJzndoRrTDotTR5gDC --sync warp
+
+  testnet-lite-amd64:
+    <<: *common-amd64
+    container_name: subtensor-testnet-lite
+    volumes:
+      - testnet-lite-volume:/data
+    command: --base-path /data --chain ./chainspecs/raw_spec_testfinney.json --rpc-external --rpc-cors all --no-mdns --in-peers 500 --out-peers 500 --bootnodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr --sync warp --reserved-nodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr --reserved-only
+
+  common-arm64: &common-arm64
+    image: ghcr.io/opentensor/subtensor:v3.2.7@sha256:c511ae27993205edc640f6a85a8492ef99dc36943a12d06abc98cd6c5aa66d2f
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: subtensor
+    cpu_count: 4
+    mem_limit: 40000000000
+    memswap_limit: 80000000000
+    networks:
+      - validator
+    ports:
+      # NOTE: uncomment these when you want to expose them
+      # - "9944:9944"
+      - "30333:30333"
+      # - "9933:9933"
+    expose:
+      - "9944"
+      - "30333"
+      - "9933"
+    environment:
+      - CARGO_HOME=/var/www/node-subtensor/.cargo
+    logging:
+      options:
+        max-size: "100m"
+
+  mainnet-lite-arm64:
+    <<: *common-arm64
+    container_name: subtensor-mainnet-lite
+    volumes:
+      - mainnet-lite-volume:/data
+    command: --base-path /data --chain ./chainspecs/raw_spec_finney.json --rpc-external --rpc-cors all --no-mdns --in-peers 500 --out-peers 500 --bootnodes /dns/bootnode.finney.chain.opentensor.ai/tcp/30333/ws/p2p/12D3KooWRwbMb85RWnT8DSXSYMWQtuDwh4LJzndoRrTDotTR5gDC --sync warp
+
+  testnet-lite-arm64:
+    <<: *common-arm64
+    container_name: subtensor-testnet-lite
+    volumes:
+      - testnet-lite-volume:/data
+    command: --base-path /data --chain ./chainspecs/raw_spec_testfinney.json --rpc-external --rpc-cors all --no-mdns --in-peers 500 --out-peers 500 --bootnodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr --sync warp --reserved-nodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr --reserved-only
