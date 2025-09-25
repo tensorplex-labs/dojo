@@ -86,6 +86,8 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 
 	updatedScoresData := v.updateScores(allTaskScores, latestScoresData)
 
+	log.Info().Msgf("Updated scores data: %+v", updatedScoresData)
+
 	updatedScoresJSON, err := sonic.Marshal(updatedScoresData)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to marshal updated scores")
@@ -287,7 +289,7 @@ func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, la
 					updatedScoresData.Scores[i] = 0
 				}
 			} else {
-				log.Info().Msgf("New UID %d with hotkey %s", i, currentHotkey)
+				log.Debug().Msgf("New UID %d with hotkey %s", i, currentHotkey)
 				updatedScoresData.Hotkeys = append(updatedScoresData.Hotkeys, currentHotkey)
 				updatedScoresData.Scores = append(updatedScoresData.Scores, 0)
 			}
