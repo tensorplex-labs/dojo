@@ -22,7 +22,7 @@ WALLET_HOTKEY=YOUR_HOTKEY_NAME
 
 NETUID=52 # 98 for testnet
 
-SUBTENSOR_NETWORK=finney # optional: replace with your custom node or `test` for testnet
+SUBTENSOR_NETWORK=ws://mainnet-lite-amd64:9944 # optional: replace with your custom node or `test` for testnet or finney for mainnet
 
 REDIS_HOST=redis
 REDIS_PORT=6379
@@ -41,7 +41,7 @@ DOJO_LOKI_URL= # DOJO TEAM WILL PROVIDE
 VALIDATOR_HOTKEY=YOUR_VALIDATOR_HOTKEY
 ```
 
-4. Start the local subtensor node
+4. OPTIONAL: Start the local subtensor node
 
 ```bash
 # Start the compose for subtensor base on your machine architecture type
