@@ -3,7 +3,7 @@ volumes:
   testnet-lite-volume:
 
 networks:
-  subtensor:
+  validator:
     name: validator
 
 services:
