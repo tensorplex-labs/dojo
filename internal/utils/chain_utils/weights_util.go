@@ -13,6 +13,18 @@ const (
 	BurnWeight = 95
 )
 
+func ClampNegativeWeights(weights []float64) []float64 {
+	clamped := make([]float64, len(weights))
+	for i, w := range weights {
+		if w < 0 {
+			clamped[i] = 0
+		} else {
+			clamped[i] = w
+		}
+	}
+	return clamped
+}
+
 func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUids, convertedWeights []int, err error) {
 	if len(uids) != len(weights) {
 		return nil, nil, fmt.Errorf("uids and weights must have the same length, got %d and %d", len(uids), len(weights))
