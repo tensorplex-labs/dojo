@@ -158,7 +158,7 @@ func (t *TaskAPI) GetExpiredTasksRollingWindow(headers AuthHeaders, hours int) (
 		SetHeader("X-Message", headers.Message).
 		SetResult(&out)
 
-	resp, err := r.Get(fmt.Sprintf("/validator/tasks/expired-rolling?hours=%d", hours))
+	resp, err := r.Get(fmt.Sprintf("/validator/tasks/expired?hours=%d", hours))
 	if err != nil {
 		return Response[VotesResponse]{}, fmt.Errorf("get expired tasks for a rolling window of %d hours: %w", hours, err)
 	}

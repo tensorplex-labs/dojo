@@ -124,15 +124,6 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 		taskScores := v.calculateSingleTaskScore(task)
 		if len(taskScores) > 0 {
 			allTaskScores[task.ID] = taskScores
-			headers, err := v.setupAuthHeaders()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to setup authentication")
-				return nil
-			}
-
-			if _, err := v.TaskAPI.UpdateTaskStatus(headers, task.ID, "scored"); err != nil {
-				log.Error().Err(err).Msgf("failed to update task status to scored for task %s", task.ID)
-			}
 		}
 	}
 
