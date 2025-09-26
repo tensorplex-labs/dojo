@@ -25,6 +25,7 @@ type TaskAPIInterface interface {
 
 	// GET requests
 	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
+	GetExpiredTasksRollingWindow(headers AuthHeaders, hours int) (Response[VotesResponse], error)
 	UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[TaskStatusUpdateResponse], error)
 }
 
@@ -143,6 +144,27 @@ func (t *TaskAPI) GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse],
 
 	if resp.IsError() {
 		return Response[VotesResponse]{}, fmt.Errorf("get expired tasks returned status %d: %s",
+			resp.StatusCode(), resp.String())
+	}
+
+	return out, nil
+}
+
+func (t *TaskAPI) GetExpiredTasksRollingWindow(headers AuthHeaders, hours int) (Response[VotesResponse], error) {
+	var out Response[VotesResponse]
+	r := t.client.R().
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
+		SetResult(&out)
+
+	resp, err := r.Get(fmt.Sprintf("/validator/tasks/expired/rolling?hours=%d", hours))
+	if err != nil {
+		return Response[VotesResponse]{}, fmt.Errorf("get expired tasks for a rolling window of %d hours: %w", hours, err)
+	}
+
+	if resp.IsError() {
+		return Response[VotesResponse]{}, fmt.Errorf("get expired tasks for a rolling window of %d hours returned status %d: %s", hours,
 			resp.StatusCode(), resp.String())
 	}
 
