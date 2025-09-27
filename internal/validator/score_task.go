@@ -26,7 +26,7 @@ type CompletionMaps struct {
 }
 
 func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
-	if latestScoresData.Step >= v.IntervalConfig.WeightSettingStep {
+	if latestScoresData.Step >= int(v.IntervalConfig.ScoreResetInterval/v.IntervalConfig.ScoringInterval) {
 		log.Info().Msg("Initializing scores")
 		initializeScores(scoresFileName)
 
@@ -50,9 +50,9 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 		return
 	}
 
-	tasks, err := v.fetchTasksToScore(headers)
+	tasks, err := v.fetchTasksToScoreRollingWindow(headers)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to fetch tasks")
+		log.Error().Err(err).Msgf("failed to fetch tasks for a rolling window of %d hours", int(v.IntervalConfig.ScoreResetInterval/time.Hour))
 		return
 	}
 
@@ -84,7 +84,7 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 	// }
 	// log.Info().Msg("Successfully loaded scores from all_task_scores.json")
 
-	updatedScoresData := v.updateScores(allTaskScores, latestScoresData)
+	updatedScoresData := v.extractTaskScores(allTaskScores, latestScoresData)
 
 	log.Info().Msgf("Updated scores data: %+v", updatedScoresData)
 
@@ -104,13 +104,15 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 	log.Info().Msgf("Processed %d tasks in %v", len(allTaskScores), time.Since(startTime))
 }
 
-func (v *Validator) fetchTasksToScore(headers taskapi.AuthHeaders) ([]taskapi.VoteTaskData, error) {
-	tasksToScore, err := v.TaskAPI.GetExpiredTasks(headers)
+func (v *Validator) fetchTasksToScoreRollingWindow(headers taskapi.AuthHeaders) ([]taskapi.VoteTaskData, error) {
+	hours := int(v.IntervalConfig.ScoreResetInterval / time.Hour)
+
+	tasksToScore, err := v.TaskAPI.GetExpiredTasksRollingWindow(headers, hours)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get expired tasks: %w", err)
+		return nil, fmt.Errorf("failed to get expired tasks for a rolling window of %d hours: %w", hours, err)
 	}
 
-	log.Info().Msgf("Found %d task(s) to score", tasksToScore.Data.Total)
+	log.Info().Msgf("Found %d task(s) in a rolling window of %d hours to score", tasksToScore.Data.Total, hours)
 	return tasksToScore.Data.Tasks, nil
 }
 
@@ -122,15 +124,6 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 		taskScores := v.calculateSingleTaskScore(task)
 		if len(taskScores) > 0 {
 			allTaskScores[task.ID] = taskScores
-			headers, err := v.setupAuthHeaders()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to setup authentication")
-				return nil
-			}
-
-			if _, err := v.TaskAPI.UpdateTaskStatus(headers, task.ID, "scored"); err != nil {
-				log.Error().Err(err).Msgf("failed to update task status to scored for task %s", task.ID)
-			}
 		}
 	}
 
@@ -267,36 +260,16 @@ func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]flo
 	return nil
 }
 
-func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, latestScoresData ScoresData) (updatedScoresData ScoresData) {
+func (v *Validator) extractTaskScores(allTaskScores map[string]map[string]float64, latestScoresData ScoresData) (updatedScoresData ScoresData) {
 	currentHotkeyToUID := make(map[string]int)
 	for uid, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
 		currentHotkeyToUID[hotkey] = uid
 	}
 
-	updatedScoresData = latestScoresData
-
-	maxLen := max(len(v.MetagraphData.Metagraph.Hotkeys), len(latestScoresData.Hotkeys))
-
-	for i := range maxLen {
-		if i < len(v.MetagraphData.Metagraph.Hotkeys) {
-			currentHotkey := v.MetagraphData.Metagraph.Hotkeys[i]
-
-			if i < len(latestScoresData.Hotkeys) {
-				if latestScoresData.Hotkeys[i] != currentHotkey {
-					log.Debug().Msgf("UID %d: hotkey changed from %s to %s, resetting score %.2f to 0",
-						i, latestScoresData.Hotkeys[i], currentHotkey, updatedScoresData.Scores[i])
-					updatedScoresData.Hotkeys[i] = currentHotkey
-					updatedScoresData.Scores[i] = 0
-				}
-			} else {
-				log.Debug().Msgf("New UID %d with hotkey %s", i, currentHotkey)
-				updatedScoresData.Hotkeys = append(updatedScoresData.Hotkeys, currentHotkey)
-				updatedScoresData.Scores = append(updatedScoresData.Scores, 0)
-			}
-		} else {
-			updatedScoresData.Hotkeys[i] = ""
-			updatedScoresData.Scores[i] = 0
-		}
+	updatedScoresData = ScoresData{
+		Scores:  make([]float64, len(v.MetagraphData.Metagraph.Hotkeys)),
+		Step:    latestScoresData.Step + 1,
+		Hotkeys: v.MetagraphData.Metagraph.Hotkeys,
 	}
 
 	for taskID, taskScores := range allTaskScores {
@@ -304,12 +277,10 @@ func (v *Validator) updateScores(allTaskScores map[string]map[string]float64, la
 			if uid, exists := currentHotkeyToUID[hotkey]; exists {
 				updatedScoresData.Scores[uid] += score
 			} else {
-				log.Warn().Str("hotkey", hotkey).Str("taskID", taskID).Msg("hotkey not found in metagraph")
+				log.Debug().Str("hotkey", hotkey).Str("taskID", taskID).Msg("hotkey not found in metagraph")
 			}
 		}
 	}
-
-	updatedScoresData.Step += 1
 
 	return updatedScoresData
 }

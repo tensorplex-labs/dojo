@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -146,8 +147,15 @@ func (v *Validator) checkCompletionExists(qaID string) bool {
 }
 
 func (v *Validator) setWeights(latestScoresData ScoresData) {
-	if latestScoresData.Step < v.IntervalConfig.WeightSettingStep {
-		log.Info().Msg(fmt.Sprintf("Current score step is %d. Will only set weights when it reaches the scoring step limit (%d)", v.LatestScoresData.Step, v.IntervalConfig.WeightSettingStep))
+	weightSettingSteps := int(v.IntervalConfig.WeightSettingInterval / v.IntervalConfig.ScoringInterval)
+
+	if latestScoresData.Step == 0 || latestScoresData.Step%weightSettingSteps != 0 {
+		nextWeightSettingStep := ((latestScoresData.Step / weightSettingSteps) + 1) * weightSettingSteps
+		remainingSteps := nextWeightSettingStep - latestScoresData.Step
+		remainingMinutes := time.Duration(remainingSteps) * v.IntervalConfig.ScoringInterval
+
+		log.Info().Msgf("Current score step is %d. Next weight setting in %.0f minutes",
+			latestScoresData.Step, remainingMinutes.Minutes())
 		return
 	}
 
