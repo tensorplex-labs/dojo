@@ -88,38 +88,42 @@ type ValidatorEnvConfig struct {
 }
 
 type IntervalConfig struct {
-	MetagraphInterval  time.Duration
-	TaskRoundInterval  time.Duration
-	BlockInterval      time.Duration
-	ScoringInterval    time.Duration
-	WeightSettingStep  int
-	TaskExpiryDuration time.Duration
+	MetagraphInterval     time.Duration
+	TaskRoundInterval     time.Duration
+	BlockInterval         time.Duration
+	ScoringInterval       time.Duration
+	ScoreResetInterval    time.Duration
+	WeightSettingInterval time.Duration
+	TaskExpiryDuration    time.Duration
 }
 
 var (
 	DevIntervalConfig = &IntervalConfig{
-		MetagraphInterval:  5 * time.Second,
-		TaskRoundInterval:  10 * time.Second,
-		BlockInterval:      2 * time.Second,
-		ScoringInterval:    5 * time.Minute,
-		WeightSettingStep:  2,
-		TaskExpiryDuration: 10 * time.Minute,
+		MetagraphInterval:     5 * time.Second,
+		TaskRoundInterval:     10 * time.Second,
+		BlockInterval:         2 * time.Second,
+		ScoringInterval:       5 * time.Minute,
+		ScoreResetInterval:    1 * time.Hour,
+		WeightSettingInterval: 30 * time.Minute,
+		TaskExpiryDuration:    10 * time.Minute,
 	}
 	TestIntervalConfig = &IntervalConfig{
-		MetagraphInterval:  30 * time.Second,
-		TaskRoundInterval:  15 * time.Minute,
-		BlockInterval:      12 * time.Second,
-		ScoringInterval:    5 * time.Minute,
-		WeightSettingStep:  4,
-		TaskExpiryDuration: 2 * time.Hour,
+		MetagraphInterval:     30 * time.Second,
+		TaskRoundInterval:     15 * time.Minute,
+		BlockInterval:         12 * time.Second,
+		ScoringInterval:       5 * time.Minute,
+		ScoreResetInterval:    24 * time.Hour,
+		WeightSettingInterval: 1 * time.Hour,
+		TaskExpiryDuration:    2 * time.Hour,
 	}
 	ProdIntervalConfig = &IntervalConfig{
-		MetagraphInterval:  30 * time.Second,
-		TaskRoundInterval:  3 * time.Hour,
-		BlockInterval:      12 * time.Second,
-		ScoringInterval:    15 * time.Minute,
-		WeightSettingStep:  4,
-		TaskExpiryDuration: 6 * time.Hour,
+		MetagraphInterval:     30 * time.Second,
+		TaskRoundInterval:     3 * time.Hour,
+		BlockInterval:         12 * time.Second,
+		ScoringInterval:       15 * time.Minute,
+		ScoreResetInterval:    24 * time.Hour,
+		WeightSettingInterval: 1 * time.Hour,
+		TaskExpiryDuration:    6 * time.Hour,
 	}
 )
 
