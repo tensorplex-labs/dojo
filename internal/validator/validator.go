@@ -129,19 +129,22 @@ func (v *Validator) runTicker(ctx context.Context, d time.Duration, fn func()) {
 
 // Start initializes validator hotkey and kicks off periodic routines.
 func (v *Validator) Start() {
-	v.Wg.Add(4)
+	v.Wg.Add(1)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {
 		v.sendTaskRound()
 	})
 
+	v.Wg.Add(1)
 	go v.runTicker(v.Ctx, v.IntervalConfig.MetagraphInterval, func() {
 		v.syncMetagraph()
 	})
 
+	v.Wg.Add(1)
 	go v.runTicker(v.Ctx, v.IntervalConfig.BlockInterval, func() {
 		v.syncBlock()
 	})
 
+	v.Wg.Add(1)
 	go v.runTicker(v.Ctx, v.IntervalConfig.ScoringInterval, func() {
 		v.startScoring()
 		v.setWeights(v.LatestScoresData)

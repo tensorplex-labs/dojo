@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -26,22 +27,6 @@ type CompletionMaps struct {
 }
 
 func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
-	if latestScoresData.Step >= int(v.IntervalConfig.ScoreResetInterval/v.IntervalConfig.ScoringInterval) {
-		log.Info().Msg("Initializing scores")
-		initializeScores(scoresFileName)
-
-		scoresFile, err := os.ReadFile(scoresFileName)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to read scores file")
-			return
-		}
-		var latestScoresFileData ScoresData
-		if err := sonic.Unmarshal(scoresFile, &latestScoresFileData); err != nil {
-			log.Error().Err(err).Msg("failed to unmarshal scores from file")
-			return
-		}
-		latestScoresData = latestScoresFileData
-	}
 	startTime := time.Now()
 
 	headers, err := v.setupAuthHeaders()
@@ -84,7 +69,7 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 	// }
 	// log.Info().Msg("Successfully loaded scores from all_task_scores.json")
 
-	updatedScoresData := v.extractTaskScores(allTaskScores, latestScoresData)
+	updatedScoresData := v.extractTaskScores(allTaskScores, tasks, latestScoresData)
 
 	log.Info().Msgf("Updated scores data: %+v", updatedScoresData)
 
@@ -260,7 +245,7 @@ func (v *Validator) saveTaskScoresToFile(allTaskScores map[string]map[string]flo
 	return nil
 }
 
-func (v *Validator) extractTaskScores(allTaskScores map[string]map[string]float64, latestScoresData ScoresData) (updatedScoresData ScoresData) {
+func (v *Validator) extractTaskScores(allTaskScores map[string]map[string]float64, tasks []taskapi.VoteTaskData, latestScoresData ScoresData) (updatedScoresData ScoresData) {
 	currentHotkeyToUID := make(map[string]int)
 	for uid, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
 		currentHotkeyToUID[hotkey] = uid
@@ -272,10 +257,19 @@ func (v *Validator) extractTaskScores(allTaskScores map[string]map[string]float6
 		Hotkeys: v.MetagraphData.Metagraph.Hotkeys,
 	}
 
+	taskDecayFactors := v.calculateTaskDecayFactors(tasks)
+
 	for taskID, taskScores := range allTaskScores {
+		decayFactor, exists := taskDecayFactors[taskID]
+		if !exists {
+			log.Warn().Str("taskID", taskID).Msg("decay factor not found for task, using no decay")
+			decayFactor = 1.0
+		}
 		for hotkey, score := range taskScores {
 			if uid, exists := currentHotkeyToUID[hotkey]; exists {
-				updatedScoresData.Scores[uid] += score
+				decayedScore := score * decayFactor
+				log.Debug().Str("hotkey", hotkey).Str("taskID", taskID).Float64("score", score).Float64("decayedScore", decayedScore).Msg("decayed score")
+				updatedScoresData.Scores[uid] += decayedScore
 			} else {
 				log.Debug().Str("hotkey", hotkey).Str("taskID", taskID).Msg("hotkey not found in metagraph")
 			}
@@ -283,4 +277,34 @@ func (v *Validator) extractTaskScores(allTaskScores map[string]map[string]float6
 	}
 
 	return updatedScoresData
+}
+
+func (v *Validator) calculateTaskDecayFactors(tasks []taskapi.VoteTaskData) map[string]float64 {
+	taskDecayFactors := make(map[string]float64)
+	now := time.Now()
+
+	for i := range tasks {
+		decayFactor := v.calculateDecayFactorForTask(&tasks[i], now)
+		taskDecayFactors[tasks[i].ID] = decayFactor
+	}
+
+	return taskDecayFactors
+}
+
+func (v *Validator) calculateDecayFactorForTask(task *taskapi.VoteTaskData, now time.Time) float64 {
+	expireAt, err := time.Parse(time.RFC3339, task.ExpireAt)
+	if err != nil {
+		log.Error().Err(err).Str("taskID", task.ID).Str("expireAt", task.ExpireAt).Msg("failed to parse task expiry time, no decay is applied")
+		return 1.0
+	}
+
+	taskAge := now.Sub(expireAt)
+
+	maxAge := v.IntervalConfig.ScoreResetInterval
+
+	lambda := -math.Log(targetDecayAtMaxAge) / maxAge.Seconds()
+
+	decayFactor := math.Exp(-lambda * taskAge.Seconds())
+
+	return decayFactor
 }

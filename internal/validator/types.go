@@ -50,9 +50,8 @@ type ProcessedMiners struct {
 }
 
 const (
-	scoresFileName string  = "scores.json"
-	decayFactor    float32 = 0.9
-	uidCount       int     = 256
+	scoresFileName      string  = "scores.json"
+	targetDecayAtMaxAge float64 = 0.01
 )
 
 type ScoresData struct {
