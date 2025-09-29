@@ -75,6 +75,8 @@ services:
   validator:
     container_name: dojo-validator
     image: ghcr.io/tensorplex-labs/dojo/validator:dev
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     env_file:
       - .env
     depends_on:
@@ -122,3 +124,14 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     logging: *default-logging
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_DEBUG=true
+      - WATCHTOWER_POLL_INTERVAL=600
+      - WATCHTOWER_LABEL_ENABLE=true
+    restart: always
