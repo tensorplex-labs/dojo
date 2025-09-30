@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/tensorplex-labs/dojo/compare/v1.2.1...v1.3.0) (2025-09-29)
+
+
+### Features
+
+* updated scores retaining logic and weights setting intervals ([#76](https://github.com/tensorplex-labs/dojo/issues/76)) ([1d614f3](https://github.com/tensorplex-labs/dojo/commit/1d614f39f10894764cd41ac8b55a2928d86a0de2))
+
+
 ## [1.2.1](https://github.com/tensorplex-labs/dojo/compare/v1.2.0...v1.2.1) (2025-09-25)
 
 
