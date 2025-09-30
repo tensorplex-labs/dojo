@@ -9,6 +9,18 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/kami"
 )
 
+const (
+	scoresFileName string  = "scores.json"
+	decayFactor    float32 = 0.9
+	uidCount       int     = 256
+
+	// Redis keys
+	redisVotersKey           string = "voters"
+	redisSyntheticQAKey      string = "synthetic:questions"
+	redisTrapKey             string = "trap"
+	redisSyntheticAnswersKey string = "synthetic:answers"
+)
+
 // IntervalConfig groups ticker intervals used by the validator runtime.
 type IntervalConfig struct {
 	HeartbeatInterval     time.Duration
@@ -48,12 +60,6 @@ type ProcessedMiners struct {
 	m    sync.Mutex
 	uids []int64
 }
-
-const (
-	scoresFileName string  = "scores.json"
-	decayFactor    float32 = 0.9
-	uidCount       int     = 256
-)
 
 type ScoresData struct {
 	Scores  []float64 `json:"scores"`

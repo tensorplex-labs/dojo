@@ -95,6 +95,7 @@ type IntervalConfig struct {
 	ScoreResetInterval    time.Duration
 	WeightSettingInterval time.Duration
 	TaskExpiryDuration    time.Duration
+	VotersCacheInterval   time.Duration
 }
 
 var (
@@ -106,6 +107,7 @@ var (
 		ScoreResetInterval:    1 * time.Hour,
 		WeightSettingInterval: 30 * time.Minute,
 		TaskExpiryDuration:    10 * time.Minute,
+		VotersCacheInterval:   15 * time.Second,
 	}
 	TestIntervalConfig = &IntervalConfig{
 		MetagraphInterval:     30 * time.Second,
@@ -115,6 +117,7 @@ var (
 		ScoreResetInterval:    24 * time.Hour,
 		WeightSettingInterval: 1 * time.Hour,
 		TaskExpiryDuration:    2 * time.Hour,
+		VotersCacheInterval:   15 * time.Minute,
 	}
 	ProdIntervalConfig = &IntervalConfig{
 		MetagraphInterval:     30 * time.Second,
@@ -124,6 +127,7 @@ var (
 		ScoreResetInterval:    24 * time.Hour,
 		WeightSettingInterval: 1 * time.Hour,
 		TaskExpiryDuration:    6 * time.Hour,
+		VotersCacheInterval:   15 * time.Minute,
 	}
 )
 
