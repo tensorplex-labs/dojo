@@ -156,10 +156,6 @@ func (v *Validator) checkIfTrapTask(taskID string) (trapBool bool, hotkey string
 
 	if negativeGeneratorHotkey != "" {
 		log.Debug().Msgf("Task %s is a trap task (negative generator: %s)", taskID, negativeGeneratorHotkey)
-		if delErr := v.Redis.Del(v.Ctx, trapRedisKey); delErr != nil {
-			// TODO: how to handle this redis delete key error better
-			log.Error().Err(delErr).Msgf("Failed to delete trap key %s", trapRedisKey)
-		}
 		return true, negativeGeneratorHotkey
 	}
 
