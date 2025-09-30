@@ -160,7 +160,7 @@ func (v *Validator) calculateSingleTaskScore(task *taskapi.VoteTaskData) map[str
 	discriminators := v.buildDiscriminatorsMap(task.Votes)
 	if len(discriminators) == 0 {
 		log.Info().Msgf("No discriminators found for task %s, skipping", task.ID)
-		return nil
+		return make(map[string]float64)
 	}
 
 	return v.calculateScoresByType(task.ID, isTrap, discriminators, completionMaps)
