@@ -65,6 +65,20 @@ func (v *Validator) startScoring() {
 	v.processTasksToScore(v.LatestScoresData)
 }
 
+func (v *Validator) startVotersCache() {
+	if v.MetagraphData.Metagraph.Hotkeys == nil {
+		log.Info().Msg("metagraph hotkeys is nil, skipping voters cache for this step")
+		return
+	}
+
+	if v.MetagraphData.CurrentActiveMinerUids == nil {
+		log.Info().Msg("no active miners, skipping voters cache for this step")
+		return
+	}
+
+	v.processVotingTasks()
+}
+
 func (v *Validator) sendTaskRound() {
 	if !v.taskRoundRunning.CompareAndSwap(false, true) {
 		return

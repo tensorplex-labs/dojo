@@ -26,6 +26,7 @@ type TaskAPIInterface interface {
 	// GET requests
 	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
 	GetExpiredTasksRollingWindow(headers AuthHeaders, hours int) (Response[VotesResponse], error)
+	GetVotingTasks(headers AuthHeaders) (Response[[]VotingPhaseTasksResponse], error)
 	UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[TaskStatusUpdateResponse], error)
 }
 
@@ -195,9 +196,8 @@ func (t *TaskAPI) UpdateTaskStatus(headers AuthHeaders, taskID, status string) (
 	return out, nil
 }
 
-func (t *TaskAPI) GetVotingTasks(headers AuthHeaders) (Response[VotesResponse], error) {
-	// TODO: implement when api is up
-	var out Response[VotesResponse]
+func (t *TaskAPI) GetVotingTasks(headers AuthHeaders) (Response[[]VotingPhaseTasksResponse], error) {
+	var out Response[[]VotingPhaseTasksResponse]
 	r := t.client.R().
 		SetHeader("X-Hotkey", headers.Hotkey).
 		SetHeader("X-Signature", headers.Signature).
@@ -206,11 +206,11 @@ func (t *TaskAPI) GetVotingTasks(headers AuthHeaders) (Response[VotesResponse], 
 
 	resp, err := r.Get("/validator/tasks/voting")
 	if err != nil {
-		return Response[VotesResponse]{}, fmt.Errorf("get voting tasks: %w", err)
+		return Response[[]VotingPhaseTasksResponse]{}, fmt.Errorf("get voting tasks: %w", err)
 	}
 
 	if resp.IsError() {
-		return Response[VotesResponse]{}, fmt.Errorf("get voting tasks returned status %d: %s",
+		return Response[[]VotingPhaseTasksResponse]{}, fmt.Errorf("get voting tasks returned status %d: %s",
 			resp.StatusCode(), resp.String())
 	}
 

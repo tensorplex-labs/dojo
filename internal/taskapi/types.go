@@ -1,6 +1,8 @@
 package taskapi
 
-import "mime/multipart"
+import (
+	"mime/multipart"
+)
 
 // CreateTasksRequest represents the payload to create a new task.
 type CreateTasksRequest[T CodegenTaskMetadata] struct {
@@ -25,7 +27,7 @@ type AuthHeaders struct {
 }
 
 // Response represents a generic API response structure.
-type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | any] struct {
+type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | []VotingPhaseTasksResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -100,4 +102,11 @@ type VoteCompletion struct {
 type TaskStatusUpdateResponse struct {
 	TaskID string `json:"task_id"`
 	Status string `json:"status"`
+}
+
+// VotingPhaseTasksResponse represents tasks in the voting phase.
+type VotingPhaseTasksResponse struct {
+	ID        string `json:"id"`
+	CreatedAt string `json:"created_at"`
+	ExpireAt  string `json:"expire_at"`
 }
