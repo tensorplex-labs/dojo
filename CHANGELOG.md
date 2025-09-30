@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/tensorplex-labs/dojo/compare/v1.2.0...v1.2.1) (2025-09-25)
+
+
+### Bug Fixes
+
+* fixing negative weights issues by clamping it to 0 instead ([#69](https://github.com/tensorplex-labs/dojo/issues/69)) ([ec85cf4](https://github.com/tensorplex-labs/dojo/commit/ec85cf4307518e79b41d11ab84d8991dab19bf12))
+
 ## [1.2.0](https://github.com/tensorplex-labs/dojo/compare/v1.1.2...v1.2.0) (2025-09-24)
 
 

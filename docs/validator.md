@@ -1,4 +1,6 @@
-# Validator Setup
+# Validator Docs
+
+## Validator Setup
 
 1. Clone `scores_example.json` to `scores.json`
 
@@ -59,4 +61,16 @@ docker plugin install grafana/loki-docker-driver:3.3.2-amd64 --alias loki --gran
 
 # Start the compose stack
 docker compose up -d
+```
+
+## Manual weights setting guide (NOTE: please configure the .env properly as mentioned above first!)
+
+```bash
+# Ensure kami is running
+docker compose up -d kami
+
+# Run the cli, it should be building wiht the Dockerfile-cli file
+docker compose -f docker-compose.cli.yaml run --rm cli
+
+# Select the desired choice either set 100% burn weights to our owner UID 158 or set weights based on the scores.json file
 ```
