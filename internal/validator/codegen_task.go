@@ -17,7 +17,7 @@ import (
 const (
 	taskType                = "codeGen"
 	augmentedProbability    = int64(25) // 25% chance for traps!
-	validatorDuelProbablity = int64(60) // 60% chance to duel validator
+	validatorDuelProbablity = int64(20) // 60% chance to duel validator
 )
 
 func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners) {
@@ -52,15 +52,20 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 		validatorContent := completion.Responses[0].Completion.Files[0].Content
 
-		taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent := v.maybeAugment(shouldDuelValidator, synAPIQuestion, selectedMinerUIDs, validatorContent)
+		taskAugmented,
+			selectedAugmentedMiner,
+			augmentedPrompt,
+			validatorContent,
+			trapValue := v.maybeAugment(shouldDuelValidator, synAPIQuestion, selectedMinerUIDs, validatorContent)
 
 		payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
 			TaskType:  taskType,
 			ExpireAt:  time.Now().Add(v.IntervalConfig.TaskExpiryDuration).Format(time.RFC3339),
 			Assignees: v.buildAssignees(synAPIQuestion.Prompt, selectedMinerUIDs, shouldDuelValidator, taskAugmented, selectedAugmentedMiner, augmentedPrompt),
 			Metadata: taskapi.CodegenTaskMetadata{
-				Prompt:        synAPIQuestion.Prompt,
-				ValidatorDuel: shouldDuelValidator,
+				Prompt:                  synAPIQuestion.Prompt,
+				ValidatorDuel:           shouldDuelValidator,
+				NegativeGeneratorHotkey: trapValue,
 			},
 		}
 
@@ -81,12 +86,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 			return
 		}
 
-		if taskAugmented {
-			trapValue := v.ValidatorHotkey
-			if !shouldDuelValidator {
-				trapValue = v.MetagraphData.Metagraph.Hotkeys[selectedAugmentedMiner]
-			}
-
+		if trapValue != "" {
 			if err = v.Redis.Set(v.Ctx, fmt.Sprintf("trap:%s", taskCreationResponse.Data.TaskID), trapValue, 0); err != nil {
 				log.Error().Err(err).Msgf("failed to set trap for task ID %s", taskCreationResponse.Data.TaskID)
 			} else {
@@ -136,14 +136,16 @@ func (v *Validator) maybeAugment(
 	selectedAugmentedMiner int64,
 	augmentedPrompt string,
 	validatorContent string,
+	trapValue string,
 ) {
 	taskAugmented = false
 	augmentedPrompt = ""
 	validatorContent = initialContent
+	trapValue = ""
 
 	if !v.shouldAugment(augmentedProbability) {
 		log.Debug().Msgf("Not using augmented answer for question ID %s", syn.QaID)
-		return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent
+		return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent, trapValue
 	}
 
 	augmentedCompletionRaw, err := v.Redis.Get(v.Ctx, fmt.Sprintf("synthetic:answers:%s", syn.AnsAugID))
@@ -154,21 +156,23 @@ func (v *Validator) maybeAugment(
 	var augmentedCompletion syntheticapi.CodegenAnswer
 	if err = sonic.Unmarshal([]byte(augmentedCompletionRaw), &augmentedCompletion); err != nil {
 		log.Error().Err(err).Msgf("failed to unmarshal augmented answer for question ID %s", syn.QaID)
-		return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent
+		return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent, trapValue
 	}
 
 	if shouldDuelValidator {
 		if len(augmentedCompletion.Responses) > 0 || len(augmentedCompletion.Responses[0].Completion.Files) > 0 {
 			log.Debug().Msgf("Using augmented answer for question ID %s", syn.QaID)
 			validatorContent = augmentedCompletion.Responses[0].Completion.Files[0].Content
+			trapValue = v.ValidatorHotkey
 		}
 	} else {
 		selectedAugmentedMiner = selectedMinerUIDs[cryptoIntn(len(selectedMinerUIDs))]
 		augmentedPrompt = augmentedCompletion.Prompt
+		trapValue = v.MetagraphData.Metagraph.Hotkeys[selectedAugmentedMiner]
 	}
 
 	taskAugmented = true
-	return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent
+	return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent, trapValue
 }
 
 func (v *Validator) buildAssignees(
