@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/tensorplex-labs/dojo/compare/v1.3.0...v1.3.1) (2025-09-30)
+
+
+### Bug Fixes
+
+* trap tasks pop issue and reduce vali duels ([#81](https://github.com/tensorplex-labs/dojo/issues/81)) ([75a7d56](https://github.com/tensorplex-labs/dojo/commit/75a7d562181d08cb3f0d47b3c8efc0f264a37a0a))
+
 ## [1.3.0](https://github.com/tensorplex-labs/dojo/compare/v1.2.1...v1.3.0) (2025-09-29)
 
 
