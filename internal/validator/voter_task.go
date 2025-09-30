@@ -61,7 +61,8 @@ func (v *Validator) processVotingTasks() {
 }
 
 func (v *Validator) cacheVoters(taskID string, voters []byte, createdAt, expireAt time.Time) error {
-	// skip tasks that are expiring in less than an hour
+	// skip tasks that are expiring in less than an hour for now
+	// TODO: remove this check once we are live for awhile
 	if expireAt.Sub(createdAt) < 1*time.Hour {
 		log.Debug().Msgf("Task %s is expiring in less than an hour, skipping caching voters", taskID)
 		return nil
