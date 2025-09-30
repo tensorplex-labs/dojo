@@ -124,7 +124,7 @@ func (v *Validator) canStartTaskRound(ctx context.Context) bool {
 
 // calling via redis so it doesn't pop the tasks out of the list
 func (v *Validator) taskTrackerPure(ctx context.Context) (total, completed int, err error) {
-	vals, err := v.Redis.LRange(ctx, "synthetic:questions", 0, -1)
+	vals, err := v.Redis.LRange(ctx, redisSyntheticQAKey, 0, -1)
 	if err != nil {
 		return 0, 0, fmt.Errorf("lrange: %w", err)
 	}
@@ -152,7 +152,7 @@ func (v *Validator) isTaskReady(taskData CachedTasks) bool {
 }
 
 func (v *Validator) checkCompletionExists(qaID string) bool {
-	exists, err := v.Redis.Get(v.Ctx, fmt.Sprintf("synthetic:answers:%s", qaID))
+	exists, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisSyntheticAnswersKey, qaID))
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if completion exists in redis")
 		return false

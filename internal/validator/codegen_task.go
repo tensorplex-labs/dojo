@@ -40,7 +40,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		log.Debug().Msgf("Received question: %s of id: %s", synAPIQuestion.Prompt, synAPIQuestion.QaID)
 		log.Debug().Msgf("Processing question with ID %s for duel %+v", synAPIQuestion.QaID, selectedMinerUIDs)
 
-		completionRaw, err := v.Redis.Get(v.Ctx, fmt.Sprintf("synthetic:answers:%s", synAPIQuestion.QaID))
+		completionRaw, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisSyntheticAnswersKey, synAPIQuestion.QaID))
 		if err != nil {
 			log.Error().Err(err).Msgf("failed to get answer content from redis for question ID %s", synAPIQuestion.QaID)
 			return
@@ -87,7 +87,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 
 		if trapValue != "" {
-			if err = v.Redis.Set(v.Ctx, fmt.Sprintf("trap:%s", taskCreationResponse.Data.TaskID), trapValue, 2*v.IntervalConfig.ScoreResetInterval); err != nil {
+			if err = v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, taskCreationResponse.Data.TaskID), trapValue, 2*v.IntervalConfig.ScoreResetInterval); err != nil {
 				log.Error().Err(err).Msgf("failed to set trap for task ID %s", taskCreationResponse.Data.TaskID)
 			} else {
 				log.Debug().Msgf("Set trap for task ID %s", taskCreationResponse.Data.TaskID)
@@ -148,7 +148,7 @@ func (v *Validator) maybeAugment(
 		return taskAugmented, selectedAugmentedMiner, augmentedPrompt, validatorContent, trapValue
 	}
 
-	augmentedCompletionRaw, err := v.Redis.Get(v.Ctx, fmt.Sprintf("synthetic:answers:%s", syn.AnsAugID))
+	augmentedCompletionRaw, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisSyntheticAnswersKey, syn.AnsAugID))
 	if err != nil {
 		log.Error().Err(err).Msgf("failed to get augmented answer for question ID %s", syn.QaID)
 	}

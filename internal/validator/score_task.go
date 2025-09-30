@@ -167,7 +167,7 @@ func (v *Validator) calculateSingleTaskScore(task *taskapi.VoteTaskData) map[str
 }
 
 func (v *Validator) checkIfTrapTask(taskID string) (trapBool bool, hotkey string) {
-	trapRedisKey := fmt.Sprintf("trap:%s", taskID)
+	trapRedisKey := fmt.Sprintf("%s:%s", redisTrapKey, taskID)
 
 	negativeGeneratorHotkey, err := v.Redis.Get(v.Ctx, trapRedisKey)
 	if err != nil {
@@ -304,7 +304,7 @@ func (v *Validator) extractTaskScores(allTaskScores map[string]map[string]float6
 }
 
 func (v *Validator) retrieveVoters(taskID string) (voters []string, err error) {
-	votersJSONString, err := v.Redis.Get(v.Ctx, fmt.Sprintf("voters:%s", taskID))
+	votersJSONString, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisVotersKey, taskID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get voters for task %s: %w", taskID, err)
 	}

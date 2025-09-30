@@ -68,7 +68,7 @@ func (v *Validator) cacheVoters(taskID string, voters []byte, createdAt, expireA
 		return nil
 	}
 
-	voterKey := fmt.Sprintf("voters:%s", taskID)
+	voterKey := fmt.Sprintf("%s:%s", redisVotersKey, taskID)
 	exists, err := v.Redis.Get(v.Ctx, voterKey)
 	if err != nil {
 		log.Error().Err(err).Msgf("failed to check if task %s has been voted on", taskID)
