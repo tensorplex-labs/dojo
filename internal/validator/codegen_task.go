@@ -87,7 +87,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 
 		if trapValue != "" {
-			if err = v.Redis.Set(v.Ctx, fmt.Sprintf("trap:%s", taskCreationResponse.Data.TaskID), trapValue, 0); err != nil {
+			if err = v.Redis.Set(v.Ctx, fmt.Sprintf("trap:%s", taskCreationResponse.Data.TaskID), trapValue, 48*time.Hour); err != nil {
 				log.Error().Err(err).Msgf("failed to set trap for task ID %s", taskCreationResponse.Data.TaskID)
 			} else {
 				log.Debug().Msgf("Set trap for task ID %s", taskCreationResponse.Data.TaskID)
