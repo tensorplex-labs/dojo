@@ -1,112 +1,80 @@
 # Changelog
 
-## [1.5.2](https://github.com/tensorplex-labs/dojo-v2/compare/v1.5.1...v1.5.2) (2025-09-17)
+## [1.2.1](https://github.com/tensorplex-labs/dojo/compare/v1.2.0...v1.2.1) (2025-09-25)
 
 
 ### Bug Fixes
 
-* revert dockerfile, added name for release ci ([b5d6af5](https://github.com/tensorplex-labs/dojo-v2/commit/b5d6af5091743eb3eda1a28c5d296760c32026e5))
+* fixing negative weights issues by clamping it to 0 instead ([#69](https://github.com/tensorplex-labs/dojo/issues/69)) ([ec85cf4](https://github.com/tensorplex-labs/dojo/commit/ec85cf4307518e79b41d11ab84d8991dab19bf12))
 
-## [1.5.1](https://github.com/tensorplex-labs/dojo-v2/compare/v1.5.0...v1.5.1) (2025-09-17)
+## [1.2.0](https://github.com/tensorplex-labs/dojo/compare/v1.1.2...v1.2.0) (2025-09-24)
+
+
+### Features
+
+* incr. task and scoring interval ([d91838e](https://github.com/tensorplex-labs/dojo/commit/d91838e791ecc96d16d49afd93189a3e4e86288f))
+
+## [1.1.2](https://github.com/tensorplex-labs/dojo/compare/v1.1.1...v1.1.2) (2025-09-24)
 
 
 ### Bug Fixes
 
-* docker build ([0189b85](https://github.com/tensorplex-labs/dojo-v2/commit/0189b857849faadc155b98b19e8d551e58fbbfa7))
+* typo in env example file ([c890e1c](https://github.com/tensorplex-labs/dojo/commit/c890e1c51392345b26d20eb152295944f3a608eb))
 
-## [1.5.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.4.0...v1.5.0) (2025-09-17)
-
-
-### Features
-
-* test release ([5de1c93](https://github.com/tensorplex-labs/dojo-v2/commit/5de1c931dfeccf1a752293660be196d1cdf0ce7c))
-* workflow revamp ([c7fdc0b](https://github.com/tensorplex-labs/dojo-v2/commit/c7fdc0b153232a400c1bcfcea88d816ed457165a))
+## [1.1.1](https://github.com/tensorplex-labs/dojo/compare/v1.1.0...v1.1.1) (2025-09-24)
 
 
 ### Bug Fixes
 
-* workflow perms ([7e4fc49](https://github.com/tensorplex-labs/dojo-v2/commit/7e4fc491c6056053384ff411074704fddc349ed9))
-* workflows perms ([eb1963f](https://github.com/tensorplex-labs/dojo-v2/commit/eb1963fb7743d6f10b2bd391c961dbf56aa1f585))
+* show preburn weights and map active miners by hotkeys instead of axons ([aca40f4](https://github.com/tensorplex-labs/dojo/commit/aca40f44f2b8aef8845078f48a5468755ca4e073))
+* show preburn weights and map active miners by hotkeys instead of axons ([aca40f4](https://github.com/tensorplex-labs/dojo/commit/aca40f44f2b8aef8845078f48a5468755ca4e073))
 
-## [1.4.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.3.0...v1.4.0) (2025-09-17)
-
-
-### Features
-
-* test release ([13562e1](https://github.com/tensorplex-labs/dojo-v2/commit/13562e1d23f13fc2ea4b9f03e82c0ec3882f4147))
-
-## [1.3.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.2.0...v1.3.0) (2025-09-17)
+## [1.1.0](https://github.com/tensorplex-labs/dojo/compare/v1.0.3...v1.1.0) (2025-09-24)
 
 
 ### Features
 
-* test release ([c436002](https://github.com/tensorplex-labs/dojo-v2/commit/c4360027393dcefed62e96781b4ceb96bb28ee1a))
+* set burn to 95% ([ce53694](https://github.com/tensorplex-labs/dojo/commit/ce53694bb050423909cce7d34859d0c2df1f7832))
 
-## [1.2.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.1.0...v1.2.0) (2025-09-17)
-
-
-### Features
-
-* release test ([56a5c03](https://github.com/tensorplex-labs/dojo-v2/commit/56a5c0360b7e2f12e36b526fc6478ca6b572cb85))
-* test release ([2677e2e](https://github.com/tensorplex-labs/dojo-v2/commit/2677e2e6aed2746f876832ec76b73dcd9fd346b5))
-* test release 2 ([f15539b](https://github.com/tensorplex-labs/dojo-v2/commit/f15539b7d780712cf9fd0361202dad3dec8337d9))
-* test release 3 ([1286126](https://github.com/tensorplex-labs/dojo-v2/commit/1286126550d9dbae219d95c215dabb135132c3ab))
-
-## [1.1.0](https://github.com/tensorplex-labs/dojo-v2/compare/v1.0.0...v1.1.0) (2025-09-17)
+## [1.0.3](https://github.com/tensorplex-labs/dojo-v2/compare/v1.0.2...v1.0.3) (2025-09-20)
 
 
-### Features
+### Bug Fixes
 
-* test release ([ce5cf30](https://github.com/tensorplex-labs/dojo-v2/commit/ce5cf309d149d1c16d492da614e4562b9dc86d48))
+* scoring bug and some docs update for clarity ([28d6fc7](https://github.com/tensorplex-labs/dojo-v2/commit/28d6fc723a6f2bd4c1c948099ca2ccd9871f0112))
+* scoring bug and some docs update for clarity ([28d6fc7](https://github.com/tensorplex-labs/dojo-v2/commit/28d6fc723a6f2bd4c1c948099ca2ccd9871f0112))
+
+## [1.0.2](https://github.com/tensorplex-labs/dojo-v2/compare/v1.0.1...v1.0.2) (2025-09-18)
+
+
+### Bug Fixes
+
+* add modifiable config for task expiry ([ae89801](https://github.com/tensorplex-labs/dojo-v2/commit/ae898011789fcfaa9a87ecfd912aa33029d8689b))
+* add modifiable config for task expiry ([ae89801](https://github.com/tensorplex-labs/dojo-v2/commit/ae898011789fcfaa9a87ecfd912aa33029d8689b))
+* fix the typo of specifying the round interval ([72e4c7d](https://github.com/tensorplex-labs/dojo-v2/commit/72e4c7d86cb89f411e85bd8c680a2c7061245ee4))
+* further shorten task expiry to 10mins ([f2701ff](https://github.com/tensorplex-labs/dojo-v2/commit/f2701ff615926feea5c3d570649dc15130172ee4))
+* hotfix for enum fix in task update api and changed scoring interval for dev ([584acc5](https://github.com/tensorplex-labs/dojo-v2/commit/584acc5ecb818485cdb10431f65841490f2c92b5))
+* testnet release ([2cf69c6](https://github.com/tensorplex-labs/dojo-v2/commit/2cf69c65b2156e4eb77c3d2d15a748589733d9d1))
+* testnet release ([2cf69c6](https://github.com/tensorplex-labs/dojo-v2/commit/2cf69c65b2156e4eb77c3d2d15a748589733d9d1))
+
+## [1.0.1](https://github.com/tensorplex-labs/dojo-v2/compare/v1.0.0...v1.0.1) (2025-09-18)
+
+
+### Bug Fixes
+
+* fixed synthetic gen issues ([1c226b4](https://github.com/tensorplex-labs/dojo-v2/commit/1c226b4d64808905497ff1b32d9adf3e2a584851))
+* fixed synthetic gen issues ([1c226b4](https://github.com/tensorplex-labs/dojo-v2/commit/1c226b4d64808905497ff1b32d9adf3e2a584851))
+* fixed synthetic-gen issues ([1413fdc](https://github.com/tensorplex-labs/dojo-v2/commit/1413fdc09e85151d20895d57e2a4d58e2984fb79))
+* fixed typing in syntheticgen interface ([b6aa0eb](https://github.com/tensorplex-labs/dojo-v2/commit/b6aa0eb4e835a0acfe9b4d68e3b5cf1182b73f3b))
+* pop qa questions response endpoint integration ([39f3333](https://github.com/tensorplex-labs/dojo-v2/commit/39f33334ace8b4707d66f0e840a930f96646ced9))
+* synthetic gen api popping mechanism ([f63c0af](https://github.com/tensorplex-labs/dojo-v2/commit/f63c0aff00945881b1f372029383af86bbb839b6))
+* synthetic gen api popping mechanism ([f63c0af](https://github.com/tensorplex-labs/dojo-v2/commit/f63c0aff00945881b1f372029383af86bbb839b6))
+* synthetic gen popping due to new types ([6c67551](https://github.com/tensorplex-labs/dojo-v2/commit/6c675519f10a3fc7dfb6d725f5476d6af5587cb4))
+* synthetic gen popping due to new types ([6c67551](https://github.com/tensorplex-labs/dojo-v2/commit/6c675519f10a3fc7dfb6d725f5476d6af5587cb4))
 
 ## 1.0.0 (2025-09-17)
 
 
 ### Features
 
-* added synthetic-api module, refactored kami to use resty ([4445201](https://github.com/tensorplex-labs/dojo-v2/commit/4445201c4467f0b41bad6625fe377b8c8176c7c8))
-* added synthetic-api module, refactored kami to use resty ([0256dd7](https://github.com/tensorplex-labs/dojo-v2/commit/0256dd7f513f06e7806bcbca1d8ef9a33031ee3c))
-* adding dockerized stuffs ([2a71e62](https://github.com/tensorplex-labs/dojo-v2/commit/2a71e6287b98fc8ed71bc2592ff306abd4dce9ed))
-* adding dojo task round ([#8](https://github.com/tensorplex-labs/dojo-v2/issues/8)) ([5e91c5f](https://github.com/tensorplex-labs/dojo-v2/commit/5e91c5f972f2b39eb5ca6794ae30557c578d9f43))
-* adding scoring mechanism ([72a1b91](https://github.com/tensorplex-labs/dojo-v2/commit/72a1b91f5d6f99b983440ca9b2a0285f18bb3edf))
-* basic set weights and task scoring for testnet ([#15](https://github.com/tensorplex-labs/dojo-v2/issues/15)) ([cd42495](https://github.com/tensorplex-labs/dojo-v2/commit/cd42495bd4d3ed79c2b1cf374ed4b320be4a3d81))
-* dojo task round & resolving linters ([#9](https://github.com/tensorplex-labs/dojo-v2/issues/9)) ([bdd8a42](https://github.com/tensorplex-labs/dojo-v2/commit/bdd8a4200e031fac827f1be0e11ba2287bca6134))
-* github actions ([2a74f94](https://github.com/tensorplex-labs/dojo-v2/commit/2a74f94ca1c71f2a2d7acf5318a53a180ac9a8d7))
-* github actions ([289d7eb](https://github.com/tensorplex-labs/dojo-v2/commit/289d7eb5562ead77e8a281a827553fe81a05225b))
-* implemented burn mechanism ([#21](https://github.com/tensorplex-labs/dojo-v2/issues/21)) ([5a37c3a](https://github.com/tensorplex-labs/dojo-v2/commit/5a37c3ab7d37c9ddd40c4e71ade10151a0d0574a))
-* scoring task ([#14](https://github.com/tensorplex-labs/dojo-v2/issues/14)) ([2317caf](https://github.com/tensorplex-labs/dojo-v2/commit/2317cafb8002c3340d6c7b2bc664709d58fc2aaa))
-* scoring-v2 ([#7](https://github.com/tensorplex-labs/dojo-v2/issues/7)) ([aac1c2e](https://github.com/tensorplex-labs/dojo-v2/commit/aac1c2e0e8d7d19950229891519293043eeb41ee))
-* semantic release ([#23](https://github.com/tensorplex-labs/dojo-v2/issues/23)) ([d8358c4](https://github.com/tensorplex-labs/dojo-v2/commit/d8358c4b14b327d3acc627b5104cfc90016aa338))
-* semver ci release testnet ([cbc5630](https://github.com/tensorplex-labs/dojo-v2/commit/cbc563036e0a84b1cf98937642d10fe145fb8b97))
-* testnet release ([c6d0ebc](https://github.com/tensorplex-labs/dojo-v2/commit/c6d0ebc744dbe1a046b1d84efcb5cf9e678d233b))
-* testnet release ([91b1d3a](https://github.com/tensorplex-labs/dojo-v2/commit/91b1d3a7ce6dcd46e56b23f6e55871b3625c28f3))
-* testnet release ([c3a1216](https://github.com/tensorplex-labs/dojo-v2/commit/c3a1216563dd63551d94ef99caa4ed47808cbb6e))
-* testnet release ([c3a1216](https://github.com/tensorplex-labs/dojo-v2/commit/c3a1216563dd63551d94ef99caa4ed47808cbb6e))
-* testnet release ([d3f49ec](https://github.com/tensorplex-labs/dojo-v2/commit/d3f49ecfcea2f1f70163b4080f929fc1f6a05f8f))
-* testnet release ([24fdd8a](https://github.com/tensorplex-labs/dojo-v2/commit/24fdd8ade516b1486f4771564a924a850160df8b))
-* testnet release ([ebfc25d](https://github.com/tensorplex-labs/dojo-v2/commit/ebfc25da1e5517425315037434622dcb5f8566c1))
-* testnet release ([ebfc25d](https://github.com/tensorplex-labs/dojo-v2/commit/ebfc25da1e5517425315037434622dcb5f8566c1))
-* testnet release (running release-please) ([9a8f8e3](https://github.com/tensorplex-labs/dojo-v2/commit/9a8f8e3eb4c947107af910e82a7b0f22e9d1a7bb))
-
-
-### Bug Fixes
-
-* added a flag to distinguish roles in assignee payload ([b754010](https://github.com/tensorplex-labs/dojo-v2/commit/b754010e04a1170406f802c5d9987e960d5ca973))
-* added clearer logs for task round. ([0384ece](https://github.com/tensorplex-labs/dojo-v2/commit/0384ece688f15095fc7012bcddc2affddfda2adc))
-* added removed code augmentations process ([815925c](https://github.com/tensorplex-labs/dojo-v2/commit/815925ceedd66f11025351edf1461ebdb941aaae))
-* added testing Uids. ([4925c49](https://github.com/tensorplex-labs/dojo-v2/commit/4925c492077396313251e9661aa1619c4d79adf0))
-* api route changed for expired task ([ae65641](https://github.com/tensorplex-labs/dojo-v2/commit/ae65641c11b03cd0b357fcc003f89ae11d811b94))
-* docker image tagging ([161ef3d](https://github.com/tensorplex-labs/dojo-v2/commit/161ef3da87c432894d711670b323bafc2fbc741e))
-* fixed active miner uids flag ([3ea582e](https://github.com/tensorplex-labs/dojo-v2/commit/3ea582eb100ab4b36aec6a33e54d4ab008ab6a12))
-* Fixed docker metadata tags ([6fcc52b](https://github.com/tensorplex-labs/dojo-v2/commit/6fcc52b895c8d85f9e451ba8de62b2b388f3b68c))
-* force redis usage, exit if redis isn't started ([357b7b6](https://github.com/tensorplex-labs/dojo-v2/commit/357b7b685b1b4af26a720a189d5b503f3706a841))
-* liniting issues on taskapi side ([#13](https://github.com/tensorplex-labs/dojo-v2/issues/13)) ([4067d57](https://github.com/tensorplex-labs/dojo-v2/commit/4067d572961e4a3c3b1653b221b841e2aa185395))
-* removed a file '~' ([31baba9](https://github.com/tensorplex-labs/dojo-v2/commit/31baba9a6a691fe997d7cdfbd4cd60df0ecf72c4))
-* removed extra loadtaskapi env config ([290adf1](https://github.com/tensorplex-labs/dojo-v2/commit/290adf130a298f766ffea30a198a30b53a248a0d))
-* removed redundant files and fix go routines for processing tasks. ([cd136a8](https://github.com/tensorplex-labs/dojo-v2/commit/cd136a8d8958381c14253c8a00ee033109cefbe2))
-* removed unused apps from build ([e120711](https://github.com/tensorplex-labs/dojo-v2/commit/e1207115bd934b094c30674dfd0481c376bdd349))
-* removed unused apps from build ([065f426](https://github.com/tensorplex-labs/dojo-v2/commit/065f4260a52e1607fbfa22bd461d071f3cc9219f))
-* return error when there is no weight to set ([51a3738](https://github.com/tensorplex-labs/dojo-v2/commit/51a373841b7b409caf42268df6a6f01be7bec693))
-* returns an error instead when there is no uid and weight to set ([#22](https://github.com/tensorplex-labs/dojo-v2/issues/22)) ([511fc10](https://github.com/tensorplex-labs/dojo-v2/commit/511fc10e3707297ac8582c521da2f5ea8deecbc7))
-* revamped task tracker to track properly now ([8c343b2](https://github.com/tensorplex-labs/dojo-v2/commit/8c343b2cc3cbdcc0be20b2148b8248bc3a6d080f))
-* wrong field ([420b5b2](https://github.com/tensorplex-labs/dojo-v2/commit/420b5b286542b6e8b2d71f32e3a1d749bf81bec6))
+* dojo v2 ([f5fbe8d](https://github.com/tensorplex-labs/dojo-v2/commit/f5fbe8d32f132c398ad414a462040239bfa4b425))
