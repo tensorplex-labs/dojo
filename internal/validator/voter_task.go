@@ -46,6 +46,7 @@ func (v *Validator) processVotingTasks() {
 
 		wg.Add(1)
 		go func(taskID string, voters []byte, createdAt, expireAt time.Time) {
+			defer wg.Done()
 			err := v.cacheVoters(taskID, voters, createdAt, expireAt)
 			if err != nil {
 				log.Error().Err(err).Msgf("failed to cache voters for task %s", taskID)
@@ -85,16 +86,16 @@ func (v *Validator) cacheVoters(taskID string, voters []byte, createdAt, expireA
 	return nil
 }
 
-func (v *Validator) buildVoterList() ([]byte, error) {
+func (v *Validator) buildVoterList() (votersJSONString []byte, err error) {
 	var voters []string
 	for _, uid := range v.MetagraphData.CurrentActiveMinerUids {
 		hotkey := v.MetagraphData.Metagraph.Hotkeys[uid]
 		voters = append(voters, hotkey)
 	}
 
-	jsonData, err := sonic.Marshal(voters)
+	votersJSONString, err = sonic.Marshal(voters)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal voter list: %w", err)
 	}
-	return jsonData, nil
+	return votersJSONString, nil
 }

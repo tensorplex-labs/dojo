@@ -5,7 +5,8 @@ import (
 	"os"
 
 	"github.com/bytedance/sonic"
-	tea "github.com/charmbracelet/bubbletea" //nolint
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/tensorplex-labs/dojo/internal/config"
 	"github.com/tensorplex-labs/dojo/internal/kami"
 	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
