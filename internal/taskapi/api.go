@@ -194,3 +194,25 @@ func (t *TaskAPI) UpdateTaskStatus(headers AuthHeaders, taskID, status string) (
 	}
 	return out, nil
 }
+
+func (t *TaskAPI) GetVotingTasks(headers AuthHeaders) (Response[VotesResponse], error) {
+	// TODO: implement when api is up
+	var out Response[VotesResponse]
+	r := t.client.R().
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
+		SetResult(&out)
+
+	resp, err := r.Get("/validator/tasks/voting")
+	if err != nil {
+		return Response[VotesResponse]{}, fmt.Errorf("get voting tasks: %w", err)
+	}
+
+	if resp.IsError() {
+		return Response[VotesResponse]{}, fmt.Errorf("get voting tasks returned status %d: %s",
+			resp.StatusCode(), resp.String())
+	}
+
+	return out, nil
+}
