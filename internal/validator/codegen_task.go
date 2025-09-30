@@ -16,8 +16,8 @@ import (
 
 const (
 	taskType                = "codeGen"
-	augmentedProbability    = int64(25) // 25% chance for traps!
-	validatorDuelProbablity = int64(20) // 60% chance to duel validator
+	augmentedProbability    = int64(25) // 25% chance for traps
+	validatorDuelProbablity = int64(20) // 20% chance to duel validator
 )
 
 func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners) {
