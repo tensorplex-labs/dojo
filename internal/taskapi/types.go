@@ -58,8 +58,9 @@ type PaginatedResponse[T any] = Response[T]
 
 // CodegenTaskMetadata represents the metadata for a codegen task
 type CodegenTaskMetadata struct {
-	Prompt        string `json:"prompt"`
-	ValidatorDuel bool   `json:"validator_duel"`
+	Prompt                  string `json:"prompt"`
+	ValidatorDuel           bool   `json:"validator_duel"`
+	NegativeGeneratorHotkey string `json:"negative_generator_hotkey"`
 }
 
 // VotesResponse represents the response structure for votes
