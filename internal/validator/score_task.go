@@ -126,9 +126,6 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 	for i := range tasks {
 		task := &tasks[i]
 		taskScores := v.calculateSingleTaskScore(task)
-		if len(taskScores) > 0 {
-			allTaskScores[task.ID] = taskScores
-		}
 
 		voters, err := v.retrieveVoters(task.ID)
 		if err != nil {
@@ -145,6 +142,10 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 			if _, exists := taskScores[hotkey]; !exists && slices.Contains(voters, hotkey) {
 				taskScores[hotkey] = noVotePenalty
 			}
+		}
+
+		if len(taskScores) > 0 {
+			allTaskScores[task.ID] = taskScores
 		}
 	}
 
