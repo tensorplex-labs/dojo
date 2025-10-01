@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	taskType                = "codeGen"
-	augmentedProbability    = int64(25) // 25% chance for traps
-	validatorDuelProbablity = int64(20) // 20% chance to duel validator
+	taskType                 = "codeGen"
+	augmentedProbability     = int64(25) // 25% chance for traps
+	validatorDuelProbability = int64(20) // 20% chance to duel validator
 )
 
 func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners) {
@@ -29,7 +29,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 			validatorCompletion string
 		)
 
-		shouldDuelValidator = v.rollProbability(validatorDuelProbablity)
+		shouldDuelValidator = v.rollProbability(validatorDuelProbability)
 		shouldAugment = v.rollProbability(augmentedProbability)
 		selectedMinerUIDs = v.pickRandomMiners(activeMinerUIDs, shouldDuelValidator, processedMiners)
 
@@ -40,20 +40,20 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		synAPIQuestion, err := v.SyntheticAPI.GetQuestion()
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get question from synthetic API")
-			return
+			continue
 		}
-
 		log.Debug().Msgf("Received question: %s of id: %s", synAPIQuestion.Prompt, synAPIQuestion.QaID)
 
 		completionRaw, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisSyntheticAnswersKey, synAPIQuestion.QaID))
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed to get answer content from redis for question ID %s", synAPIQuestion.QaID)
-			return
+			continue
 		}
 
 		var completion syntheticapi.CodegenAnswer
 		if err = sonic.Unmarshal([]byte(completionRaw), &completion); err != nil {
 			log.Error().Err(err).Msgf("Failed to unmarshal answer content from redis for %s", synAPIQuestion.QaID)
+			continue
 		}
 		validatorCompletion = completion.Responses[0].Completion.Files[0].Content
 
@@ -64,7 +64,6 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 			selectedMinerUIDs:   selectedMinerUIDs,
 			initialContent:      validatorCompletion,
 		}
-
 		augmentedPrompt, validatorCompletion, trapHotkey := v.augmentTask(&augmentArgs)
 
 		payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
@@ -81,7 +80,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		headers, err := v.setupAuthHeaders()
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to sign message")
-			return
+			continue
 		}
 
 		content := ""
@@ -95,12 +94,13 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		taskCreationResponse, err := v.TaskAPI.CreateCodegenTask(headers, payload, content)
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed to create task for question with ID %s for %+v ", synAPIQuestion.QaID, selectedMinerUIDs)
-			return
+			continue
 		}
 
 		if trapHotkey != "" {
 			if err = v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, taskCreationResponse.Data.TaskID), trapHotkey, 2*v.IntervalConfig.ScoreResetInterval); err != nil {
 				log.Error().Err(err).Msgf("Failed to set trap for task ID %s", taskCreationResponse.Data.TaskID)
+				continue
 			} else {
 				if shouldDuelValidator {
 					log.Debug().Msgf("Set trap for task ID %s for %+v and validator", taskCreationResponse.Data.TaskID, selectedMinerUIDs)
@@ -113,12 +113,12 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		ok, err := v.SyntheticAPI.PopQA(synAPIQuestion.QaID)
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed to pop question with ID %s", synAPIQuestion.QaID)
+			continue
 		}
-
 		if !ok {
 			log.Error().Msgf("Failed to pop question with ID %s", synAPIQuestion.QaID)
+			continue
 		}
-
 		log.Info().Msgf("Processed miners so far: %d/%d\n", len(processedMiners.uids), len(activeMinerUIDs))
 	}
 }
@@ -264,6 +264,5 @@ func (v *Validator) pickRandomMiners(activeMinerUIDs []int64, shouldDuelValidato
 			break
 		}
 	}
-
 	return selectedMiners
 }
