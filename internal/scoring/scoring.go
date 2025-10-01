@@ -1,6 +1,12 @@
 // Package scoring contains logic to execute and calculate scoring
 package scoring
 
+import (
+	"github.com/rs/zerolog/log"
+)
+
+const trapPenalty = -0.5
+
 func CalcPvPScores(discriminators, generators map[string]string) (scores map[string]float64) {
 	/*
 		@param discriminators: map of discriminator addresses to their votes. A 'vote' is represented by the unique ID of selected code output.
@@ -15,16 +21,24 @@ func CalcPvPScores(discriminators, generators map[string]string) (scores map[str
 	// 1. tally votes + calculate discriminator scores
 	totalDiscriminators := len(discriminators)
 	voteCounts := make(map[string]int)
+
+	generatorTaskIDToAddrs := make(map[string]string, len(generators))
+	for addr, outputID := range generators {
+		generatorTaskIDToAddrs[outputID] = addr
+	}
+
 	for addr, vote := range discriminators {
 		scores[addr] = 1.0 / float64(totalDiscriminators)
 		voteCounts[vote]++
+		log.Debug().Msgf("Discriminator (%s) voted for Generator (%s) and scores: %f", addr, generatorTaskIDToAddrs[vote], scores[addr])
 	}
 
 	// 2. calculate generator scores
 	for addr, id := range generators {
 		scores[addr] = float64(voteCounts[id]) * (1.0 / float64(totalDiscriminators))
+		log.Debug().Msgf("Generator (%s) received %d votes and scores: %f", addr, voteCounts[id], scores[addr])
 	}
-
+	log.Debug().Msgf("Final Scores: %+v", scores)
 	return scores
 }
 
@@ -42,6 +56,11 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 
 	scores = make(map[string]float64)
 
+	negativeGeneratorTaskIDToAddrs := make(map[string]string, len(negativeGenerators))
+	for addr, outputID := range negativeGenerators {
+		negativeGeneratorTaskIDToAddrs[outputID] = addr
+	}
+
 	negativeOutputs := make(map[string]bool)
 	for _, outputID := range negativeGenerators {
 		negativeOutputs[outputID] = true
@@ -49,9 +68,15 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 
 	for addr, vote := range discriminators {
 		if negativeOutputs[vote] {
-			scores[addr] = -1.0
+			scores[addr] = trapPenalty
+			log.Debug().Msgf("Discriminator (%s) voted for Trap Generator (%s) and scores: %f", addr, negativeGeneratorTaskIDToAddrs[vote], scores[addr])
+		} else {
+			scores[addr] = 0.0
+			log.Debug().Msgf("Discriminator (%s) did not vote for Trap Generator (%s) and scores: %f", addr, negativeGeneratorTaskIDToAddrs[vote], scores[addr])
 		}
 	}
+
+	log.Debug().Msgf("Final Scores: %+v", scores)
 
 	return scores
 }
@@ -69,6 +94,12 @@ func CalcPvVScores(discriminators, generators, validators map[string]string) (sc
 	*/
 
 	scores = make(map[string]float64)
+
+	generatorTaskIDToAddrs := make(map[string]string, len(generators))
+	for addr, outputID := range generators {
+		generatorTaskIDToAddrs[outputID] = addr
+	}
+
 	validatorOutputs := make(map[string]bool)
 	for _, outputID := range validators {
 		validatorOutputs[outputID] = true
@@ -85,13 +116,19 @@ func CalcPvVScores(discriminators, generators, validators map[string]string) (sc
 	for addr, vote := range discriminators {
 		if validatorOutputs[vote] {
 			scores[addr] = 1.0 / float64(totalDiscriminators)
+			log.Debug().Msgf("Discriminator (%s) voted for Validator and scores: %f", addr, scores[addr])
+		} else {
+			scores[addr] = 0.0
+			log.Debug().Msgf("Discriminator (%s) voted for Generator (%s) and scores: %f", addr, generatorTaskIDToAddrs[vote], scores[addr])
 		}
 	}
 
 	// calculate generator scores
 	for addr, outputID := range generators {
 		scores[addr] = float64(voteCounts[outputID]) * (1.0 / float64(totalDiscriminators))
+		log.Debug().Msgf("Generator (%s) received %d votes and scores: %f", addr, voteCounts[outputID], scores[addr])
 	}
 
+	log.Debug().Msgf("Final Scores: %+v", scores)
 	return scores
 }
