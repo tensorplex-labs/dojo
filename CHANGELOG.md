@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/tensorplex-labs/dojo/compare/v1.4.0...v1.5.0) (2025-10-01)
+
+
+### Features
+
+* burn weights if there is no weights to be set ([#87](https://github.com/tensorplex-labs/dojo/issues/87)) ([f3dc6d5](https://github.com/tensorplex-labs/dojo/commit/f3dc6d59942b4e063e20aa45412601feb8dbf359))
+* burn weights if there is no weights to be set ([#87](https://github.com/tensorplex-labs/dojo/issues/87)) ([6c59683](https://github.com/tensorplex-labs/dojo/commit/6c59683ed53c739f1e9edb1859847aa18ba6798f))
+
+
+### Bug Fixes
+
+* divide into percentage for burn weight ([#89](https://github.com/tensorplex-labs/dojo/issues/89)) ([df92661](https://github.com/tensorplex-labs/dojo/commit/df92661579f1bd28730551975cd4687d08ecdcf9))
+
 ## [1.4.0](https://github.com/tensorplex-labs/dojo/compare/v1.3.1...v1.4.0) (2025-10-01)
 
 
