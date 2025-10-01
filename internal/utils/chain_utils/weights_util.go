@@ -10,7 +10,7 @@ import (
 const (
 	U16MAX     = 65535
 	BurnUID    = 158
-	BurnWeight = 95
+	BurnWeight = 80
 )
 
 func ClampNegativeWeights(weights []float64) []float64 {
