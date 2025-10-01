@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,7 +16,10 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
 )
 
-const scoreFileName = "all_task_scores.json"
+const (
+	scoreFileName = "all_task_scores.json"
+	noVotePenalty = -0.1
+)
 
 // CompletionMaps maps hotkeys to their completion id
 type CompletionMaps struct {
@@ -122,6 +126,24 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 	for i := range tasks {
 		task := &tasks[i]
 		taskScores := v.calculateSingleTaskScore(task)
+
+		voters, err := v.retrieveVoters(task.ID)
+		if err != nil {
+			log.Error().Err(err).Msgf("failed to retrieve voters for task %s", task.ID)
+			continue
+		}
+
+		if len(voters) == 0 {
+			log.Warn().Msgf("No voters found for task %s, skipping", task.ID)
+			continue
+		}
+
+		for _, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
+			if _, exists := taskScores[hotkey]; !exists && slices.Contains(voters, hotkey) {
+				taskScores[hotkey] = noVotePenalty
+			}
+		}
+
 		if len(taskScores) > 0 {
 			allTaskScores[task.ID] = taskScores
 		}
@@ -138,14 +160,14 @@ func (v *Validator) calculateSingleTaskScore(task *taskapi.VoteTaskData) map[str
 	discriminators := v.buildDiscriminatorsMap(task.Votes)
 	if len(discriminators) == 0 {
 		log.Info().Msgf("No discriminators found for task %s, skipping", task.ID)
-		return nil
+		return make(map[string]float64)
 	}
 
 	return v.calculateScoresByType(task.ID, isTrap, discriminators, completionMaps)
 }
 
 func (v *Validator) checkIfTrapTask(taskID string) (trapBool bool, hotkey string) {
-	trapRedisKey := fmt.Sprintf("trap:%s", taskID)
+	trapRedisKey := fmt.Sprintf("%s:%s", redisTrapKey, taskID)
 
 	negativeGeneratorHotkey, err := v.Redis.Get(v.Ctx, trapRedisKey)
 	if err != nil {
@@ -279,4 +301,22 @@ func (v *Validator) extractTaskScores(allTaskScores map[string]map[string]float6
 	}
 
 	return updatedScoresData
+}
+
+func (v *Validator) retrieveVoters(taskID string) (voters []string, err error) {
+	votersJSONString, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisVotersKey, taskID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get voters for task %s: %w", taskID, err)
+	}
+
+	if votersJSONString == "" {
+		log.Warn().Str("taskID", taskID).Msg("voters key for task exists but has empty value")
+		return []string{}, nil
+	}
+
+	if err := sonic.Unmarshal([]byte(votersJSONString), &voters); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal voters for task %s: %w", taskID, err)
+	}
+
+	return voters, nil
 }
