@@ -18,7 +18,7 @@ import (
 
 const (
 	scoreFileName = "all_task_scores.json"
-	noVotePenalty = -1.0
+	noVotePenalty = -0.1
 )
 
 // CompletionMaps maps hotkeys to their completion id
