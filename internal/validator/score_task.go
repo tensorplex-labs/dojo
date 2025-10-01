@@ -140,6 +140,8 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 			continue
 		}
 
+		log.Debug().Msgf("Number of voters for task %s: %d", task.ID, len(voters))
+
 		for _, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
 			if _, exists := taskScores[hotkey]; !exists && slices.Contains(voters, hotkey) {
 				taskScores[hotkey] = noVotePenalty
