@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0](https://github.com/tensorplex-labs/dojo/compare/v1.3.1...v1.4.0) (2025-10-01)
+
+
+### Features
+
+* miners penalisation for not voting ([fca6dd0](https://github.com/tensorplex-labs/dojo/commit/fca6dd079a13fc51476221c993e85373ecf639e7))
+* penalising miners ([#83](https://github.com/tensorplex-labs/dojo/issues/83)) ([dfa760b](https://github.com/tensorplex-labs/dojo/commit/dfa760b082846a4e3497284ee4b5dec3ecb450a1))
+
+
+### Bug Fixes
+
+* assignee bug where trap hotkeys are not getting the right prompts ([#84](https://github.com/tensorplex-labs/dojo/issues/84)) ([b70cb7b](https://github.com/tensorplex-labs/dojo/commit/b70cb7b5044f4d03a34e9fe0bcf0a9376dcbc187))
+
 ## [1.3.1](https://github.com/tensorplex-labs/dojo/compare/v1.3.0...v1.3.1) (2025-09-30)
 
 
