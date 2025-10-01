@@ -76,6 +76,16 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 		}
 	}
 
+	for addr := range positiveGenerators {
+		scores[addr] = 0.0
+		log.Debug().Msgf("Non-negative Generator (%s) is not part of the trap and gains no score: %f", addr, scores[addr])
+	}
+
+	for addr := range negativeGenerators {
+		scores[addr] = 0.0
+		log.Debug().Msgf("Negative Generator (%s) is not part of the trap and gains no score: %f", addr, scores[addr])
+	}
+
 	log.Debug().Msgf("Final Scores: %+v", scores)
 
 	return scores
