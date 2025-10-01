@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	scoreFileName = "all_task_scores.json"
-	noVotePenalty = -0.1
+	scoreFileName                  = "all_task_scores.json"
+	noVotePenaltyTotalDistribution = -4.0
 )
 
 // CompletionMaps maps hotkeys to their completion id
@@ -142,11 +142,18 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 
 		log.Debug().Msgf("Number of voters for task %s: %d", task.ID, len(voters))
 
+		var nonVoterAddresses []string
 		for _, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
 			if _, exists := taskScores[hotkey]; !exists && slices.Contains(voters, hotkey) {
-				taskScores[hotkey] = noVotePenalty
-				log.Debug().Msgf("hotkey %s did not vote for task %s, adding no vote penalty of %f", hotkey, task.ID, noVotePenalty)
+				nonVoterAddresses = append(nonVoterAddresses, hotkey)
 			}
+		}
+
+		noVotePenalty := noVotePenaltyTotalDistribution / float64(len(nonVoterAddresses))
+		log.Debug().Msgf("There are %d non-voters for the task %s, so the no vote penalty for each non-voter is %f", len(nonVoterAddresses), task.ID, noVotePenalty)
+		for _, nonVoter := range nonVoterAddresses {
+			taskScores[nonVoter] = noVotePenalty
+			log.Debug().Msgf("hotkey %s did not vote for task %s, adding no vote penalty of %f", nonVoter, task.ID, noVotePenalty)
 		}
 
 		if len(taskScores) > 0 {
