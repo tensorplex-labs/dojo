@@ -17,15 +17,6 @@ import (
 	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
 )
 
-func (v *Validator) shouldAugment(probability int64) bool {
-	limit := big.NewInt(100)
-	n, err := rand.Int(rand.Reader, limit)
-	if err != nil {
-		return false
-	}
-	return n.Int64() < probability
-}
-
 func (v *Validator) rollProbability(percentage int64) bool {
 	limit := big.NewInt(100)
 	n, err := rand.Int(rand.Reader, limit)
