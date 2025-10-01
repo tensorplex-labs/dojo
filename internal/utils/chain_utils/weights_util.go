@@ -53,6 +53,9 @@ func ConvertWeightsAndUidsForEmit(uids []int64, weights []float64) (finalisedUid
 	}
 
 	if totalWeightForNormalization == 0 {
+		if BurnWeight > 0 {
+			return []int{BurnUID}, []int{BurnWeight * U16MAX}, nil
+		}
 		return []int{}, []int{}, fmt.Errorf("no weights to set")
 	}
 
