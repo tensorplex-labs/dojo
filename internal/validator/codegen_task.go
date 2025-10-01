@@ -157,6 +157,7 @@ func (v *Validator) maybeAugment(
 	if shouldDuelValidator {
 		if len(augmentedCompletion.Responses) > 0 || len(augmentedCompletion.Responses[0].Completion.Files) > 0 {
 			log.Debug().Msgf("Using augmented answer for question ID %s", syn.QaID)
+			augmentedPrompt = augmentedCompletion.Prompt
 			validatorContent = augmentedCompletion.Responses[0].Completion.Files[0].Content
 			trapHotkey = v.ValidatorHotkey
 		}
