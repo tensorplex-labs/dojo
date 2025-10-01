@@ -85,10 +85,7 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 
 		content := ""
 		if shouldDuelValidator {
-			log.Debug().Msgf("Created task for %d and validator\n", selectedMinerUIDs[0])
 			content = validatorCompletion
-		} else {
-			log.Debug().Msgf("Created task for %+v\n", selectedMinerUIDs)
 		}
 
 		taskCreationResponse, err := v.TaskAPI.CreateCodegenTask(headers, payload, content)
@@ -96,6 +93,9 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 			log.Error().Err(err).Msgf("Failed to create task for question with ID %s for %+v ", synAPIQuestion.QaID, selectedMinerUIDs)
 			continue
 		}
+
+		// If dueling validator, only one miner
+		log.Debug().Msgf("Created codegen task with ID %s for %+v", taskCreationResponse.Data.TaskID, selectedMinerUIDs)
 
 		if trapHotkey != "" {
 			if err = v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, taskCreationResponse.Data.TaskID), trapHotkey, 2*v.IntervalConfig.ScoreResetInterval); err != nil {
