@@ -32,7 +32,6 @@ func (v *Validator) syncMetagraph() {
 		}
 		if miner {
 			currentActiveMiners = append(currentActiveMiners, int64(uid))
-			log.Debug().Msgf("Found active miner UID %d of %s", uid, hotkey)
 		}
 	}
 
