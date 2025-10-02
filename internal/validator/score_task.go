@@ -37,12 +37,12 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 		task := &tasks[i]
 		isTrap, negativeGeneratorHotkey, checkTrapErr := v.checkIfTrapTask(task.ID)
 		if checkTrapErr != nil {
-			log.Error().Err(checkTrapErr).Msg("failed to check if task is a trap, skipping")
+			log.Warn().Err(checkTrapErr).Str("taskID", task.ID).Msg("failed to check if task is a trap, skipping")
 			continue
 		}
 		voters, votersRetrievalErr := v.retrieveVoters(task.ID)
 		if votersRetrievalErr != nil {
-			log.Error().Err(votersRetrievalErr).Msg("failed to retrieve voters for task, skipping")
+			log.Warn().Err(votersRetrievalErr).Str("taskID", task.ID).Msg("failed to retrieve voters for task, skipping")
 			continue
 		}
 

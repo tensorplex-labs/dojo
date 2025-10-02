@@ -16,14 +16,14 @@ const (
 )
 
 type TaskScoringInput struct {
-	TaskID                     string
-	Completions                []taskapi.VoteCompletion
-	Votes                      []taskapi.VoteData
-	IsTrap                     bool
-	NegativeGeneratorHotkey    string
+	TaskID                     string                   // taskID to score
+	Completions                []taskapi.VoteCompletion // completions of the tasks to score
+	Votes                      []taskapi.VoteData       // votes of the tasks to score
+	IsTrap                     bool                     // whether the task is a trap
+	NegativeGeneratorHotkey    string                   // hotkey of the negative generator if it is a trap
 	ValidatorHotkey            string
-	Voters                     []string
-	CurrentActiveMinersHotkeys []string
+	Voters                     []string // voters assigned to this task
+	CurrentActiveMinersHotkeys []string // active miners hotkeys
 }
 
 func CalcPvPScores(discriminators, generators map[string]string) (scores map[string]float64) {
@@ -236,6 +236,11 @@ func CalculateTaskScores(taskScoringInput *TaskScoringInput) (scores map[string]
 		if _, exists := scores[hotkey]; !exists && slices.Contains(taskScoringInput.Voters, hotkey) {
 			nonVoterAddresses = append(nonVoterAddresses, hotkey)
 		}
+	}
+
+	if len(nonVoterAddresses) == 0 {
+		log.Debug().Msgf("No non-voters for task %s", taskScoringInput.TaskID)
+		return scores
 	}
 
 	noVotePenalty := NoVotePenaltyTotalDistribution / float64(len(nonVoterAddresses))
