@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	scoreFileName = "all_task_scores.json"
-	noVotePenalty = -0.1
+	scoreFileName                  = "all_task_scores.json"
+	noVotePenaltyTotalDistribution = -4.0
 )
 
 // CompletionMaps maps hotkeys to their completion id
@@ -90,7 +90,9 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 
 	updatedScoresData := v.extractTaskScores(allTaskScores, latestScoresData)
 
-	log.Info().Msgf("Updated scores data: %+v", updatedScoresData)
+	for uid, score := range updatedScoresData.Scores {
+		log.Info().Int("uid", uid).Float64("score", score).Str("hotkey", updatedScoresData.Hotkeys[uid]).Msgf("uid %d with hotkey %s | coldkey %s scored %f", uid, updatedScoresData.Hotkeys[uid], v.MetagraphData.Metagraph.Coldkeys[uid], score)
+	}
 
 	updatedScoresJSON, err := sonic.Marshal(updatedScoresData)
 	if err != nil {
@@ -138,10 +140,20 @@ func (v *Validator) calculateAllTaskScores(tasks []taskapi.VoteTaskData) map[str
 			continue
 		}
 
+		log.Debug().Msgf("Number of voters for task %s: %d", task.ID, len(voters))
+
+		var nonVoterAddresses []string
 		for _, hotkey := range v.MetagraphData.Metagraph.Hotkeys {
 			if _, exists := taskScores[hotkey]; !exists && slices.Contains(voters, hotkey) {
-				taskScores[hotkey] = noVotePenalty
+				nonVoterAddresses = append(nonVoterAddresses, hotkey)
 			}
+		}
+
+		noVotePenalty := noVotePenaltyTotalDistribution / float64(len(nonVoterAddresses))
+		log.Debug().Msgf("There are %d non-voters for the task %s, so the no vote penalty for each non-voter is %f", len(nonVoterAddresses), task.ID, noVotePenalty)
+		for _, nonVoter := range nonVoterAddresses {
+			taskScores[nonVoter] = noVotePenalty
+			log.Debug().Msgf("hotkey %s did not vote for task %s, adding no vote penalty of %f", nonVoter, task.ID, noVotePenalty)
 		}
 
 		if len(taskScores) > 0 {
@@ -294,6 +306,7 @@ func (v *Validator) extractTaskScores(allTaskScores map[string]map[string]float6
 		for hotkey, score := range taskScores {
 			if uid, exists := currentHotkeyToUID[hotkey]; exists {
 				updatedScoresData.Scores[uid] += score
+				log.Debug().Str("hotkey", hotkey).Str("taskID", taskID).Float64("score", score).Msgf("hotkey %s scored %f for task %s", hotkey, score, taskID)
 			} else {
 				log.Debug().Str("hotkey", hotkey).Str("taskID", taskID).Msg("hotkey not found in metagraph")
 			}

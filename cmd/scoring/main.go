@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/rs/zerolog/log"
 
 	"github.com/tensorplex-labs/dojo/internal/scoring"
@@ -33,7 +31,7 @@ func testCalcPvPScores() {
 
 	scores := scoring.CalcPvPScores(discriminators, generators)
 	for addr, score := range scores {
-		fmt.Printf("Address: %s, Score: %f\n", addr, score)
+		log.Info().Str("addr", addr).Float64("score", score).Msgf("addr %s scored %f", addr, score)
 	}
 }
 
@@ -55,7 +53,7 @@ func testCalcTrapScores() {
 
 	scores := scoring.CalcTrapScores(discriminators, positiveGenerators, negativeGenerators)
 	for addr, score := range scores {
-		fmt.Printf("Address: %s, Score: %f\n", addr, score)
+		log.Info().Str("addr", addr).Float64("score", score).Msgf("addr %s scored %f", addr, score)
 	}
 }
 
@@ -77,6 +75,6 @@ func testCalcPvVScores() {
 
 	scores := scoring.CalcPvVScores(discriminators, generators, validators)
 	for addr, score := range scores {
-		fmt.Printf("Address: %s, Score: %f\n", addr, score)
+		log.Info().Str("addr", addr).Float64("score", score).Msgf("addr %s scored %f", addr, score)
 	}
 }
