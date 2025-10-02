@@ -2,10 +2,29 @@
 package scoring
 
 import (
+	"slices"
+	"time"
+
 	"github.com/rs/zerolog/log"
+
+	"github.com/tensorplex-labs/dojo/internal/taskapi"
 )
 
-const trapPenalty = -0.5
+const (
+	TrapPenalty                    = -0.5
+	NoVotePenaltyTotalDistribution = -4.0
+)
+
+type TaskScoringInput struct {
+	TaskID                     string
+	Completions                []taskapi.VoteCompletion
+	Votes                      []taskapi.VoteData
+	IsTrap                     bool
+	NegativeGeneratorHotkey    string
+	ValidatorHotkey            string
+	Voters                     []string
+	CurrentActiveMinersHotkeys []string
+}
 
 func CalcPvPScores(discriminators, generators map[string]string) (scores map[string]float64) {
 	/*
@@ -68,7 +87,7 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 
 	for addr, vote := range discriminators {
 		if negativeOutputs[vote] {
-			scores[addr] = trapPenalty
+			scores[addr] = TrapPenalty
 			log.Debug().Msgf("Discriminator (%s) voted for Trap Generator (%s) and scores: %f", addr, negativeGeneratorTaskIDToAddrs[vote], scores[addr])
 		} else {
 			scores[addr] = 0.0
@@ -140,5 +159,122 @@ func CalcPvVScores(discriminators, generators, validators map[string]string) (sc
 	}
 
 	log.Debug().Msgf("Final Scores: %+v", scores)
+	return scores
+}
+
+type CompletionMaps struct {
+	Validator          map[string]string
+	Generators         map[string]string
+	PositiveGenerators map[string]string
+	NegativeGenerators map[string]string
+}
+
+func CategorizeCompletions(
+	completions []taskapi.VoteCompletion,
+	isTrap bool,
+	negativeGeneratorHotkey,
+	validatorHotkey string,
+) CompletionMaps {
+	completionMaps := CompletionMaps{
+		Validator:          make(map[string]string),
+		Generators:         make(map[string]string),
+		PositiveGenerators: make(map[string]string),
+		NegativeGenerators: make(map[string]string),
+	}
+
+	for _, completion := range completions {
+		if isTrap {
+			if completion.ParticipantHotkey == negativeGeneratorHotkey {
+				completionMaps.NegativeGenerators[completion.ParticipantHotkey] = completion.ID
+			} else {
+				completionMaps.PositiveGenerators[completion.ParticipantHotkey] = completion.ID
+			}
+		} else {
+			if completion.ParticipantHotkey == validatorHotkey {
+				completionMaps.Validator[completion.ParticipantHotkey] = completion.ID
+			} else {
+				completionMaps.Generators[completion.ParticipantHotkey] = completion.ID
+			}
+		}
+	}
+
+	return completionMaps
+}
+
+func BuildDiscriminatorsMap(votes []taskapi.VoteData) map[string]string {
+	discriminators := make(map[string]string)
+
+	for _, vote := range votes {
+		discriminators[vote.VoterHotkey] = vote.ChosenCompletionID
+	}
+
+	return discriminators
+}
+
+func CalculateTaskScores(taskScoringInput *TaskScoringInput) (scores map[string]float64) {
+	startTime := time.Now()
+	completionMaps := CategorizeCompletions(taskScoringInput.Completions, taskScoringInput.IsTrap, taskScoringInput.NegativeGeneratorHotkey, taskScoringInput.ValidatorHotkey)
+	discriminators := BuildDiscriminatorsMap(taskScoringInput.Votes)
+
+	if len(discriminators) == 0 {
+		return make(map[string]float64)
+	}
+
+	if taskScoringInput.IsTrap {
+		log.Debug().Msgf("Calculating trap score for task %s", taskScoringInput.TaskID)
+		scores = CalcTrapScores(discriminators, completionMaps.PositiveGenerators, completionMaps.NegativeGenerators)
+	} else if len(completionMaps.Validator) == 0 {
+		log.Debug().Msgf("Calculating PvP score for task %s", taskScoringInput.TaskID)
+		scores = CalcPvPScores(discriminators, completionMaps.Generators)
+	} else {
+		log.Debug().Msgf("Calculating PvV score for task %s", taskScoringInput.TaskID)
+		scores = CalcPvVScores(discriminators, completionMaps.Generators, completionMaps.Validator)
+	}
+
+	var nonVoterAddresses []string
+	for _, hotkey := range taskScoringInput.CurrentActiveMinersHotkeys {
+		if _, exists := scores[hotkey]; !exists && slices.Contains(taskScoringInput.Voters, hotkey) {
+			nonVoterAddresses = append(nonVoterAddresses, hotkey)
+		}
+	}
+
+	noVotePenalty := NoVotePenaltyTotalDistribution / float64(len(nonVoterAddresses))
+	log.Debug().Msgf("There are %d non-voters for the task %s, so the no vote penalty for each non-voter is %f", len(nonVoterAddresses), taskScoringInput.TaskID, noVotePenalty)
+	for _, nonVoter := range nonVoterAddresses {
+		scores[nonVoter] = noVotePenalty
+		log.Debug().Msgf("hotkey %s did not vote for task %s, adding no vote penalty of %f", nonVoter, taskScoringInput.TaskID, noVotePenalty)
+	}
+
+	if len(scores) == 0 {
+		scores = make(map[string]float64)
+	}
+
+	log.Debug().Msgf("Calculated task scores successfully for task %s in %v", taskScoringInput.TaskID, time.Since(startTime))
+	return scores
+}
+
+func AggregateTaskScoresByUID(
+	allTaskScores map[string]map[string]float64,
+	hotkeys []string,
+) []float64 {
+	hotkeyToUID := make(map[string]int)
+	for uid, hotkey := range hotkeys {
+		hotkeyToUID[hotkey] = uid
+	}
+	scores := make([]float64, len(hotkeys))
+
+	for taskID, taskScores := range allTaskScores {
+		for hotkey, score := range taskScores {
+			if uid, exists := hotkeyToUID[hotkey]; exists {
+				scores[uid] += score
+				log.Debug().Str("hotkey", hotkey).Str("taskID", taskID).Float64("score", score).
+					Msgf("hotkey %s scored %f for task %s", hotkey, score, taskID)
+			} else {
+				log.Debug().Str("hotkey", hotkey).Str("taskID", taskID).
+					Msg("hotkey not found in metagraph")
+			}
+		}
+	}
+
 	return scores
 }
