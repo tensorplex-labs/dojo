@@ -32,6 +32,7 @@ type VotesRecord struct {
 type ScoredTaskAnalyticsRecord struct {
 	TaskID            string         `json:"task_id"`
 	TaskType          string         `json:"task_type"`
+	CreatedAt         time.Time      `json:"created_at"`
 	AnalyticsMetadata map[string]any `json:"analytics_metadata"`
 	ValidatorHotkey   string         `json:"validator_hotkey"`
 	ScoresRecord      []ScoresRecord `json:"scores_record"`
@@ -57,8 +58,9 @@ func (v *Validator) buildTaskAnalytics(
 	votesRecord := v.buildVotesRecord(task, completionMaps, nonVotersAddresses)
 
 	return ScoredTaskAnalyticsRecord{
-		TaskID:   task.ID,
-		TaskType: taskType,
+		TaskID:    task.ID,
+		TaskType:  taskType,
+		CreatedAt: time.Now(),
 		AnalyticsMetadata: map[string]any{
 			"created_at": time.Now(),
 		},
@@ -159,7 +161,7 @@ func (v *Validator) pushLogAnalytics(analytics *ScoredTaskAnalyticsRecord) {
 		return
 	}
 
-	// push to task api
+	// TODO: push to task api
 
 	log.Info().RawJSON("analytics", analyticsJSON).Msg("Task Analytics")
 }
