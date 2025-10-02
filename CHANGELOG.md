@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.0](https://github.com/tensorplex-labs/dojo/compare/v1.5.0...v1.6.0) (2025-10-02)
+
+
+### Features
+
+* reduce burn emission to 80% ([#95](https://github.com/tensorplex-labs/dojo/issues/95)) ([c04e36d](https://github.com/tensorplex-labs/dojo/commit/c04e36dc05378c4ad45b239f592276e9bf9441f6))
+
+
+### Bug Fixes
+
+* added more logging, returns 0 properly for trap task ([#91](https://github.com/tensorplex-labs/dojo/issues/91)) ([0db44e5](https://github.com/tensorplex-labs/dojo/commit/0db44e5a6e5957aeed25bc3c969363a42e079849))
+* added more logging, returns 0 properly for trap task ([#91](https://github.com/tensorplex-labs/dojo/issues/91)) ([dd12892](https://github.com/tensorplex-labs/dojo/commit/dd128926ad329256e2189fe34e7df4a641a0bc47))
+* trap generators do not get penalize, now distributes vote penalties across non-voters ([#94](https://github.com/tensorplex-labs/dojo/issues/94)) ([5dc9d0e](https://github.com/tensorplex-labs/dojo/commit/5dc9d0e8bede09dbfddddd5c0aeaabb3fd7ed41d))
+
 ## [1.5.0](https://github.com/tensorplex-labs/dojo/compare/v1.4.0...v1.5.0) (2025-10-01)
 
 
