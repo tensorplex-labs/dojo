@@ -41,6 +41,7 @@ LANGFUSE_HOST="https://us.cloud.langfuse.com" # 🇺🇸 US region
 
 DOJO_LOKI_URL= # DOJO TEAM WILL PROVIDE
 VALIDATOR_HOTKEY=YOUR_VALIDATOR_HOTKEY
+LOG_LEVEL=info
 ```
 
 4. OPTIONAL: Start the local subtensor node
