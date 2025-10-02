@@ -61,6 +61,8 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 
 		if len(taskScores) > 0 {
 			allTaskScores[task.ID] = taskScores
+			analytics := v.buildTaskAnalytics(task, taskScores, isTrap, negativeGeneratorHotkey, voters)
+			v.pushLogAnalytics(&analytics)
 		}
 	}
 

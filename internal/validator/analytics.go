@@ -1,0 +1,165 @@
+package validator
+
+import (
+	"slices"
+	"time"
+
+	"github.com/bytedance/sonic"
+	"github.com/rs/zerolog/log"
+
+	"github.com/tensorplex-labs/dojo/internal/scoring"
+	"github.com/tensorplex-labs/dojo/internal/taskapi"
+	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
+)
+
+type ScoresRecord struct {
+	Hotkey  string  `json:"hotkey"`
+	Coldkey string  `json:"coldkey"`
+	Score   float64 `json:"score"`
+	Role    string  `json:"role"`
+}
+
+type VotesRecord struct {
+	VoterHotkey        string  `json:"voter_hotkey"`
+	VoterColdkey       string  `json:"voter_coldkey"`
+	ChosenCompletionID string  `json:"chosen_completion_id"`
+	VoteWeight         float64 `json:"vote_weight"`
+	VoteeHotkey        string  `json:"votee_hotkey"`
+	VoteeColdkey       string  `json:"votee_coldkey"`
+	VoteeRole          string  `json:"votee_role"`
+}
+
+type ScoredTaskAnalyticsRecord struct {
+	TaskID            string         `json:"task_id"`
+	TaskType          string         `json:"task_type"`
+	AnalyticsMetadata map[string]any `json:"analytics_metadata"`
+	ValidatorHotkey   string         `json:"validator_hotkey"`
+	ScoresRecord      []ScoresRecord `json:"scores_record"`
+	VotesRecord       []VotesRecord  `json:"votes_record"`
+}
+
+func (v *Validator) buildTaskAnalytics(
+	task *taskapi.VoteTaskData,
+	taskScores map[string]float64,
+	isTrap bool,
+	negativeGeneratorHotkey string,
+	voters []string,
+) ScoredTaskAnalyticsRecord {
+	completionMaps := scoring.CategorizeCompletions(
+		task.Completions, isTrap, negativeGeneratorHotkey, task.ValidatorHotkey,
+	)
+	taskType := scoring.DetermineTaskType(completionMaps, isTrap)
+
+	nonVotersAddresses := scoring.FindNonVoters(taskScores, v.MetagraphData.Metagraph.Hotkeys, voters)
+
+	scoresRecord := v.buildScoresRecord(task, taskScores, completionMaps, nonVotersAddresses)
+
+	votesRecord := v.buildVotesRecord(task, completionMaps, nonVotersAddresses)
+
+	return ScoredTaskAnalyticsRecord{
+		TaskID:   task.ID,
+		TaskType: taskType,
+		AnalyticsMetadata: map[string]any{
+			"created_at": time.Now(),
+		},
+		ValidatorHotkey: task.ValidatorHotkey,
+		ScoresRecord:    scoresRecord,
+		VotesRecord:     votesRecord,
+	}
+}
+
+func (v *Validator) buildScoresRecord(
+	task *taskapi.VoteTaskData,
+	taskScores map[string]float64,
+	completionMaps scoring.CompletionMaps,
+	nonVotersAddresses []string,
+) []ScoresRecord {
+	records := make([]ScoresRecord, 0, len(taskScores))
+
+	for hotkey, score := range taskScores {
+		role := v.determineRole(hotkey, task.ValidatorHotkey, completionMaps, nonVotersAddresses)
+		coldkey := chainutils.GetColdkeyForHotkey(&v.MetagraphData.Metagraph, hotkey)
+
+		records = append(records, ScoresRecord{
+			Hotkey:  hotkey,
+			Coldkey: coldkey,
+			Score:   score,
+			Role:    role,
+		})
+	}
+
+	return records
+}
+
+func (v *Validator) buildVotesRecord(
+	task *taskapi.VoteTaskData,
+	completionMaps scoring.CompletionMaps,
+	nonVotersAddresses []string,
+) []VotesRecord {
+	records := make([]VotesRecord, 0, len(task.Votes))
+
+	completionToParticipant := make(map[string]string)
+	for _, completion := range task.Completions {
+		completionToParticipant[completion.ID] = completion.ParticipantHotkey
+	}
+
+	for _, vote := range task.Votes {
+		voteeHotkey := completionToParticipant[vote.ChosenCompletionID]
+		voteeRole := v.determineRole(voteeHotkey, task.ValidatorHotkey, completionMaps, nonVotersAddresses)
+
+		records = append(records, VotesRecord{
+			VoterHotkey:        vote.VoterHotkey,
+			VoterColdkey:       chainutils.GetColdkeyForHotkey(&v.MetagraphData.Metagraph, vote.VoterHotkey),
+			ChosenCompletionID: vote.ChosenCompletionID,
+			VoteWeight:         vote.Weight,
+			VoteeHotkey:        voteeHotkey,
+			VoteeColdkey:       chainutils.GetColdkeyForHotkey(&v.MetagraphData.Metagraph, voteeHotkey),
+			VoteeRole:          voteeRole,
+		})
+	}
+
+	return records
+}
+
+func (v *Validator) determineRole(
+	hotkey string,
+	taskValidatorHotkey string,
+	completionMaps scoring.CompletionMaps,
+	nonVotersAddresses []string,
+) string {
+	if _, exists := completionMaps.Generators[hotkey]; exists {
+		return "Generator"
+	}
+	if _, exists := completionMaps.Validator[hotkey]; exists {
+		return "Validator"
+	}
+	if _, exists := completionMaps.PositiveGenerators[hotkey]; exists {
+		if hotkey == taskValidatorHotkey {
+			return "PositiveValidator"
+		}
+		return "PositiveGenerator"
+	}
+	if _, exists := completionMaps.NegativeGenerators[hotkey]; exists {
+		if hotkey == taskValidatorHotkey {
+			return "NegativeValidator"
+		}
+		return "NegativeGenerator"
+	}
+
+	if slices.Contains(nonVotersAddresses, hotkey) {
+		return "DiscriminatorNoVote"
+	}
+	return "Discriminator"
+}
+
+func (v *Validator) pushLogAnalytics(analytics *ScoredTaskAnalyticsRecord) {
+	analyticsJSON, err := sonic.Marshal(analytics)
+	if err != nil {
+		log.Warn().Err(err).Str("taskID", analytics.TaskID).Msg("failed to marshal task analytics")
+		return
+	}
+
+	// push to task api
+
+	log.Info().RawJSON("analytics", analyticsJSON).Msg("Task Analytics")
+}

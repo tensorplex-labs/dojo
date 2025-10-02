@@ -187,11 +187,6 @@ func CalculateTaskScores(taskScoringInput *TaskScoringInput) (scores map[string]
 
 	nonVoterAddresses := FindNonVoters(scores, taskScoringInput.CurrentActiveMinersHotkeys, taskScoringInput.Voters)
 
-	if len(nonVoterAddresses) == 0 {
-		log.Debug().Msgf("No non-voters for task %s", taskScoringInput.TaskID)
-		return scores
-	}
-
 	noVotePenalty := CalculateNoVotePenalty(nonVoterAddresses)
 	log.Debug().Msgf("There are %d non-voters for the task %s, so the no vote penalty for each non-voter is %f", len(nonVoterAddresses), taskScoringInput.TaskID, noVotePenalty)
 	for _, nonVoter := range nonVoterAddresses {
@@ -277,6 +272,10 @@ func FindNonVoters(scores map[string]float64, currentActiveMinersHotkeys, voters
 }
 
 func CalculateNoVotePenalty(nonVoterAddresses []string) float64 {
+	if len(nonVoterAddresses) == 0 {
+		log.Info().Msgf("No non-voters")
+		return 0.0
+	}
 	return NoVotePenaltyTotalDistribution / float64(len(nonVoterAddresses))
 }
 
