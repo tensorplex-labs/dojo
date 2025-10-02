@@ -162,6 +162,51 @@ func CalcPvVScores(discriminators, generators, validators map[string]string) (sc
 	return scores
 }
 
+func CalculateTaskScores(taskScoringInput *TaskScoringInput) (scores map[string]float64) {
+	startTime := time.Now()
+	completionMaps := CategorizeCompletions(taskScoringInput.Completions, taskScoringInput.IsTrap, taskScoringInput.NegativeGeneratorHotkey, taskScoringInput.ValidatorHotkey)
+	discriminators := BuildDiscriminatorsMap(taskScoringInput.Votes)
+
+	if len(discriminators) == 0 {
+		return make(map[string]float64)
+	}
+
+	taskType := DetermineTaskType(completionMaps, taskScoringInput.IsTrap)
+
+	switch taskType {
+	case "Trap":
+		log.Debug().Msgf("Calculating trap score for task %s", taskScoringInput.TaskID)
+		scores = CalcTrapScores(discriminators, completionMaps.PositiveGenerators, completionMaps.NegativeGenerators)
+	case "PvP":
+		log.Debug().Msgf("Calculating PvP score for task %s", taskScoringInput.TaskID)
+		scores = CalcPvPScores(discriminators, completionMaps.Generators)
+	case "PvV":
+		log.Debug().Msgf("Calculating PvV score for task %s", taskScoringInput.TaskID)
+		scores = CalcPvVScores(discriminators, completionMaps.Generators, completionMaps.Validator)
+	}
+
+	nonVoterAddresses := FindNonVoters(scores, taskScoringInput.CurrentActiveMinersHotkeys, taskScoringInput.Voters)
+
+	if len(nonVoterAddresses) == 0 {
+		log.Debug().Msgf("No non-voters for task %s", taskScoringInput.TaskID)
+		return scores
+	}
+
+	noVotePenalty := CalculateNoVotePenalty(nonVoterAddresses)
+	log.Debug().Msgf("There are %d non-voters for the task %s, so the no vote penalty for each non-voter is %f", len(nonVoterAddresses), taskScoringInput.TaskID, noVotePenalty)
+	for _, nonVoter := range nonVoterAddresses {
+		scores[nonVoter] = noVotePenalty
+		log.Debug().Msgf("hotkey %s did not vote for task %s, adding no vote penalty of %f", nonVoter, taskScoringInput.TaskID, noVotePenalty)
+	}
+
+	if len(scores) == 0 {
+		scores = make(map[string]float64)
+	}
+
+	log.Debug().Msgf("Calculated task scores successfully for task %s in %v", taskScoringInput.TaskID, time.Since(startTime))
+	return scores
+}
+
 type CompletionMaps struct {
 	Validator          map[string]string
 	Generators         map[string]string
@@ -211,51 +256,28 @@ func BuildDiscriminatorsMap(votes []taskapi.VoteData) map[string]string {
 	return discriminators
 }
 
-func CalculateTaskScores(taskScoringInput *TaskScoringInput) (scores map[string]float64) {
-	startTime := time.Now()
-	completionMaps := CategorizeCompletions(taskScoringInput.Completions, taskScoringInput.IsTrap, taskScoringInput.NegativeGeneratorHotkey, taskScoringInput.ValidatorHotkey)
-	discriminators := BuildDiscriminatorsMap(taskScoringInput.Votes)
-
-	if len(discriminators) == 0 {
-		return make(map[string]float64)
-	}
-
-	if taskScoringInput.IsTrap {
-		log.Debug().Msgf("Calculating trap score for task %s", taskScoringInput.TaskID)
-		scores = CalcTrapScores(discriminators, completionMaps.PositiveGenerators, completionMaps.NegativeGenerators)
+func DetermineTaskType(completionMaps CompletionMaps, isTrap bool) string {
+	if isTrap {
+		return "Trap"
 	} else if len(completionMaps.Validator) == 0 {
-		log.Debug().Msgf("Calculating PvP score for task %s", taskScoringInput.TaskID)
-		scores = CalcPvPScores(discriminators, completionMaps.Generators)
+		return "PvP"
 	} else {
-		log.Debug().Msgf("Calculating PvV score for task %s", taskScoringInput.TaskID)
-		scores = CalcPvVScores(discriminators, completionMaps.Generators, completionMaps.Validator)
+		return "PvV"
 	}
+}
 
-	var nonVoterAddresses []string
-	for _, hotkey := range taskScoringInput.CurrentActiveMinersHotkeys {
-		if _, exists := scores[hotkey]; !exists && slices.Contains(taskScoringInput.Voters, hotkey) {
+func FindNonVoters(scores map[string]float64, currentActiveMinersHotkeys, voters []string) (nonVoterAddresses []string) {
+	for _, hotkey := range currentActiveMinersHotkeys {
+		if _, exists := scores[hotkey]; !exists && slices.Contains(voters, hotkey) {
 			nonVoterAddresses = append(nonVoterAddresses, hotkey)
 		}
 	}
 
-	if len(nonVoterAddresses) == 0 {
-		log.Debug().Msgf("No non-voters for task %s", taskScoringInput.TaskID)
-		return scores
-	}
+	return nonVoterAddresses
+}
 
-	noVotePenalty := NoVotePenaltyTotalDistribution / float64(len(nonVoterAddresses))
-	log.Debug().Msgf("There are %d non-voters for the task %s, so the no vote penalty for each non-voter is %f", len(nonVoterAddresses), taskScoringInput.TaskID, noVotePenalty)
-	for _, nonVoter := range nonVoterAddresses {
-		scores[nonVoter] = noVotePenalty
-		log.Debug().Msgf("hotkey %s did not vote for task %s, adding no vote penalty of %f", nonVoter, taskScoringInput.TaskID, noVotePenalty)
-	}
-
-	if len(scores) == 0 {
-		scores = make(map[string]float64)
-	}
-
-	log.Debug().Msgf("Calculated task scores successfully for task %s in %v", taskScoringInput.TaskID, time.Since(startTime))
-	return scores
+func CalculateNoVotePenalty(nonVoterAddresses []string) float64 {
+	return NoVotePenaltyTotalDistribution / float64(len(nonVoterAddresses))
 }
 
 func AggregateTaskScoresByUID(
