@@ -95,11 +95,9 @@ services:
       options:
         loki-url: "https://${DOJO_LOKI_URL}"
         loki-external-labels: "validator=${VALIDATOR_HOTKEY}"
-        loki-batch-size: "500"
-        max-size: "100m"
         # disable loki's default of not saving to a file, so we have persistence
-        # mode: non-blocking
-        # no-file: 0
+        mode: non-blocking
+        no-file: 0
 
   synthetic-gen:
     container_name: synthetic-gen
