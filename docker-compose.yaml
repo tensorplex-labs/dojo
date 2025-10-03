@@ -89,7 +89,7 @@ services:
       - ./scores.json:/app/scores.json
     networks:
       - validator
-    command: ["./app", "--${LOG_LEVEL:info}"]
+    command: ["./app", "--${LOG_LEVEL}"]
     logging:
       driver: loki
       options:

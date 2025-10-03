@@ -13,24 +13,30 @@ import (
 
 func (v *Validator) syncMetagraph() {
 	log.Info().Msg(fmt.Sprintf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid))
+	var currentActiveMiners []int64
+
 	newMetagraph, err := v.Kami.GetMetagraph(v.ValidatorConfig.Netuid)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get metagraph")
 		return
 	}
 
-	var currentActiveMiners []int64
-	for uid := range newMetagraph.Data.Hotkeys {
-		rootStake := newMetagraph.Data.TaoStake[uid]
-		alphaStake := newMetagraph.Data.AlphaStake[uid]
+	if v.ValidatorConfig.Environment == "dev" {
+		currentActiveMiners = []int64{202, 93, 201}
+	} else {
+		for uid := range newMetagraph.Data.Hotkeys {
+			rootStake := newMetagraph.Data.TaoStake[uid]
+			alphaStake := newMetagraph.Data.AlphaStake[uid]
 
-		miner, err := chainutils.CheckIfMiner(alphaStake, rootStake)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to check miner status")
-			continue
-		}
-		if miner {
-			currentActiveMiners = append(currentActiveMiners, int64(uid))
+			miner, err := chainutils.CheckIfMiner(alphaStake, rootStake)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to check miner status")
+				continue
+			}
+
+			if miner {
+				currentActiveMiners = append(currentActiveMiners, int64(uid))
+			}
 		}
 	}
 
