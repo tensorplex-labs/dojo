@@ -2,6 +2,7 @@ package taskapi
 
 import (
 	"mime/multipart"
+	"time"
 )
 
 // CreateTasksRequest represents the payload to create a new task.
@@ -27,7 +28,7 @@ type AuthHeaders struct {
 }
 
 // Response represents a generic API response structure.
-type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | []VotingPhaseTasksResponse | any] struct {
+type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | []VotingPhaseTasksResponse | PostTaskScoresAnalyticsResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -109,4 +110,37 @@ type VotingPhaseTasksResponse struct {
 	ID        string `json:"id"`
 	CreatedAt string `json:"created_at"`
 	ExpireAt  string `json:"expire_at"`
+}
+
+// PostTaskScoresAnalyticsResponse represents the response data for a posted task scores analytics.
+type PostTaskScoresAnalyticsResponse struct {
+	ID     string `json:"id"`
+	TaskID string `json:"task_id"`
+}
+
+type ScoresRecord struct {
+	Hotkey  string  `json:"hotkey"`
+	Coldkey string  `json:"coldkey"`
+	Score   float64 `json:"score"`
+	Role    string  `json:"role"`
+}
+
+type VotesRecord struct {
+	VoterHotkey        string  `json:"voter_hotkey"`
+	VoterColdkey       string  `json:"voter_coldkey"`
+	ChosenCompletionID string  `json:"chosen_completion_id"`
+	VoteWeight         float64 `json:"vote_weight"`
+	VoteeHotkey        string  `json:"votee_hotkey"`
+	VoteeColdkey       string  `json:"votee_coldkey"`
+	VoteeRole          string  `json:"votee_role"`
+}
+
+type ScoredTaskAnalyticsRecord struct {
+	TaskID            string         `json:"task_id"`
+	TaskType          string         `json:"task_type"`
+	CreatedAt         time.Time      `json:"created_at"`
+	AnalyticsMetadata map[string]any `json:"analytics_metadata"`
+	ValidatorHotkey   string         `json:"validator_hotkey"`
+	ScoresRecord      []ScoresRecord `json:"scores_record"`
+	VotesRecord       []VotesRecord  `json:"votes_record"`
 }
