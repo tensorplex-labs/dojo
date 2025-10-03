@@ -12,32 +12,11 @@ import (
 	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
 )
 
-type ScoresRecord struct {
-	Hotkey  string  `json:"hotkey"`
-	Coldkey string  `json:"coldkey"`
-	Score   float64 `json:"score"`
-	Role    string  `json:"role"`
-}
+type ScoresRecord = taskapi.ScoresRecord
 
-type VotesRecord struct {
-	VoterHotkey        string  `json:"voter_hotkey"`
-	VoterColdkey       string  `json:"voter_coldkey"`
-	ChosenCompletionID string  `json:"chosen_completion_id"`
-	VoteWeight         float64 `json:"vote_weight"`
-	VoteeHotkey        string  `json:"votee_hotkey"`
-	VoteeColdkey       string  `json:"votee_coldkey"`
-	VoteeRole          string  `json:"votee_role"`
-}
+type VotesRecord = taskapi.VotesRecord
 
-type ScoredTaskAnalyticsRecord struct {
-	TaskID            string         `json:"task_id"`
-	TaskType          string         `json:"task_type"`
-	CreatedAt         time.Time      `json:"created_at"`
-	AnalyticsMetadata map[string]any `json:"analytics_metadata"`
-	ValidatorHotkey   string         `json:"validator_hotkey"`
-	ScoresRecord      []ScoresRecord `json:"scores_record"`
-	VotesRecord       []VotesRecord  `json:"votes_record"`
-}
+type ScoredTaskAnalyticsRecord = taskapi.ScoredTaskAnalyticsRecord
 
 func (v *Validator) buildTaskAnalytics(
 	task *taskapi.VoteTaskData,
@@ -164,4 +143,18 @@ func (v *Validator) pushLogAnalytics(analytics *ScoredTaskAnalyticsRecord) {
 	// TODO: push to task api
 
 	log.Info().RawJSON("analytics", analyticsJSON).Msg("Task Analytics")
+}
+
+func (v *Validator) pushTaskAnalyticsToTaskAPI(analytics *ScoredTaskAnalyticsRecord) error {
+	headers, err := v.setupAuthHeaders()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to sign message")
+		return err
+	}
+	_, err = v.TaskAPI.PostTaskScoresAnalytics(headers, analytics)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to push task analytics to task API")
+		return err
+	}
+	return nil
 }
