@@ -22,6 +22,7 @@ type TaskAPIInterface interface {
 		validatorCompletion string,
 	) (Response[CreateTaskResponse], error)
 	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
+	PostTaskScoresAnalytics(headers AuthHeaders, scoredTaskAnalyticsRecord *ScoredTaskAnalyticsRecord) (Response[PostTaskScoresAnalyticsResponse], error)
 
 	// GET requests
 	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
@@ -125,6 +126,27 @@ func (t *TaskAPI) SubmitCompletion(headers AuthHeaders, taskID, completion strin
 	}
 	if resp.IsError() {
 		return Response[SubmitCompletionResponse]{}, fmt.Errorf("submit completion returned status %d: %s",
+			resp.StatusCode(), resp.String())
+	}
+	return out, nil
+}
+
+func (t *TaskAPI) PostTaskScoresAnalytics(headers AuthHeaders, scoredTaskAnalyticsRecord *ScoredTaskAnalyticsRecord) (Response[PostTaskScoresAnalyticsResponse], error) {
+	var out Response[PostTaskScoresAnalyticsResponse]
+
+	r := t.client.R().
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
+		SetBody(scoredTaskAnalyticsRecord).
+		SetResult(&out)
+
+	resp, err := r.Post("/validator/analytics")
+	if err != nil {
+		return Response[PostTaskScoresAnalyticsResponse]{}, fmt.Errorf("post task scores analytics: %w", err)
+	}
+	if resp.IsError() {
+		return Response[PostTaskScoresAnalyticsResponse]{}, fmt.Errorf("post task scores analytics returned status %d: %s",
 			resp.StatusCode(), resp.String())
 	}
 	return out, nil

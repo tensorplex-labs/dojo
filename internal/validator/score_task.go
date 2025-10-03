@@ -62,6 +62,10 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 		if len(taskScores) > 0 {
 			allTaskScores[task.ID] = taskScores
 			analytics := v.buildTaskAnalytics(task, taskScores, isTrap, negativeGeneratorHotkey, voters)
+			if pushTaskAnalyticsErr := v.pushTaskAnalyticsToTaskAPI(&analytics); pushTaskAnalyticsErr != nil {
+				log.Error().Err(pushTaskAnalyticsErr).Msg("Failed to push task analytics to task API")
+				continue
+			}
 			v.pushLogAnalytics(&analytics)
 		}
 	}
