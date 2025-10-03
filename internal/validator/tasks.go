@@ -13,26 +13,30 @@ import (
 
 func (v *Validator) syncMetagraph() {
 	log.Info().Msg(fmt.Sprintf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid))
+	var currentActiveMiners []int64
+
 	newMetagraph, err := v.Kami.GetMetagraph(v.ValidatorConfig.Netuid)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get metagraph")
 		return
 	}
 
-	var currentActiveMiners []int64
-	for uid, hotkey := range newMetagraph.Data.Hotkeys {
-		rootStake := newMetagraph.Data.TaoStake[uid]
-		alphaStake := newMetagraph.Data.AlphaStake[uid]
+	if v.ValidatorConfig.Environment == "dev" {
+		currentActiveMiners = []int64{202, 93, 201}
+	} else {
+		for uid := range newMetagraph.Data.Hotkeys {
+			rootStake := newMetagraph.Data.TaoStake[uid]
+			alphaStake := newMetagraph.Data.AlphaStake[uid]
 
-		miner, err := chainutils.CheckIfMiner(alphaStake, rootStake)
-		log.Debug().Msgf("Miner check for UID %d of %s returned: %t", uid, hotkey, miner)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to check miner status")
-			continue
-		}
-		if miner {
-			currentActiveMiners = append(currentActiveMiners, int64(uid))
-			log.Debug().Msgf("Found active miner UID %d of %s", uid, hotkey)
+			miner, err := chainutils.CheckIfMiner(alphaStake, rootStake)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to check miner status")
+				continue
+			}
+
+			if miner {
+				currentActiveMiners = append(currentActiveMiners, int64(uid))
+			}
 		}
 	}
 
@@ -63,6 +67,20 @@ func (v *Validator) startScoring() {
 		return
 	}
 	v.processTasksToScore(v.LatestScoresData)
+}
+
+func (v *Validator) startVotersCache() {
+	if v.MetagraphData.Metagraph.Hotkeys == nil {
+		log.Info().Msg("metagraph hotkeys is nil, skipping voters cache for this step")
+		return
+	}
+
+	if v.MetagraphData.CurrentActiveMinerUids == nil {
+		log.Info().Msg("no active miners, skipping voters cache for this step")
+		return
+	}
+
+	v.processVotingTasks()
 }
 
 func (v *Validator) sendTaskRound() {
@@ -110,7 +128,7 @@ func (v *Validator) canStartTaskRound(ctx context.Context) bool {
 
 // calling via redis so it doesn't pop the tasks out of the list
 func (v *Validator) taskTrackerPure(ctx context.Context) (total, completed int, err error) {
-	vals, err := v.Redis.LRange(ctx, "synthetic:questions", 0, -1)
+	vals, err := v.Redis.LRange(ctx, redisSyntheticQAKey, 0, -1)
 	if err != nil {
 		return 0, 0, fmt.Errorf("lrange: %w", err)
 	}
@@ -138,7 +156,7 @@ func (v *Validator) isTaskReady(taskData CachedTasks) bool {
 }
 
 func (v *Validator) checkCompletionExists(qaID string) bool {
-	exists, err := v.Redis.Get(v.Ctx, fmt.Sprintf("synthetic:answers:%s", qaID))
+	exists, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisSyntheticAnswersKey, qaID))
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check if completion exists in redis")
 		return false
