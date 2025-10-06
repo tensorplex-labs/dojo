@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.7.0](https://github.com/tensorplex-labs/dojo/compare/v1.6.0...v1.7.0) (2025-10-06)
+
+
+### Features
+
+* post score analytics to task api ([#100](https://github.com/tensorplex-labs/dojo/issues/100)) ([89fb650](https://github.com/tensorplex-labs/dojo/commit/89fb6507d9e22c163d358896c0278f20523ac193))
+* task analytics ([9c227d9](https://github.com/tensorplex-labs/dojo/commit/9c227d9f88b3ef086ced67edbf4e52542a82155c))
+* task analytics ([9c227d9](https://github.com/tensorplex-labs/dojo/commit/9c227d9f88b3ef086ced67edbf4e52542a82155c))
+* task analytics ([#97](https://github.com/tensorplex-labs/dojo/issues/97)) ([cbac097](https://github.com/tensorplex-labs/dojo/commit/cbac097ce070d37164f4eeb8e9c93990b36ea848))
+
+
+### Bug Fixes
+
+* classifying non-voters in analytics correctly ([#102](https://github.com/tensorplex-labs/dojo/issues/102)) ([067113e](https://github.com/tensorplex-labs/dojo/commit/067113ee5f24bb78741bffe3681308349add8de3))
+
 ## [1.6.0](https://github.com/tensorplex-labs/dojo/compare/v1.5.0...v1.6.0) (2025-10-02)
 
 
