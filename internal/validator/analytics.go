@@ -30,11 +30,9 @@ func (v *Validator) buildTaskAnalytics(
 	)
 	taskType := scoring.DetermineTaskType(completionMaps, isTrap)
 
-	nonVotersAddresses := scoring.FindNonVoters(taskScores, v.MetagraphData.Metagraph.Hotkeys, voters)
+	scoresRecord := v.buildScoresRecord(task, taskScores, completionMaps, voters)
 
-	scoresRecord := v.buildScoresRecord(task, taskScores, completionMaps, nonVotersAddresses)
-
-	votesRecord := v.buildVotesRecord(task, completionMaps, nonVotersAddresses)
+	votesRecord := v.buildVotesRecord(task, completionMaps, voters)
 
 	return ScoredTaskAnalyticsRecord{
 		TaskID:    task.ID,
@@ -53,12 +51,12 @@ func (v *Validator) buildScoresRecord(
 	task *taskapi.VoteTaskData,
 	taskScores map[string]float64,
 	completionMaps scoring.CompletionMaps,
-	nonVotersAddresses []string,
+	voters []string,
 ) []ScoresRecord {
 	records := make([]ScoresRecord, 0, len(taskScores))
 
 	for hotkey, score := range taskScores {
-		role := v.determineRole(hotkey, task.ValidatorHotkey, completionMaps, nonVotersAddresses)
+		role := v.determineRole(hotkey, task.ValidatorHotkey, completionMaps, voters, task)
 		coldkey := chainutils.GetColdkeyForHotkey(&v.MetagraphData.Metagraph, hotkey)
 
 		records = append(records, ScoresRecord{
@@ -75,7 +73,7 @@ func (v *Validator) buildScoresRecord(
 func (v *Validator) buildVotesRecord(
 	task *taskapi.VoteTaskData,
 	completionMaps scoring.CompletionMaps,
-	nonVotersAddresses []string,
+	voters []string,
 ) []VotesRecord {
 	records := make([]VotesRecord, 0, len(task.Votes))
 
@@ -86,7 +84,7 @@ func (v *Validator) buildVotesRecord(
 
 	for _, vote := range task.Votes {
 		voteeHotkey := completionToParticipant[vote.ChosenCompletionID]
-		voteeRole := v.determineRole(voteeHotkey, task.ValidatorHotkey, completionMaps, nonVotersAddresses)
+		voteeRole := v.determineRole(voteeHotkey, task.ValidatorHotkey, completionMaps, voters, task)
 
 		records = append(records, VotesRecord{
 			VoterHotkey:        vote.VoterHotkey,
@@ -106,7 +104,8 @@ func (v *Validator) determineRole(
 	hotkey string,
 	taskValidatorHotkey string,
 	completionMaps scoring.CompletionMaps,
-	nonVotersAddresses []string,
+	voters []string,
+	task *taskapi.VoteTaskData,
 ) string {
 	if _, exists := completionMaps.Generators[hotkey]; exists {
 		return "Generator"
@@ -127,7 +126,12 @@ func (v *Validator) determineRole(
 		return "NegativeGenerator"
 	}
 
-	if slices.Contains(nonVotersAddresses, hotkey) {
+	if slices.Contains(voters, hotkey) {
+		for _, vote := range task.Votes {
+			if vote.VoterHotkey == hotkey {
+				return "Discriminator"
+			}
+		}
 		return "DiscriminatorNoVote"
 	}
 	return "Discriminator"
