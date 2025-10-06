@@ -51,7 +51,7 @@ func (v *Validator) processVotingTasks() {
 			if err != nil {
 				log.Error().Err(err).Msgf("failed to cache voters for task %s", taskID)
 			} else {
-				log.Debug().Msgf("Successfully cached voters for task %s", taskID)
+				log.Trace().Msgf("Successfully cached voters for task %s", taskID)
 			}
 		}(id, voterList, createdAt, expireAt)
 	}
@@ -75,7 +75,7 @@ func (v *Validator) cacheVoters(taskID string, voters []byte, createdAt, expireA
 		return err
 	}
 	if exists != "" {
-		log.Debug().Msgf("Voters already cached for task %s", taskID)
+		log.Trace().Msgf("Voters already cached for task %s", taskID)
 		return nil
 	}
 
