@@ -23,6 +23,7 @@ type TaskAPIInterface interface {
 	) (Response[CreateTaskResponse], error)
 	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
 	PostTaskScoresAnalytics(headers AuthHeaders, scoredTaskAnalyticsRecord *ScoredTaskAnalyticsRecord) (Response[PostTaskScoresAnalyticsResponse], error)
+	PostTaskScoresAnalyticsBatch(headers AuthHeaders, scoredTaskAnalyticsRecords []*ScoredTaskAnalyticsRecord) (Response[[]PostTaskScoresAnalyticsBatchResponse], error)
 
 	// GET requests
 	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
@@ -147,6 +148,27 @@ func (t *TaskAPI) PostTaskScoresAnalytics(headers AuthHeaders, scoredTaskAnalyti
 	}
 	if resp.IsError() {
 		return Response[PostTaskScoresAnalyticsResponse]{}, fmt.Errorf("post task scores analytics returned status %d: %s",
+			resp.StatusCode(), resp.String())
+	}
+	return out, nil
+}
+
+func (t *TaskAPI) PostTaskScoresAnalyticsBatch(headers AuthHeaders, scoredTaskAnalyticsRecord []*ScoredTaskAnalyticsRecord) (Response[[]PostTaskScoresAnalyticsBatchResponse], error) {
+	var out Response[[]PostTaskScoresAnalyticsBatchResponse]
+
+	r := t.client.R().
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
+		SetBody(scoredTaskAnalyticsRecord).
+		SetResult(&out)
+
+	resp, err := r.Post("/validator/analytics/batch")
+	if err != nil {
+		return Response[[]PostTaskScoresAnalyticsBatchResponse]{}, fmt.Errorf("post task scores analytics batch: %w", err)
+	}
+	if resp.IsError() {
+		return Response[[]PostTaskScoresAnalyticsBatchResponse]{}, fmt.Errorf("post task scores analytics batch returned status %d: %s",
 			resp.StatusCode(), resp.String())
 	}
 	return out, nil

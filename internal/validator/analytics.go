@@ -149,13 +149,13 @@ func (v *Validator) pushLogAnalytics(analytics *ScoredTaskAnalyticsRecord) {
 	log.Info().RawJSON("analytics", analyticsJSON).Msg("Task Analytics")
 }
 
-func (v *Validator) pushTaskAnalyticsToTaskAPI(analytics *ScoredTaskAnalyticsRecord) error {
+func (v *Validator) pushTaskAnalyticsToTaskAPIBatch(analyticsBatch []*ScoredTaskAnalyticsRecord) error {
 	headers, err := v.setupAuthHeaders()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign message")
 		return err
 	}
-	_, err = v.TaskAPI.PostTaskScoresAnalytics(headers, analytics)
+	_, err = v.TaskAPI.PostTaskScoresAnalyticsBatch(headers, analyticsBatch)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to push task analytics to task API")
 		return err
