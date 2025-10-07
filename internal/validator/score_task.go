@@ -71,7 +71,7 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 
 	if len(analyticsBatch) > 0 {
 		if pushTaskAnalyticsErr := v.pushTaskAnalyticsToTaskAPIBatch(analyticsBatch); pushTaskAnalyticsErr != nil {
-			log.Error().Err(pushTaskAnalyticsErr).Msgf("Failed to push %d task analytics to task API", len(analyticsBatch))
+			log.Error().Err(pushTaskAnalyticsErr).Msg("Failed to push task analytics to task API in batch")
 		}
 	}
 

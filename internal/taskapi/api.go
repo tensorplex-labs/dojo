@@ -23,7 +23,7 @@ type TaskAPIInterface interface {
 	) (Response[CreateTaskResponse], error)
 	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
 	PostTaskScoresAnalytics(headers AuthHeaders, scoredTaskAnalyticsRecord *ScoredTaskAnalyticsRecord) (Response[PostTaskScoresAnalyticsResponse], error)
-	PostTaskScoresAnalyticsBatch(headers AuthHeaders, scoredTaskAnalyticsRecords []*ScoredTaskAnalyticsRecord) (Response[[]PostTaskScoresAnalyticsBatchResponse], error)
+	PostTaskScoresAnalyticsBatch(headers AuthHeaders, scoredTaskAnalyticsRecords ScoredTaskAnalyticsBatchRequest) (Response[PostTaskScoresAnalyticsBatchResponse], error)
 
 	// GET requests
 	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
@@ -153,8 +153,8 @@ func (t *TaskAPI) PostTaskScoresAnalytics(headers AuthHeaders, scoredTaskAnalyti
 	return out, nil
 }
 
-func (t *TaskAPI) PostTaskScoresAnalyticsBatch(headers AuthHeaders, scoredTaskAnalyticsRecord []*ScoredTaskAnalyticsRecord) (Response[[]PostTaskScoresAnalyticsBatchResponse], error) {
-	var out Response[[]PostTaskScoresAnalyticsBatchResponse]
+func (t *TaskAPI) PostTaskScoresAnalyticsBatch(headers AuthHeaders, scoredTaskAnalyticsRecord ScoredTaskAnalyticsBatchRequest) (Response[PostTaskScoresAnalyticsBatchResponse], error) {
+	var out Response[PostTaskScoresAnalyticsBatchResponse]
 
 	r := t.client.R().
 		SetHeader("X-Hotkey", headers.Hotkey).
@@ -165,10 +165,10 @@ func (t *TaskAPI) PostTaskScoresAnalyticsBatch(headers AuthHeaders, scoredTaskAn
 
 	resp, err := r.Post("/validator/analytics/batch")
 	if err != nil {
-		return Response[[]PostTaskScoresAnalyticsBatchResponse]{}, fmt.Errorf("post task scores analytics batch: %w", err)
+		return Response[PostTaskScoresAnalyticsBatchResponse]{}, fmt.Errorf("post task scores analytics batch: %w", err)
 	}
 	if resp.IsError() {
-		return Response[[]PostTaskScoresAnalyticsBatchResponse]{}, fmt.Errorf("post task scores analytics batch returned status %d: %s",
+		return Response[PostTaskScoresAnalyticsBatchResponse]{}, fmt.Errorf("post task scores analytics batch returned status %d: %s",
 			resp.StatusCode(), resp.String())
 	}
 	return out, nil

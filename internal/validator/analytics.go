@@ -144,21 +144,22 @@ func (v *Validator) pushLogAnalytics(analytics *ScoredTaskAnalyticsRecord) {
 		return
 	}
 
-	// TODO: push to task api
-
 	log.Info().RawJSON("analytics", analyticsJSON).Msg("Task Analytics")
 }
 
 func (v *Validator) pushTaskAnalyticsToTaskAPIBatch(analyticsBatch []*ScoredTaskAnalyticsRecord) error {
-	headers, err := v.setupAuthHeaders()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to sign message")
-		return err
+	headers, setupAuthHeadersErr := v.setupAuthHeaders()
+	if setupAuthHeadersErr != nil {
+		log.Error().Err(setupAuthHeadersErr).Msg("Failed to sign message")
+		return setupAuthHeadersErr
 	}
-	_, err = v.TaskAPI.PostTaskScoresAnalyticsBatch(headers, analyticsBatch)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to push task analytics to task API")
-		return err
+	if _, postTaskScoresAnalyticsBatchErr := v.TaskAPI.PostTaskScoresAnalyticsBatch(headers, taskapi.ScoredTaskAnalyticsBatchRequest{
+		Analytics: analyticsBatch,
+	}); postTaskScoresAnalyticsBatchErr != nil {
+		log.Error().Err(postTaskScoresAnalyticsBatchErr).Msg("Failed to push task analytics to task API batch")
+		return postTaskScoresAnalyticsBatchErr
 	}
+
+	log.Info().Msgf("Successfully pushed %d task analytics to task API", len(analyticsBatch))
 	return nil
 }
