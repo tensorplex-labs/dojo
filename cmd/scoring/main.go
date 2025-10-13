@@ -44,12 +44,9 @@ func testCalcTrapScores() {
 		"ng1": "n_out",
 	}
 	discriminators := map[string]string{
-		"d1": "p_out",
-		"d2": "p_out",
-		"d3": "p_out",
-		"d4": "n_out",
-		"d5": "n_out",
-		"d6": "n_out",
+		"d1": "p_out", "d2": "p_out", "d3": "p_out",
+		"d4": "p_out", "d5": "p_out",
+		"d6": "n_out", "d7": "n_out",
 	}
 
 	scores := scoring.CalcTrapScores(discriminators, positiveGenerators, negativeGenerators)

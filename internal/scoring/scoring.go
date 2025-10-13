@@ -15,7 +15,10 @@ const (
 	TrapPenalty                       = -0.5
 	TrapPenaltyTransferFactor         = 0.5
 	TrapPositiveGeneratorRewardFactor = 0.003
-	NoVotePenaltyTotalDistribution    = -4.0
+	TrapNullificationMinThreshold     = 0.4
+	TrapNullificationMaxThreshold     = 0.6
+
+	NoVotePenaltyTotalDistribution = -4.0
 )
 
 type TaskScoringInput struct {
@@ -105,6 +108,26 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 	lo.ForEach(lo.Keys(positiveGenerators), func(addr string, _ int) {
 		scores[addr] = TrapPositiveGeneratorRewardFactor * float64(posVotes[addr])
 	})
+
+	// Trap Nullification Clause
+	totalNegVotes := lo.Sum(lo.Values(negVotes))
+	totalPosVotes := lo.Sum(lo.Values(posVotes))
+	totalVotes := totalNegVotes + totalPosVotes
+
+	if totalVotes > 0 {
+		negPercentage := float64(totalNegVotes) / float64(totalVotes)
+
+		if negPercentage >= TrapNullificationMinThreshold && negPercentage <= TrapNullificationMaxThreshold {
+			log.Debug().Msgf("TrapNullification: neg=%.1f%% pos=%.1f%% (within %.0f%%-%.0f%% range) - all scores set to 0",
+				negPercentage*100, (1-negPercentage)*100,
+				TrapNullificationMinThreshold*100, TrapNullificationMaxThreshold*100)
+
+			for addr := range scores {
+				scores[addr] = 0.0
+			}
+			return scores
+		}
+	}
 
 	return scores
 }
