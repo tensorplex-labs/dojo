@@ -10,6 +10,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/rueidis v1.0.64
 	github.com/rs/zerolog v1.34.0
+	github.com/samber/lo v1.52.0
 	go.uber.org/zap v1.27.0
 )
 

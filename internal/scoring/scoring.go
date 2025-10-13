@@ -6,12 +6,18 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/samber/lo"
 
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
 )
 
 const (
-	TrapPenalty                    = -0.5
+	TrapPenalty                       = -0.5
+	TrapPenaltyTransferFactor         = 0.5
+	TrapPositiveGeneratorRewardFactor = 0.003
+	TrapNullificationMinThreshold     = 0.4
+	TrapNullificationMaxThreshold     = 0.6
+
 	NoVotePenaltyTotalDistribution = -4.0
 )
 
@@ -68,44 +74,60 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 		@param negativeGenerators: map of generator addresses to the inferior output ID.
 		@return scores: map of addresses to their scores
 
-		- generators receive no scores
-		- discriminators that vote correctly receive no scores
-		- discriminators that vote for the 'trap' output receive -1 score
+		- discriminators that vote correctly for positiveGenerators receive no scores
+		- discriminators that vote for the 'negativeGenerators receive a penalty score of TrapPenalty
+		- the penalty score is transferred to the negativeGenerators in proportion to their weight
+		- the positiveGenerators receive a reward score of TrapPositiveGeneratorRewardFactor * votes for the positiveGenerators
 	*/
 
-	scores = make(map[string]float64)
+	negOutputToAddr := lo.Invert(negativeGenerators)
+	posOutputToAddr := lo.Invert(positiveGenerators)
 
-	negativeGeneratorTaskIDToAddrs := make(map[string]string, len(negativeGenerators))
-	for addr, outputID := range negativeGenerators {
-		negativeGeneratorTaskIDToAddrs[outputID] = addr
-	}
+	scores = make(map[string]float64, len(discriminators)+len(negativeGenerators)+len(positiveGenerators))
+	negVotes := make(map[string]int, len(negativeGenerators))
+	posVotes := make(map[string]int, len(positiveGenerators))
 
-	negativeOutputs := make(map[string]bool)
-	for _, outputID := range negativeGenerators {
-		negativeOutputs[outputID] = true
-	}
+	lo.ForEach(lo.Entries(discriminators), func(e lo.Entry[string, string], _ int) {
+		addr, vote := e.Key, e.Value
 
-	for addr, vote := range discriminators {
-		if negativeOutputs[vote] {
+		if genAddr, ok := negOutputToAddr[vote]; ok {
 			scores[addr] = TrapPenalty
-			log.Debug().Msgf("Discriminator (%s) voted for Trap Generator (%s) and scores: %f", addr, negativeGeneratorTaskIDToAddrs[vote], scores[addr])
+			negVotes[genAddr]++
+		} else if genAddr, ok := posOutputToAddr[vote]; ok {
+			scores[addr] = 0.0
+			posVotes[genAddr]++
 		} else {
 			scores[addr] = 0.0
-			log.Debug().Msgf("Discriminator (%s) did not vote for Trap Generator (%s) and scores: %f", addr, negativeGeneratorTaskIDToAddrs[vote], scores[addr])
+		}
+	})
+
+	lo.ForEach(lo.Keys(negativeGenerators), func(addr string, _ int) {
+		scores[addr] = -TrapPenalty * TrapPenaltyTransferFactor * float64(negVotes[addr])
+	})
+
+	lo.ForEach(lo.Keys(positiveGenerators), func(addr string, _ int) {
+		scores[addr] = TrapPositiveGeneratorRewardFactor * float64(posVotes[addr])
+	})
+
+	// Trap Nullification Clause
+	totalNegVotes := lo.Sum(lo.Values(negVotes))
+	totalPosVotes := lo.Sum(lo.Values(posVotes))
+	totalVotes := totalNegVotes + totalPosVotes
+
+	if totalVotes > 0 {
+		negPercentage := float64(totalNegVotes) / float64(totalVotes)
+
+		if negPercentage >= TrapNullificationMinThreshold && negPercentage <= TrapNullificationMaxThreshold {
+			log.Debug().Msgf("TrapNullification: neg=%.1f%% pos=%.1f%% (within %.0f%%-%.0f%% range) - all scores set to 0",
+				negPercentage*100, (1-negPercentage)*100,
+				TrapNullificationMinThreshold*100, TrapNullificationMaxThreshold*100)
+
+			for addr := range scores {
+				scores[addr] = 0.0
+			}
+			return scores
 		}
 	}
-
-	for addr := range positiveGenerators {
-		scores[addr] = 0.0
-		log.Debug().Msgf("Non-negative Generator (%s) is not part of the trap and gains no score: %f", addr, scores[addr])
-	}
-
-	for addr := range negativeGenerators {
-		scores[addr] = 0.0
-		log.Debug().Msgf("Negative Generator (%s) is not part of the trap and gains no score: %f", addr, scores[addr])
-	}
-
-	log.Debug().Msgf("Final Scores: %+v", scores)
 
 	return scores
 }
