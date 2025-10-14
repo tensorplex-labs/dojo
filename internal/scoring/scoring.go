@@ -273,7 +273,7 @@ func FindNonVoters(scores map[string]float64, currentActiveMinersHotkeys, voters
 
 func CalculateNoVotePenalty(nonVoterAddresses []string) float64 {
 	if len(nonVoterAddresses) == 0 {
-		log.Info().Msgf("No non-voters")
+		log.Debug().Msgf("No non-voters")
 		return 0.0
 	}
 	return NoVotePenaltyTotalDistribution / float64(len(nonVoterAddresses))

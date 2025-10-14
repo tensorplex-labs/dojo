@@ -148,7 +148,7 @@ func (v *Validator) checkIfTrapTask(taskID string) (trapBool bool, hotkey string
 	}
 
 	if negativeGeneratorHotkey != "" {
-		log.Debug().Msgf("Task %s is a trap task (negative generator: %s)", taskID, negativeGeneratorHotkey)
+		log.Trace().Msgf("Task %s is a trap task (negative generator: %s)", taskID, negativeGeneratorHotkey)
 		return true, negativeGeneratorHotkey, nil
 	}
 
