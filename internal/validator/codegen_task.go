@@ -16,7 +16,7 @@ import (
 
 const (
 	taskType                 = "codeGen"
-	augmentedProbability     = int64(25) // 25% chance for traps
+	augmentedProbability     = int64(20) // 20% chance for traps
 	validatorDuelProbability = int64(20) // 20% chance to duel validator
 )
 

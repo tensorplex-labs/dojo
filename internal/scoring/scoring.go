@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	TrapPenalty                    = -0.5
+	TrapPenalty                    = -0.4
 	NoVotePenaltyTotalDistribution = -4.0
 )
 
