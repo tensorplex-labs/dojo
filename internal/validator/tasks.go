@@ -12,7 +12,7 @@ import (
 )
 
 func (v *Validator) syncMetagraph() {
-	log.Info().Msg(fmt.Sprintf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid))
+	log.Trace().Msgf("syncing metagraph data for subnet: %d", v.ValidatorConfig.Netuid)
 	var currentActiveMiners []int64
 
 	newMetagraph, err := v.Kami.GetMetagraph(v.ValidatorConfig.Netuid)
@@ -49,12 +49,12 @@ func (v *Validator) syncMetagraph() {
 }
 
 func (v *Validator) syncBlock() {
-	log.Info().Msg(fmt.Sprintf("syncing latest block. current block : %d", v.LatestBlock))
 	newBlockResp, err := v.Kami.GetLatestBlock()
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get latest block")
 		return
 	}
+	log.Info().Msgf("syncing latest block. current block : %d", v.LatestBlock)
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -63,7 +63,7 @@ func (v *Validator) syncBlock() {
 
 func (v *Validator) startScoring() {
 	if v.MetagraphData.Metagraph.Hotkeys == nil {
-		log.Info().Msg("metagraph hotkeys is nil, skipping scoring for this step")
+		log.Warn().Msg("metagraph hotkeys is nil, skipping scoring for this step")
 		return
 	}
 	v.processTasksToScore(v.LatestScoresData)
@@ -71,12 +71,12 @@ func (v *Validator) startScoring() {
 
 func (v *Validator) startVotersCache() {
 	if v.MetagraphData.Metagraph.Hotkeys == nil {
-		log.Info().Msg("metagraph hotkeys is nil, skipping voters cache for this step")
+		log.Warn().Msg("metagraph hotkeys is nil, skipping voters cache for this step")
 		return
 	}
 
 	if v.MetagraphData.CurrentActiveMinerUids == nil {
-		log.Info().Msg("no active miners, skipping voters cache for this step")
+		log.Warn().Msg("no active miners, skipping voters cache for this step")
 		return
 	}
 
@@ -94,7 +94,7 @@ func (v *Validator) sendTaskRound() {
 	}
 
 	active := len(v.MetagraphData.CurrentActiveMinerUids)
-	log.Info().Msg(fmt.Sprintf("Starting task round: miners active %d", active))
+	log.Info().Msgf("Starting task round: miners active %d", active)
 
 	var processedMiners ProcessedMiners
 	v.processCodegenTask(v.MetagraphData.CurrentActiveMinerUids, &processedMiners)
@@ -120,7 +120,7 @@ func (v *Validator) canStartTaskRound(ctx context.Context) bool {
 	}
 
 	if int64(generatedCount) < int64(active) {
-		log.Info().Msg(fmt.Sprintf("Tasks in pool %d, generated tasks %d and active miners %d. Not starting new task round", taskCount, generatedCount, active))
+		log.Info().Msgf("Tasks in pool %d, generated tasks %d and active miners %d. Not starting new task round", taskCount, generatedCount, active)
 		return false
 	}
 	return true

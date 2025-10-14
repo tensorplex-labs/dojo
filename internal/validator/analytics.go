@@ -144,7 +144,7 @@ func (v *Validator) pushLogAnalytics(analytics *ScoredTaskAnalyticsRecord) {
 		return
 	}
 
-	log.Info().RawJSON("analytics", analyticsJSON).Msg("Task Analytics")
+	log.Debug().RawJSON("analytics", analyticsJSON).Msg("Task Analytics")
 }
 
 func (v *Validator) pushTaskAnalyticsToTaskAPIBatch(analyticsBatch []*ScoredTaskAnalyticsRecord) error {
