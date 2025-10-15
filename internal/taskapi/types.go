@@ -28,7 +28,7 @@ type AuthHeaders struct {
 }
 
 // Response represents a generic API response structure.
-type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | []VotingPhaseTasksResponse | PostTaskScoresAnalyticsResponse | any] struct {
+type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | []VotingPhaseTasksResponse | PostTaskScoresAnalyticsResponse | PostTaskScoresAnalyticsBatchResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -143,4 +143,18 @@ type ScoredTaskAnalyticsRecord struct {
 	ValidatorHotkey   string         `json:"validator_hotkey"`
 	ScoresRecord      []ScoresRecord `json:"scores_record"`
 	VotesRecord       []VotesRecord  `json:"votes_record"`
+}
+
+type PostTaskScoresAnalyticsBatchStatus struct {
+	TaskID  string `json:"task_id"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+type PostTaskScoresAnalyticsBatchResponse struct {
+	Results []PostTaskScoresAnalyticsBatchStatus `json:"results"`
+}
+
+type ScoredTaskAnalyticsBatchRequest struct {
+	Analytics []*ScoredTaskAnalyticsRecord `json:"analytics"`
 }

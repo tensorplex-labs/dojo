@@ -33,6 +33,8 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 
 	allTaskScores := make(map[string]map[string]float64)
 
+	analyticsBatch := make([]*ScoredTaskAnalyticsRecord, 0, len(tasks))
+
 	for i := range tasks {
 		task := &tasks[i]
 		isTrap, negativeGeneratorHotkey, checkTrapErr := v.checkIfTrapTask(task.ID)
@@ -62,11 +64,14 @@ func (v *Validator) processTasksToScore(latestScoresData ScoresData) {
 		if len(taskScores) > 0 {
 			allTaskScores[task.ID] = taskScores
 			analytics := v.buildTaskAnalytics(task, taskScores, isTrap, negativeGeneratorHotkey, voters)
-			if pushTaskAnalyticsErr := v.pushTaskAnalyticsToTaskAPI(&analytics); pushTaskAnalyticsErr != nil {
-				log.Error().Err(pushTaskAnalyticsErr).Msg("Failed to push task analytics to task API")
-				continue
-			}
 			v.pushLogAnalytics(&analytics)
+			analyticsBatch = append(analyticsBatch, &analytics)
+		}
+	}
+
+	if len(analyticsBatch) > 0 {
+		if pushTaskAnalyticsErr := v.pushTaskAnalyticsToTaskAPIBatch(analyticsBatch); pushTaskAnalyticsErr != nil {
+			log.Error().Err(pushTaskAnalyticsErr).Msg("Failed to push task analytics to task API in batch")
 		}
 	}
 
@@ -143,7 +148,7 @@ func (v *Validator) checkIfTrapTask(taskID string) (trapBool bool, hotkey string
 	}
 
 	if negativeGeneratorHotkey != "" {
-		log.Debug().Msgf("Task %s is a trap task (negative generator: %s)", taskID, negativeGeneratorHotkey)
+		log.Trace().Msgf("Task %s is a trap task (negative generator: %s)", taskID, negativeGeneratorHotkey)
 		return true, negativeGeneratorHotkey, nil
 	}
 
