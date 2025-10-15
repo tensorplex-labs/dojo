@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/tensorplex-labs/dojo/compare/v1.7.0...v1.8.0) (2025-10-15)
+
+
+### Features
+
+* analytics batch upload ([#106](https://github.com/tensorplex-labs/dojo/issues/106)) ([b089e72](https://github.com/tensorplex-labs/dojo/commit/b089e722881d9802e918ce48f4fe1c7a958f1760))
+* analytics batch upload ([#106](https://github.com/tensorplex-labs/dojo/issues/106)) ([0907df6](https://github.com/tensorplex-labs/dojo/commit/0907df6f53bb47238739d13f40549331774136a5))
+
 ## [1.7.0](https://github.com/tensorplex-labs/dojo/compare/v1.6.0...v1.7.0) (2025-10-06)
 
 
