@@ -153,13 +153,28 @@ func (v *Validator) pushTaskAnalyticsToTaskAPIBatch(analyticsBatch []*ScoredTask
 		log.Error().Err(setupAuthHeadersErr).Msg("Failed to sign message")
 		return setupAuthHeadersErr
 	}
-	if _, postTaskScoresAnalyticsBatchErr := v.TaskAPI.PostTaskScoresAnalyticsBatch(headers, taskapi.ScoredTaskAnalyticsBatchRequest{
+
+	postTaskScoresAnalyticsBatchResponse, postTaskScoresAnalyticsBatchErr := v.TaskAPI.PostTaskScoresAnalyticsBatch(headers, taskapi.ScoredTaskAnalyticsBatchRequest{
 		Analytics: analyticsBatch,
-	}); postTaskScoresAnalyticsBatchErr != nil {
+	})
+
+	if postTaskScoresAnalyticsBatchErr != nil {
 		log.Error().Err(postTaskScoresAnalyticsBatchErr).Msg("Failed to push task analytics to task API batch")
 		return postTaskScoresAnalyticsBatchErr
 	}
 
-	log.Info().Msgf("Successfully pushed %d task analytics to task API", len(analyticsBatch))
+	if postTaskScoresAnalyticsBatchResponse.Success {
+		for _, result := range postTaskScoresAnalyticsBatchResponse.Data.Results {
+			switch result.Status {
+			case "created":
+				log.Info().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message)
+			case "duplicate":
+				log.Info().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message)
+			case "error":
+				log.Error().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message).Msg("Task analytics failed to be pushed to task API because of an error")
+			}
+		}
+	}
+
 	return nil
 }
