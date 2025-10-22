@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.1](https://github.com/tensorplex-labs/dojo/compare/v1.8.0...v1.8.1) (2025-10-22)
+
+
+### Bug Fixes
+
+* return deregistered instead of empty string ([#114](https://github.com/tensorplex-labs/dojo/issues/114)) ([b49c4f6](https://github.com/tensorplex-labs/dojo/commit/b49c4f6f2ef3752da41fa3db0dada2cde3f737b8))
+* return deregistered instead of empty string ([#114](https://github.com/tensorplex-labs/dojo/issues/114)) ([6f5174f](https://github.com/tensorplex-labs/dojo/commit/6f5174f6703c3df66ecde60cdb94687edb6a9e1d))
+
 ## [1.8.0](https://github.com/tensorplex-labs/dojo/compare/v1.7.0...v1.8.0) (2025-10-15)
 
 
