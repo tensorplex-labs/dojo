@@ -191,27 +191,32 @@ func (v *Validator) pushTaskAnalyticsToTaskAPIBatch(analyticsBatch []*ScoredTask
 	}
 
 	var successfulUploads int
+	var duplicateUploads int
 	var failedUploads []string
 
 	if postTaskScoresAnalyticsUploadResponse.Success {
 		for _, result := range postTaskScoresAnalyticsUploadResponse.Data.Results {
 			switch result.Status {
 			case scoreAnalyticsUploadCacheStatusCreated:
-				if err := v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", scoreAnalyticsUploadCacheKey, result.TaskID), result.Status, scoreAnalyticsUploadCacheTTL); err != nil {
-					log.Error().Err(err).Msg("Failed to set score analytics upload cache")
-					return err
-				}
 				successfulUploads++
-				log.Info().Msgf("Successful upload, caching for task ID %s", result.TaskID)
+				log.Debug().Msgf("Successful upload, caching for task ID %s", result.TaskID)
+				if err := v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", scoreAnalyticsUploadCacheKey, result.TaskID), result.Status, scoreAnalyticsUploadCacheTTL); err != nil {
+					log.Warn().Err(err).Str("taskID", result.TaskID).Msg("Failed to set score analytics upload cache")
+				}
 			case scoreAnalyticsUploadCacheStatusDuplicate:
-				log.Info().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message)
+				duplicateUploads++
+				log.Debug().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message)
 			case scoreAnalyticsUploadCacheStatusError:
 				failedUploads = append(failedUploads, result.TaskID)
 				log.Error().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message).Msg("Failed to push task analytics to task API")
 			}
 		}
+
+		log.Info().Msgf("Found %d duplicate uploads", duplicateUploads)
 		log.Info().Msgf("Successfully pushed %d task analytics to task API", successfulUploads)
-		log.Warn().Strs("taskIDs", failedUploads).Msg("Failed to push task analytics to task API")
+		if len(failedUploads) > 0 {
+			log.Warn().Strs("taskIDs", failedUploads).Msgf("Failed to push %d task analytics to task API", len(failedUploads))
+		}
 	}
 
 	return nil
