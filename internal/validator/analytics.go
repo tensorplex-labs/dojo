@@ -210,6 +210,9 @@ func (v *Validator) pushTaskAnalyticsToTaskAPIBatch(analyticsBatch []*ScoredTask
 			case scoreAnalyticsUploadCacheStatusDuplicate:
 				duplicateUploads++
 				log.Debug().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message)
+				if err := v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", scoreAnalyticsUploadCacheKey, result.TaskID), result.Status, scoreAnalyticsUploadCacheTTL); err != nil {
+					log.Warn().Err(err).Str("taskID", result.TaskID).Msg("Failed to set score analytics upload cache")
+				}
 			case scoreAnalyticsUploadCacheStatusError:
 				failedUploads = append(failedUploads, result.TaskID)
 				log.Error().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message).Msg("Failed to push score analytics to task API")
