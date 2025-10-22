@@ -165,20 +165,24 @@ func (v *Validator) pushTaskAnalyticsToTaskAPIBatch(analyticsBatch []*ScoredTask
 	}
 
 	analyticsUploadBatch := make([]*taskapi.ScoredTaskAnalyticsRecord, 0, len(analyticsBatch))
+	var cachedCount int
 	for _, analytics := range analyticsBatch {
 		exists, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", scoreAnalyticsUploadCacheKey, analytics.TaskID))
 		if err != nil {
 			log.Warn().Err(err).Str("taskID", analytics.TaskID).Msg("Failed to check cache, including in upload")
 		}
 		if exists != "" {
-			log.Info().Str("taskID", analytics.TaskID).Msg("Task analytics already uploaded")
+			cachedCount++
+			log.Debug().Str("taskID", analytics.TaskID).Msg("Score analytics already uploaded")
 			continue
 		}
 		analyticsUploadBatch = append(analyticsUploadBatch, analytics)
 	}
 
+	log.Info().Msgf("Found %d cached score analytics that were uploaded, to upload remaining %d score analytics to task API", cachedCount, len(analyticsUploadBatch))
+
 	if len(analyticsUploadBatch) == 0 {
-		log.Info().Msg("No task analytics to upload")
+		log.Info().Msg("No score analytics to upload")
 		return nil
 	}
 
@@ -208,14 +212,14 @@ func (v *Validator) pushTaskAnalyticsToTaskAPIBatch(analyticsBatch []*ScoredTask
 				log.Debug().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message)
 			case scoreAnalyticsUploadCacheStatusError:
 				failedUploads = append(failedUploads, result.TaskID)
-				log.Error().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message).Msg("Failed to push task analytics to task API")
+				log.Error().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message).Msg("Failed to push score analytics to task API")
 			}
 		}
 
 		log.Info().Msgf("Found %d duplicate uploads", duplicateUploads)
-		log.Info().Msgf("Successfully pushed %d task analytics to task API", successfulUploads)
+		log.Info().Msgf("Successfully pushed %d score analytics to task API", successfulUploads)
 		if len(failedUploads) > 0 {
-			log.Warn().Strs("taskIDs", failedUploads).Msgf("Failed to push %d task analytics to task API", len(failedUploads))
+			log.Warn().Strs("taskIDs", failedUploads).Msgf("Failed to push %d score analytics to task API", len(failedUploads))
 		}
 	}
 
