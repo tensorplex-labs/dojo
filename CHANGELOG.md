@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.8.2](https://github.com/tensorplex-labs/dojo/compare/v1.8.1...v1.8.2) (2025-10-22)
+
+
+### Bug Fixes
+
+* disable sending task ([#124](https://github.com/tensorplex-labs/dojo/issues/124)) ([aa8481a](https://github.com/tensorplex-labs/dojo/commit/aa8481a22510037fcc15021c60cf83e40a1ab0d1))
+* fixing linting ([#121](https://github.com/tensorplex-labs/dojo/issues/121)) ([e322d9a](https://github.com/tensorplex-labs/dojo/commit/e322d9aaad4c5d59a0c8eacda89eb3f878e03598))
+* fixing linting ([#121](https://github.com/tensorplex-labs/dojo/issues/121)) ([b8aab92](https://github.com/tensorplex-labs/dojo/commit/b8aab920649de946ad95ba71c8a8016e813d9a38))
+
 ## [1.8.1](https://github.com/tensorplex-labs/dojo/compare/v1.8.0...v1.8.1) (2025-10-22)
 
 
