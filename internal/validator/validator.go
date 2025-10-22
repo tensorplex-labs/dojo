@@ -16,6 +16,7 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/kami"
 	"github.com/tensorplex-labs/dojo/internal/syntheticapi"
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
+	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
 	"github.com/tensorplex-labs/dojo/internal/utils/redis"
 )
 
@@ -131,6 +132,11 @@ func (v *Validator) runTicker(ctx context.Context, d time.Duration, fn func()) {
 func (v *Validator) Start() {
 	v.Wg.Add(1)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {
+		if chainutils.BurnWeight == 100 {
+			log.Info().Msg("Burn weight is 100, skipping task round")
+			return
+		}
+
 		v.sendTaskRound()
 	})
 
