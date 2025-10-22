@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"fmt"
 	"slices"
 	"time"
 
@@ -10,6 +11,15 @@ import (
 	"github.com/tensorplex-labs/dojo/internal/scoring"
 	"github.com/tensorplex-labs/dojo/internal/taskapi"
 	chainutils "github.com/tensorplex-labs/dojo/internal/utils/chain_utils"
+)
+
+const (
+	scoreAnalyticsUploadCacheKey string        = "score_analytics_upload"
+	scoreAnalyticsUploadCacheTTL time.Duration = 24 * time.Hour
+
+	scoreAnalyticsUploadCacheStatusCreated   string = "created"
+	scoreAnalyticsUploadCacheStatusDuplicate string = "duplicate"
+	scoreAnalyticsUploadCacheStatusError     string = "error"
 )
 
 type ScoresRecord = taskapi.ScoresRecord
@@ -153,13 +163,56 @@ func (v *Validator) pushTaskAnalyticsToTaskAPIBatch(analyticsBatch []*ScoredTask
 		log.Error().Err(setupAuthHeadersErr).Msg("Failed to sign message")
 		return setupAuthHeadersErr
 	}
-	if _, postTaskScoresAnalyticsBatchErr := v.TaskAPI.PostTaskScoresAnalyticsBatch(headers, taskapi.ScoredTaskAnalyticsBatchRequest{
-		Analytics: analyticsBatch,
-	}); postTaskScoresAnalyticsBatchErr != nil {
-		log.Error().Err(postTaskScoresAnalyticsBatchErr).Msg("Failed to push task analytics to task API batch")
-		return postTaskScoresAnalyticsBatchErr
+
+	analyticsUploadBatch := make([]*taskapi.ScoredTaskAnalyticsRecord, 0, len(analyticsBatch))
+	for _, analytics := range analyticsBatch {
+		exists, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", scoreAnalyticsUploadCacheKey, analytics.TaskID))
+		if err != nil {
+			log.Warn().Err(err).Str("taskID", analytics.TaskID).Msg("Failed to check cache, including in upload")
+		}
+		if exists != "" {
+			log.Info().Str("taskID", analytics.TaskID).Msg("Task analytics already uploaded")
+			continue
+		}
+		analyticsUploadBatch = append(analyticsUploadBatch, analytics)
 	}
 
-	log.Info().Msgf("Successfully pushed %d task analytics to task API", len(analyticsBatch))
+	if len(analyticsUploadBatch) == 0 {
+		log.Info().Msg("No task analytics to upload")
+		return nil
+	}
+
+	postTaskScoresAnalyticsUploadResponse, err := v.TaskAPI.PostTaskScoresAnalyticsBatch(headers, taskapi.ScoredTaskAnalyticsBatchRequest{
+		Analytics: analyticsUploadBatch,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to push task analytics to task API batch")
+		return err
+	}
+
+	var successfulUploads int
+	var failedUploads []string
+
+	if postTaskScoresAnalyticsUploadResponse.Success {
+		for _, result := range postTaskScoresAnalyticsUploadResponse.Data.Results {
+			switch result.Status {
+			case scoreAnalyticsUploadCacheStatusCreated:
+				if err := v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", scoreAnalyticsUploadCacheKey, result.TaskID), result.Status, scoreAnalyticsUploadCacheTTL); err != nil {
+					log.Error().Err(err).Msg("Failed to set score analytics upload cache")
+					return err
+				}
+				successfulUploads++
+				log.Info().Msgf("Successful upload, caching for task ID %s", result.TaskID)
+			case scoreAnalyticsUploadCacheStatusDuplicate:
+				log.Info().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message)
+			case scoreAnalyticsUploadCacheStatusError:
+				failedUploads = append(failedUploads, result.TaskID)
+				log.Error().Str("taskID", result.TaskID).Str("status", result.Status).Str("message", result.Message).Msg("Failed to push task analytics to task API")
+			}
+		}
+		log.Info().Msgf("Successfully pushed %d task analytics to task API", successfulUploads)
+		log.Warn().Strs("taskIDs", failedUploads).Msg("Failed to push task analytics to task API")
+	}
+
 	return nil
 }
