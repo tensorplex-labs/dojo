@@ -10,5 +10,5 @@ func GetColdkeyForHotkey(metagraph *kami.SubnetMetagraph, hotkey string) string 
 			}
 		}
 	}
-	return ""
+	return "DEREGISTERED" // hotkey is not found in the metagraph (only used in scores analytics upload thus far)
 }
