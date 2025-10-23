@@ -30,6 +30,7 @@ type TaskAPIInterface interface {
 	GetExpiredTasksRollingWindow(headers AuthHeaders, hours int) (Response[VotesResponse], error)
 	GetVotingTasks(headers AuthHeaders) (Response[[]VotingPhaseTasksResponse], error)
 	UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[TaskStatusUpdateResponse], error)
+	GetExpiredTasksWithOneCompletion(headers AuthHeaders) (Response[ExpiredTasksWithOneCompletionResponse], error)
 }
 
 // TaskAPI is a REST client wrapper for the task service.
@@ -255,6 +256,28 @@ func (t *TaskAPI) GetVotingTasks(headers AuthHeaders) (Response[[]VotingPhaseTas
 
 	if resp.IsError() {
 		return Response[[]VotingPhaseTasksResponse]{}, fmt.Errorf("get voting tasks returned status %d: %s",
+			resp.StatusCode(), resp.String())
+	}
+
+	return out, nil
+}
+
+func (t *TaskAPI) GetExpiredTasksWithOneCompletion(headers AuthHeaders) (Response[ExpiredTasksWithOneCompletionResponse], error) {
+	var out Response[ExpiredTasksWithOneCompletionResponse]
+	r := t.client.R().
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
+		SetResult(&out)
+
+	// TODO: update route
+	resp, err := r.Get("/validator/expired-tasks-with-one-completion")
+	if err != nil {
+		return Response[ExpiredTasksWithOneCompletionResponse]{}, fmt.Errorf("get expired tasks that is missing one completion: %w", err)
+	}
+
+	if resp.IsError() {
+		return Response[ExpiredTasksWithOneCompletionResponse]{}, fmt.Errorf("get expired tasks that is missing one completion returned status %d: %s",
 			resp.StatusCode(), resp.String())
 	}
 
