@@ -166,9 +166,15 @@ type ExpiredTasksWithOneCompletionResponse struct {
 }
 
 type ExpiredTaskWithOneCompletionTaskData struct {
-	ID              string              `json:"id"`
-	ValidatorHotkey string              `json:"validator_hotkey"`
-	ExpireAt        string              `json:"expire_at"`
-	TaskStatus      string              `json:"task_status"`
-	TaskMetadata    CodegenTaskMetadata `json:"task_metadata"`
+	ID                          string              `json:"id"`
+	ValidatorHotkey             string              `json:"validator_hotkey"`
+	ExpireAt                    string              `json:"expire_at"`
+	TaskStatus                  string              `json:"task_status"`
+	TaskMetadata                CodegenTaskMetadata `json:"task_metadata"`
+	CompletionParticipantHotkey string              `json:"completion_participant_hotkey"`
+}
+
+type SubmitCompletionForTaskExpiredWithOneCompletionNonTrapResponse struct {
+	TaskID       string `json:"task_id"`
+	CompletionID string `json:"completion_id"`
 }

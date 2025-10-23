@@ -137,7 +137,11 @@ func (v *Validator) Start() {
 			return
 		}
 
+		// TODO: need to pop qa first for tasks with all completions present
+		// since we only pop qa during task reassignment
+		// and not during initial task inception
 		v.sendTaskRound()
+		v.reassignTasks()
 	})
 
 	v.Wg.Add(1)
