@@ -64,6 +64,8 @@ type CodegenTaskMetadata struct {
 	Prompt                  string `json:"prompt"`
 	ValidatorDuel           bool   `json:"validator_duel"`
 	NegativeGeneratorHotkey string `json:"negative_generator_hotkey"`
+	OriginalQaID            string `json:"original_qa_id"`
+	AugmentedQaID           string `json:"augmented_qa_id"`
 }
 
 // VotesResponse represents the response structure for votes

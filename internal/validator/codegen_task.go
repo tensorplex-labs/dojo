@@ -74,6 +74,8 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 				Prompt:                  synAPIQuestion.Prompt,
 				ValidatorDuel:           shouldDuelValidator,
 				NegativeGeneratorHotkey: trapHotkey,
+				OriginalQaID:            synAPIQuestion.QaID,
+				AugmentedQaID:           synAPIQuestion.AnsAugID,
 			},
 		}
 
@@ -110,15 +112,6 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 			}
 		}
 
-		ok, err := v.SyntheticAPI.PopQA(synAPIQuestion.QaID)
-		if err != nil {
-			log.Error().Err(err).Msgf("Failed to pop question with ID %s", synAPIQuestion.QaID)
-			continue
-		}
-		if !ok {
-			log.Error().Msgf("Failed to pop question with ID %s", synAPIQuestion.QaID)
-			continue
-		}
 		log.Info().Msgf("Processed miners so far: %d/%d\n", len(processedMiners.uids), len(activeMinerUIDs))
 	}
 }
