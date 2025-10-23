@@ -316,6 +316,8 @@ func (v *Validator) reassignTask(task *taskapi.ExpiredTaskWithOneCompletionTaskD
 			return fmt.Errorf("failed to submit completion for task expired with one completion non trap: %w", err)
 		}
 
+		// TODO: update task metadata with the new validatorduel(?)
+
 		return nil
 	}
 
@@ -324,6 +326,8 @@ func (v *Validator) reassignTask(task *taskapi.ExpiredTaskWithOneCompletionTaskD
 		if _, err = v.TaskAPI.SubmitCompletionForTaskExpiredWithOneCompletionNonTrap(headers, validatorCompletion); err != nil {
 			return fmt.Errorf("failed to submit completion for task expired with one completion non trap: %w", err)
 		}
+
+		// TODO: update task metadata with the new validatorduel(?)
 
 		return nil
 	}
@@ -341,6 +345,8 @@ func (v *Validator) reassignTask(task *taskapi.ExpiredTaskWithOneCompletionTaskD
 		if err = v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, task.ID), task.ValidatorHotkey, 2*v.IntervalConfig.ScoreResetInterval); err != nil {
 			return fmt.Errorf("failed to set trap for task ID %s: %w", task.ID, err)
 		}
+
+		// TODO: update task metadata with the new negative generator hotkey and validatorduel(?)
 
 		return nil
 	}
