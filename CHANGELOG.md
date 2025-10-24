@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.3](https://github.com/tensorplex-labs/dojo/compare/v1.8.2...v1.8.3) (2025-10-24)
+
+
+### Bug Fixes
+
+* skip score step count, and weight set on 100 percent burn ([#126](https://github.com/tensorplex-labs/dojo/issues/126)) ([c78123d](https://github.com/tensorplex-labs/dojo/commit/c78123d0eee412dd49475d84a1260ef6f0b2f080))
+* skip score step count, and weight set on 100 percent burn ([#126](https://github.com/tensorplex-labs/dojo/issues/126)) ([c938a23](https://github.com/tensorplex-labs/dojo/commit/c938a231ef61002c5b95073c41dcd92b07f6acd9))
+
 ## [1.8.2](https://github.com/tensorplex-labs/dojo/compare/v1.8.1...v1.8.2) (2025-10-22)
 
 
