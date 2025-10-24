@@ -24,7 +24,7 @@ type TaskAPIInterface interface {
 	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
 	PostTaskScoresAnalytics(headers AuthHeaders, scoredTaskAnalyticsRecord *ScoredTaskAnalyticsRecord) (Response[PostTaskScoresAnalyticsResponse], error)
 	PostTaskScoresAnalyticsBatch(headers AuthHeaders, scoredTaskAnalyticsRecords ScoredTaskAnalyticsBatchRequest) (Response[PostTaskScoresAnalyticsBatchResponse], error)
-	SubmitCompletionForTaskExpiredWithOneCompletionNonTrap(headers AuthHeaders, validatorCompletion string) (Response[SubmitCompletionForTaskExpiredWithOneCompletionNonTrapResponse], error)
+	UpdateTaskToPvV(headers AuthHeaders, taskID, completion, taskMetadata string) (Response[UpdateTaskToPvVResponse], error)
 
 	// GET requests
 	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
@@ -271,40 +271,42 @@ func (t *TaskAPI) GetExpiredTasksWithOneCompletion(headers AuthHeaders) (Respons
 		SetHeader("X-Message", headers.Message).
 		SetResult(&out)
 
-	// TODO: update route
-	resp, err := r.Get("/validator/expired-tasks-with-one-completion")
+	resp, err := r.Get("/validator/tasks/incomplete-pvp")
 	if err != nil {
-		return Response[ExpiredTasksWithOneCompletionResponse]{}, fmt.Errorf("get expired tasks that is missing one completion: %w", err)
+		return Response[ExpiredTasksWithOneCompletionResponse]{}, fmt.Errorf("get expired pvp/trap tasks with one missing completion: %w", err)
 	}
 
 	if resp.IsError() {
-		return Response[ExpiredTasksWithOneCompletionResponse]{}, fmt.Errorf("get expired tasks that is missing one completion returned status %d: %s",
+		return Response[ExpiredTasksWithOneCompletionResponse]{}, fmt.Errorf("get expired pvp/trap tasks with one missing completion returned status %d: %s",
 			resp.StatusCode(), resp.String())
 	}
 
 	return out, nil
 }
 
-func (t *TaskAPI) SubmitCompletionForTaskExpiredWithOneCompletionNonTrap(headers AuthHeaders, validatorCompletion string) (Response[SubmitCompletionForTaskExpiredWithOneCompletionNonTrapResponse], error) { //nolint:lll
-	var out Response[SubmitCompletionForTaskExpiredWithOneCompletionNonTrapResponse]
+func (t *TaskAPI) UpdateTaskToPvV(headers AuthHeaders, taskID, completion, taskMetadata string) (Response[UpdateTaskToPvVResponse], error) {
+	var out Response[UpdateTaskToPvVResponse]
+
+	vals := url.Values{}
+	vals.Set("metadata", taskMetadata)
 
 	r := t.client.R().
 		SetHeader("X-Hotkey", headers.Hotkey).
 		SetHeader("X-Signature", headers.Signature).
 		SetHeader("X-Message", headers.Message).
+		SetFormDataFromValues(vals).
 		SetResult(&out)
 
-	if validatorCompletion != "" {
-		r.SetFileReader("files", "index.html", strings.NewReader(validatorCompletion))
+	if completion != "" {
+		r.SetFileReader("files", "index.html", strings.NewReader(completion))
 	}
 
-	// TODO: update route
-	resp, err := r.Post("/validator/tasks")
+	resp, err := r.Put(fmt.Sprintf("/validator/tasks/%s/completion-pvv", taskID))
 	if err != nil {
-		return Response[SubmitCompletionForTaskExpiredWithOneCompletionNonTrapResponse]{}, fmt.Errorf("submit completion for task expired with one completion non trap: %w", err)
+		return Response[UpdateTaskToPvVResponse]{}, fmt.Errorf("update pvp/trap tasks with one missing completion to pvv: %w", err)
 	}
 	if resp.IsError() {
-		return Response[SubmitCompletionForTaskExpiredWithOneCompletionNonTrapResponse]{}, fmt.Errorf("submit completion for task expired with one completion non trap returned status %d: %s",
+		return Response[UpdateTaskToPvVResponse]{}, fmt.Errorf("update pvp/trap tasks with one missing completion to pvv returned status %d: %s",
 			resp.StatusCode(), resp.String())
 	}
 	return out, nil

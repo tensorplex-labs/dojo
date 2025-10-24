@@ -28,7 +28,7 @@ type AuthHeaders struct {
 }
 
 // Response represents a generic API response structure.
-type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | []VotingPhaseTasksResponse | PostTaskScoresAnalyticsResponse | PostTaskScoresAnalyticsBatchResponse | ExpiredTasksWithOneCompletionResponse | any] struct {
+type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | []VotingPhaseTasksResponse | PostTaskScoresAnalyticsResponse | PostTaskScoresAnalyticsBatchResponse | UpdateTaskToPvVResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -166,15 +166,21 @@ type ExpiredTasksWithOneCompletionResponse struct {
 }
 
 type ExpiredTaskWithOneCompletionTaskData struct {
-	ID                          string              `json:"id"`
-	ValidatorHotkey             string              `json:"validator_hotkey"`
-	ExpireAt                    string              `json:"expire_at"`
-	TaskStatus                  string              `json:"task_status"`
-	TaskMetadata                CodegenTaskMetadata `json:"task_metadata"`
-	CompletionParticipantHotkey string              `json:"completion_participant_hotkey"`
+	TaskID                     string              `json:"task_id"`
+	TaskStatus                 string              `json:"task_status"`
+	ValidatorHotkey            string              `json:"validator_hotkey"`
+	TaskMetadata               CodegenTaskMetadata `json:"task_metadata"`
+	CreatedAt                  time.Time           `json:"created_at"`
+	ExpireAt                   time.Time           `json:"expire_at"`
+	SubmittedParticipantHotkey string              `json:"submitted_participant_hotkey"`
 }
 
-type SubmitCompletionForTaskExpiredWithOneCompletionNonTrapResponse struct {
+type CreateCompletionForm struct {
+	Metadata CodegenTaskMetadata     `form:"metadata" json:"metadata"`
+	Files    []*multipart.FileHeader `form:"files" json:"files"`
+}
+
+type UpdateTaskToPvVResponse struct {
 	TaskID       string `json:"task_id"`
 	CompletionID string `json:"completion_id"`
 }

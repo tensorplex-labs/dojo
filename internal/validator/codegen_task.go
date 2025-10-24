@@ -275,7 +275,7 @@ func (v *Validator) reassignTasks() {
 			log.Error().Err(err).Msg("Failed to reassign task")
 			return
 		}
-		log.Info().Msgf("Reassigned task %s", expiredTasks[i].ID)
+		log.Info().Msgf("Reassigned task %s", expiredTasks[i].TaskID)
 	}
 }
 
@@ -296,14 +296,23 @@ func (v *Validator) retrieveExpiredTaskWithOneCompletion() ([]taskapi.ExpiredTas
 }
 
 func (v *Validator) reassignTask(task *taskapi.ExpiredTaskWithOneCompletionTaskData) error {
-	negativeGeneratorHotkey, getTrapHotkeyErr := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, task.ID))
+	negativeGeneratorHotkey, getTrapHotkeyErr := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, task.TaskID))
 	if getTrapHotkeyErr != nil {
-		return fmt.Errorf("failed to get trap for task %s: %w", task.ID, getTrapHotkeyErr)
+		return fmt.Errorf("failed to get trap for task %s: %w", task.TaskID, getTrapHotkeyErr)
 	}
 
-	validatorCompletion, err := v.getCompletionFromCache(task.TaskMetadata.OriginalQaID)
+	validatorCompletion, err := v.determineCompletion(task, negativeGeneratorHotkey)
 	if err != nil {
-		return fmt.Errorf("failed to get completion from cache for question ID %s: %w", task.TaskMetadata.OriginalQaID, err)
+		return fmt.Errorf("failed to determine completion for task %s: %w", task.TaskID, err)
+	}
+
+	task.TaskMetadata.ValidatorDuel = true
+	if negativeGeneratorHotkey != "" && negativeGeneratorHotkey != task.SubmittedParticipantHotkey {
+		task.TaskMetadata.NegativeGeneratorHotkey = task.ValidatorHotkey
+	}
+	updatedTaskMetadata, err := sonic.Marshal(task.TaskMetadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task metadata: %w", err)
 	}
 
 	headers, err := v.setupAuthHeaders()
@@ -311,44 +320,16 @@ func (v *Validator) reassignTask(task *taskapi.ExpiredTaskWithOneCompletionTaskD
 		return fmt.Errorf("failed to sign message: %w", err)
 	}
 
-	if negativeGeneratorHotkey == "" {
-		if _, err = v.TaskAPI.SubmitCompletionForTaskExpiredWithOneCompletionNonTrap(headers, validatorCompletion); err != nil {
-			return fmt.Errorf("failed to submit completion for task expired with one completion non trap: %w", err)
-		}
-
-		// TODO: update task metadata with the new validatorduel(?)
-
-		return nil
+	_, err = v.TaskAPI.UpdateTaskToPvV(headers, task.TaskID, validatorCompletion, string(updatedTaskMetadata))
+	if err != nil {
+		return fmt.Errorf("failed to update task to pvv: %w", err)
 	}
 
-	if negativeGeneratorHotkey == task.CompletionParticipantHotkey {
-		// TODO: update route
-		if _, err = v.TaskAPI.SubmitCompletionForTaskExpiredWithOneCompletionNonTrap(headers, validatorCompletion); err != nil {
-			return fmt.Errorf("failed to submit completion for task expired with one completion non trap: %w", err)
-		}
-
-		// TODO: update task metadata with the new validatorduel(?)
-
-		return nil
-	}
-	if negativeGeneratorHotkey != task.CompletionParticipantHotkey {
-		augmentedValidatorCompletion, err := v.getCompletionFromCache(task.TaskMetadata.AugmentedQaID)
+	if negativeGeneratorHotkey != "" && negativeGeneratorHotkey != task.SubmittedParticipantHotkey {
+		err = v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, task.TaskID), task.ValidatorHotkey, 2*v.IntervalConfig.ScoreResetInterval)
 		if err != nil {
-			return fmt.Errorf("failed to get completion from cache for question ID %s: %w", task.TaskMetadata.AugmentedQaID, err)
+			return fmt.Errorf("failed to set trap for task ID %s: %w", task.TaskID, err)
 		}
-
-		// TODO: update route
-		if _, err = v.TaskAPI.SubmitCompletionForTaskExpiredWithOneCompletionNonTrap(headers, augmentedValidatorCompletion); err != nil {
-			return fmt.Errorf("failed to submit completion for task expired with one completion non trap: %w", err)
-		}
-
-		if err = v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, task.ID), task.ValidatorHotkey, 2*v.IntervalConfig.ScoreResetInterval); err != nil {
-			return fmt.Errorf("failed to set trap for task ID %s: %w", task.ID, err)
-		}
-
-		// TODO: update task metadata with the new negative generator hotkey and validatorduel(?)
-
-		return nil
 	}
 
 	// TODO: refactor how to popqa properly for tasks with all completions present
@@ -357,10 +338,26 @@ func (v *Validator) reassignTask(task *taskapi.ExpiredTaskWithOneCompletionTaskD
 		return fmt.Errorf("failed to pop question with ID %s: %w", task.TaskMetadata.OriginalQaID, popQAErr)
 	}
 	if !ok {
-		return fmt.Errorf("failed to pop question with ID %s: %w", task.TaskMetadata.OriginalQaID, popQAErr)
+		return fmt.Errorf("failed to pop question with ID %s", task.TaskMetadata.OriginalQaID)
 	}
 
 	return nil
+}
+
+func (v *Validator) determineCompletion(task *taskapi.ExpiredTaskWithOneCompletionTaskData, negativeGeneratorHotkey string) (string, error) {
+	if negativeGeneratorHotkey == "" || negativeGeneratorHotkey == task.SubmittedParticipantHotkey {
+		completion, err := v.getCompletionFromCache(task.TaskMetadata.OriginalQaID)
+		if err != nil {
+			return "", fmt.Errorf("failed to get completion from cache for question ID %s: %w", task.TaskMetadata.OriginalQaID, err)
+		}
+		return completion, nil
+	}
+
+	completion, err := v.getCompletionFromCache(task.TaskMetadata.AugmentedQaID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get completion from cache for question ID %s: %w", task.TaskMetadata.AugmentedQaID, err)
+	}
+	return completion, nil
 }
 
 func (v *Validator) getCompletionFromCache(qaID string) (string, error) {
