@@ -306,14 +306,18 @@ func (v *Validator) reassignTasks() {
 		log.Error().Err(err).Msg("Failed to retrieve expired tasks that is missing one completion")
 		return
 	}
+	if len(expiredTasks) == 0 {
+		log.Info().Msg("No expired tasks that are missing one completion found")
+		return
+	}
 
 	log.Info().Msgf("Found %d expired tasks that are missing one completion", len(expiredTasks))
 
 	for i := range expiredTasks {
 		err := v.reassignTask(&expiredTasks[i])
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to reassign task")
-			return
+			log.Error().Err(err).Msgf("Failed to reassign task %s", expiredTasks[i].TaskID)
+			continue
 		}
 		log.Info().Msgf("Reassigned task %s", expiredTasks[i].TaskID)
 	}
