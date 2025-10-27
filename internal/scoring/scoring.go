@@ -76,8 +76,6 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 
 		- discriminators that vote correctly for positiveGenerators receive no scores
 		- discriminators that vote for the 'negativeGenerators receive a penalty score of TrapPenalty
-		- the penalty score is transferred to the negativeGenerators in proportion to their weight
-		- the positiveGenerators receive a reward score of TrapPositiveGeneratorRewardFactor * votes for the positiveGenerators
 	*/
 
 	negOutputToAddr := lo.Invert(negativeGenerators)
@@ -99,14 +97,6 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 		} else {
 			scores[addr] = 0.0
 		}
-	})
-
-	lo.ForEach(lo.Keys(negativeGenerators), func(addr string, _ int) {
-		scores[addr] = -TrapPenalty * TrapPenaltyTransferFactor * float64(negVotes[addr])
-	})
-
-	lo.ForEach(lo.Keys(positiveGenerators), func(addr string, _ int) {
-		scores[addr] = TrapPositiveGeneratorRewardFactor * float64(posVotes[addr])
 	})
 
 	// Trap Nullification Clause
