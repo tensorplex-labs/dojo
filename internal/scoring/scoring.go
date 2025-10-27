@@ -97,6 +97,13 @@ func CalcTrapScores(discriminators, positiveGenerators, negativeGenerators map[s
 		}
 	})
 
+	lo.ForEach(lo.Keys(negativeGenerators), func(addr string, _ int) {
+		scores[addr] = 0.0
+	})
+	lo.ForEach(lo.Keys(positiveGenerators), func(addr string, _ int) {
+		scores[addr] = 0.0
+	})
+
 	// Trap Nullification Clause
 	totalNegVotes := lo.Sum(lo.Values(negVotes))
 	totalPosVotes := lo.Sum(lo.Values(posVotes))
