@@ -132,7 +132,7 @@ func (v *Validator) runTicker(ctx context.Context, d time.Duration, fn func()) {
 func (v *Validator) Start() {
 	v.Wg.Add(1)
 	go v.runTicker(v.Ctx, v.IntervalConfig.TaskRoundInterval, func() {
-		if chainutils.BurnWeight == 100 {
+		if v.ValidatorConfig.Environment == "prod" && chainutils.BurnWeight == 100 {
 			log.Info().Msg("Burn weight is 100, skipping task round")
 			return
 		}
