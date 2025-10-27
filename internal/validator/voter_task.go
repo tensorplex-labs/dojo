@@ -11,7 +11,7 @@ import (
 
 func (v *Validator) processVotingTasks() {
 	// get tasks that are in voting period
-	log.Info().Msg("Fetching voting tasks from Task API...")
+	log.Trace().Msg("Fetching voting tasks from Task API...")
 
 	headers, err := v.setupAuthHeaders()
 	if err != nil {

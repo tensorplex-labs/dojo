@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	scoresFileName string  = "scores.json"
-	decayFactor    float32 = 0.9
+	scoresFileName string = "scores.json"
+	// decayFactor    float32 = 0.9
 
 	// Redis keys
 	redisVotersKey           string = "voters"
