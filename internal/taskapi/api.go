@@ -301,7 +301,7 @@ func (t *TaskAPI) UpdateTaskToPvV(headers AuthHeaders, taskID, completion, taskM
 		r.SetFileReader("files", "index.html", strings.NewReader(completion))
 	}
 
-	resp, err := r.Put(fmt.Sprintf("/validator/tasks/%s/completion-pvv", taskID))
+	resp, err := r.Put(fmt.Sprintf("/validator/tasks/%s/fill-completion", taskID))
 	if err != nil {
 		return Response[UpdateTaskToPvVResponse]{}, fmt.Errorf("update pvp/trap tasks with one missing completion to pvv: %w", err)
 	}

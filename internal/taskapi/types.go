@@ -175,11 +175,6 @@ type ExpiredTaskWithOneCompletionTaskData struct {
 	SubmittedParticipantHotkey string              `json:"submitted_participant_hotkey"`
 }
 
-type CreateCompletionForm struct {
-	Metadata CodegenTaskMetadata     `form:"metadata" json:"metadata"`
-	Files    []*multipart.FileHeader `form:"files" json:"files"`
-}
-
 type UpdateTaskToPvVResponse struct {
 	TaskID       string `json:"task_id"`
 	CompletionID string `json:"completion_id"`
