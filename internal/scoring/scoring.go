@@ -12,11 +12,9 @@ import (
 )
 
 const (
-	TrapPenalty                       = -0.5
-	TrapPenaltyTransferFactor         = 0.5
-	TrapPositiveGeneratorRewardFactor = 0.003
-	TrapNullificationMinThreshold     = 0.4
-	TrapNullificationMaxThreshold     = 0.6
+	TrapPenalty                   = -0.4
+	TrapNullificationMinThreshold = 0.4
+	TrapNullificationMaxThreshold = 0.6
 
 	NoVotePenaltyTotalDistribution = -4.0
 )
