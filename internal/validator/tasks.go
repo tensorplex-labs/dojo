@@ -167,7 +167,8 @@ func (v *Validator) checkCompletionExists(qaID string) bool {
 func (v *Validator) setWeights(latestScoresData ScoresData) {
 	weightSettingSteps := int(v.IntervalConfig.WeightSettingInterval / v.IntervalConfig.ScoringInterval)
 
-	if latestScoresData.Step == 0 || latestScoresData.Step%weightSettingSteps != 0 {
+	// Skip step check when burn is 100% to ensure weights are always set during pause
+	if chainutils.BurnWeight != 100 && (latestScoresData.Step == 0 || latestScoresData.Step%weightSettingSteps != 0) {
 		nextWeightSettingStep := ((latestScoresData.Step / weightSettingSteps) + 1) * weightSettingSteps
 		remainingSteps := nextWeightSettingStep - latestScoresData.Step
 		remainingMinutes := time.Duration(remainingSteps) * v.IntervalConfig.ScoringInterval
