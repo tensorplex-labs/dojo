@@ -28,7 +28,7 @@ type AuthHeaders struct {
 }
 
 // Response represents a generic API response structure.
-type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | []VotingPhaseTasksResponse | PostTaskScoresAnalyticsResponse | PostTaskScoresAnalyticsBatchResponse | any] struct {
+type Response[T CreateTaskResponse | SubmitCompletionResponse | VotesResponse | TaskStatusUpdateResponse | []VotingPhaseTasksResponse | PostTaskScoresAnalyticsResponse | PostTaskScoresAnalyticsBatchResponse | UpdateTaskToPvVResponse | any] struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message,omitempty"`
 	Error      string `json:"error,omitempty"`
@@ -64,6 +64,8 @@ type CodegenTaskMetadata struct {
 	Prompt                  string `json:"prompt"`
 	ValidatorDuel           bool   `json:"validator_duel"`
 	NegativeGeneratorHotkey string `json:"negative_generator_hotkey"`
+	OriginalQaID            string `json:"original_qa_id"`
+	AugmentedQaID           string `json:"augmented_qa_id"`
 }
 
 // VotesResponse represents the response structure for votes
@@ -157,4 +159,23 @@ type PostTaskScoresAnalyticsBatchResponse struct {
 
 type ScoredTaskAnalyticsBatchRequest struct {
 	Analytics []*ScoredTaskAnalyticsRecord `json:"analytics"`
+}
+
+type ExpiredTasksWithOneCompletionResponse struct {
+	Tasks []ExpiredTaskWithOneCompletionTaskData `json:"tasks"`
+}
+
+type ExpiredTaskWithOneCompletionTaskData struct {
+	TaskID                     string              `json:"task_id"`
+	TaskStatus                 string              `json:"task_status"`
+	ValidatorHotkey            string              `json:"validator_hotkey"`
+	TaskMetadata               CodegenTaskMetadata `json:"task_metadata"`
+	CreatedAt                  time.Time           `json:"created_at"`
+	ExpireAt                   time.Time           `json:"expire_at"`
+	SubmittedParticipantHotkey string              `json:"submitted_participant_hotkey"`
+}
+
+type UpdateTaskToPvVResponse struct {
+	TaskID       string `json:"task_id"`
+	CompletionID string `json:"completion_id"`
 }

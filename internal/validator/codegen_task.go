@@ -18,6 +18,7 @@ const (
 	taskType                 = "codeGen"
 	augmentedProbability     = int64(20) // 20% chance for traps
 	validatorDuelProbability = int64(20) // 20% chance to duel validator
+	assignedQAKeyPrefix      = "assigned:qa"
 )
 
 func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners *ProcessedMiners) {
@@ -49,7 +50,6 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 			log.Error().Err(err).Msgf("Failed to get answer content from redis for question ID %s", synAPIQuestion.QaID)
 			continue
 		}
-
 		var completion syntheticapi.CodegenAnswer
 		if err = sonic.Unmarshal([]byte(completionRaw), &completion); err != nil {
 			log.Error().Err(err).Msgf("Failed to unmarshal answer content from redis for %s", synAPIQuestion.QaID)
@@ -57,14 +57,13 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 		}
 		validatorCompletion = completion.Responses[0].Completion.Files[0].Content
 
-		augmentArgs := augmentTaskArgs{
+		augmentedPrompt, validatorCompletion, trapHotkey := v.augmentTask(&augmentTaskArgs{
 			shouldDuelValidator: shouldDuelValidator,
 			shouldAugment:       shouldAugment,
 			syn:                 synAPIQuestion,
 			selectedMinerUIDs:   selectedMinerUIDs,
 			initialContent:      validatorCompletion,
-		}
-		augmentedPrompt, validatorCompletion, trapHotkey := v.augmentTask(&augmentArgs)
+		})
 
 		payload := taskapi.CreateTasksRequest[taskapi.CodegenTaskMetadata]{
 			TaskType:  taskType,
@@ -74,6 +73,8 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 				Prompt:                  synAPIQuestion.Prompt,
 				ValidatorDuel:           shouldDuelValidator,
 				NegativeGeneratorHotkey: trapHotkey,
+				OriginalQaID:            synAPIQuestion.QaID,
+				AugmentedQaID:           synAPIQuestion.AnsAugID,
 			},
 		}
 
@@ -110,17 +111,49 @@ func (v *Validator) processCodegenTask(activeMinerUIDs []int64, processedMiners 
 			}
 		}
 
-		ok, err := v.SyntheticAPI.PopQA(synAPIQuestion.QaID)
-		if err != nil {
-			log.Error().Err(err).Msgf("Failed to pop question with ID %s", synAPIQuestion.QaID)
+		if err = v.postProcessCodegenTask(synAPIQuestion.QaID, synAPIQuestion.AnsAugID); err != nil {
+			log.Error().Err(err).Msgf("Failed to post process for task ID %s", taskCreationResponse.Data.TaskID)
 			continue
 		}
-		if !ok {
-			log.Error().Msgf("Failed to pop question with ID %s", synAPIQuestion.QaID)
-			continue
-		}
+
 		log.Info().Msgf("Processed miners so far: %d/%d\n", len(processedMiners.uids), len(activeMinerUIDs))
 	}
+}
+
+func (v *Validator) postProcessCodegenTask(qaID, ansAugID string) error {
+	originalCompletion, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisSyntheticAnswersKey, qaID))
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to get answer content from redis for question ID %s", qaID)
+		return err
+	}
+
+	if err = v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", assignedQAKeyPrefix, qaID), originalCompletion, 2*v.IntervalConfig.TaskExpiryDuration); err != nil {
+		log.Error().Err(err).Msgf("Failed to reassign qa id for question ID %s", qaID)
+		return err
+	}
+
+	augmentedCompletion, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisSyntheticAnswersKey, ansAugID))
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to get answer content from redis for question ID %s", ansAugID)
+		return err
+	}
+
+	if err = v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", assignedQAKeyPrefix, ansAugID), augmentedCompletion, 2*v.IntervalConfig.TaskExpiryDuration); err != nil {
+		log.Error().Err(err).Msgf("Failed to reassign qa id for question ID %s", ansAugID)
+		return err
+	}
+
+	ok, err := v.SyntheticAPI.PopQA(qaID)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to pop question with ID %s", qaID)
+		return err
+	}
+	if !ok {
+		log.Error().Msgf("Failed to pop question with ID %s", qaID)
+		return err
+	}
+
+	return nil
 }
 
 func cryptoIntn(n int) int {
@@ -265,4 +298,116 @@ func (v *Validator) pickRandomMiners(activeMinerUIDs []int64, shouldDuelValidato
 		}
 	}
 	return selectedMiners
+}
+
+func (v *Validator) reassignTasks() {
+	expiredTasks, err := v.retrieveExpiredTaskWithOneCompletion()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve expired tasks that is missing one completion")
+		return
+	}
+	if len(expiredTasks) == 0 {
+		log.Info().Msg("No expired tasks that are missing one completion found")
+		return
+	}
+
+	log.Info().Msgf("Found %d expired tasks that are missing one completion", len(expiredTasks))
+
+	for i := range expiredTasks {
+		err := v.reassignTask(&expiredTasks[i])
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to reassign task %s", expiredTasks[i].TaskID)
+			continue
+		}
+		log.Info().Msgf("Reassigned task %s", expiredTasks[i].TaskID)
+	}
+}
+
+func (v *Validator) retrieveExpiredTaskWithOneCompletion() ([]taskapi.ExpiredTaskWithOneCompletionTaskData, error) {
+	headers, err := v.setupAuthHeaders()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to sign message")
+		return nil, err
+	}
+
+	response, err := v.TaskAPI.GetExpiredTasksWithOneCompletion(headers)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get expired tasks that is missing one completion")
+		return nil, err
+	}
+
+	return response.Data.Tasks, nil
+}
+
+func (v *Validator) reassignTask(task *taskapi.ExpiredTaskWithOneCompletionTaskData) error {
+	negativeGeneratorHotkey, getTrapHotkeyErr := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, task.TaskID))
+	if getTrapHotkeyErr != nil {
+		return fmt.Errorf("failed to get trap for task %s: %w", task.TaskID, getTrapHotkeyErr)
+	}
+
+	validatorCompletion, err := v.determineCompletion(task, negativeGeneratorHotkey)
+	if err != nil {
+		return fmt.Errorf("failed to determine completion for task %s: %w", task.TaskID, err)
+	}
+
+	task.TaskMetadata.ValidatorDuel = true
+	if negativeGeneratorHotkey != "" && negativeGeneratorHotkey != task.SubmittedParticipantHotkey {
+		task.TaskMetadata.NegativeGeneratorHotkey = task.ValidatorHotkey
+	}
+	updatedTaskMetadata, err := sonic.Marshal(task.TaskMetadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task metadata: %w", err)
+	}
+
+	headers, err := v.setupAuthHeaders()
+	if err != nil {
+		return fmt.Errorf("failed to sign message: %w", err)
+	}
+
+	_, err = v.TaskAPI.UpdateTaskToPvV(headers, task.TaskID, validatorCompletion, string(updatedTaskMetadata))
+	if err != nil {
+		return fmt.Errorf("failed to update task to pvv: %w", err)
+	}
+
+	if negativeGeneratorHotkey != "" && negativeGeneratorHotkey != task.SubmittedParticipantHotkey {
+		err = v.Redis.Set(v.Ctx, fmt.Sprintf("%s:%s", redisTrapKey, task.TaskID), task.ValidatorHotkey, 2*v.IntervalConfig.ScoreResetInterval)
+		if err != nil {
+			return fmt.Errorf("failed to set trap for task ID %s: %w", task.TaskID, err)
+		}
+	}
+
+	return nil
+}
+
+func (v *Validator) determineCompletion(task *taskapi.ExpiredTaskWithOneCompletionTaskData, negativeGeneratorHotkey string) (string, error) {
+	if negativeGeneratorHotkey == "" || negativeGeneratorHotkey == task.SubmittedParticipantHotkey {
+		completion, err := v.getCompletionFromCache(task.TaskMetadata.OriginalQaID)
+		if err != nil {
+			return "", fmt.Errorf("failed to get completion from cache for question ID %s: %w", task.TaskMetadata.OriginalQaID, err)
+		}
+		return completion, nil
+	}
+
+	completion, err := v.getCompletionFromCache(task.TaskMetadata.AugmentedQaID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get completion from cache for question ID %s: %w", task.TaskMetadata.AugmentedQaID, err)
+	}
+	return completion, nil
+}
+
+func (v *Validator) getCompletionFromCache(qaID string) (string, error) {
+	completionRaw, err := v.Redis.Get(v.Ctx, fmt.Sprintf("%s:%s", assignedQAKeyPrefix, qaID))
+	if err != nil {
+		return "", fmt.Errorf("failed to get answer content from redis for question ID %s: %w", qaID, err)
+	}
+
+	if completionRaw == "" {
+		return "", fmt.Errorf("completion not found for question ID %s", qaID)
+	}
+
+	var completion syntheticapi.CodegenAnswer
+	if err = sonic.Unmarshal([]byte(completionRaw), &completion); err != nil {
+		return "", fmt.Errorf("failed to unmarshal answer content from redis for %s: %w", qaID, err)
+	}
+	return completion.Responses[0].Completion.Files[0].Content, nil
 }

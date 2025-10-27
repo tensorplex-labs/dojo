@@ -24,12 +24,14 @@ type TaskAPIInterface interface {
 	SubmitCompletion(headers AuthHeaders, taskID, completion string) (Response[SubmitCompletionResponse], error)
 	PostTaskScoresAnalytics(headers AuthHeaders, scoredTaskAnalyticsRecord *ScoredTaskAnalyticsRecord) (Response[PostTaskScoresAnalyticsResponse], error)
 	PostTaskScoresAnalyticsBatch(headers AuthHeaders, scoredTaskAnalyticsRecords ScoredTaskAnalyticsBatchRequest) (Response[PostTaskScoresAnalyticsBatchResponse], error)
+	UpdateTaskToPvV(headers AuthHeaders, taskID, completion, taskMetadata string) (Response[UpdateTaskToPvVResponse], error)
 
 	// GET requests
 	GetExpiredTasks(headers AuthHeaders) (Response[VotesResponse], error)
 	GetExpiredTasksRollingWindow(headers AuthHeaders, hours int) (Response[VotesResponse], error)
 	GetVotingTasks(headers AuthHeaders) (Response[[]VotingPhaseTasksResponse], error)
 	UpdateTaskStatus(headers AuthHeaders, taskID, status string) (Response[TaskStatusUpdateResponse], error)
+	GetExpiredTasksWithOneCompletion(headers AuthHeaders) (Response[ExpiredTasksWithOneCompletionResponse], error)
 }
 
 // TaskAPI is a REST client wrapper for the task service.
@@ -258,5 +260,54 @@ func (t *TaskAPI) GetVotingTasks(headers AuthHeaders) (Response[[]VotingPhaseTas
 			resp.StatusCode(), resp.String())
 	}
 
+	return out, nil
+}
+
+func (t *TaskAPI) GetExpiredTasksWithOneCompletion(headers AuthHeaders) (Response[ExpiredTasksWithOneCompletionResponse], error) {
+	var out Response[ExpiredTasksWithOneCompletionResponse]
+	r := t.client.R().
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
+		SetResult(&out)
+
+	resp, err := r.Get("/validator/tasks/incomplete-pvp")
+	if err != nil {
+		return Response[ExpiredTasksWithOneCompletionResponse]{}, fmt.Errorf("get expired pvp/trap tasks with one missing completion: %w", err)
+	}
+
+	if resp.IsError() {
+		return Response[ExpiredTasksWithOneCompletionResponse]{}, fmt.Errorf("get expired pvp/trap tasks with one missing completion returned status %d: %s",
+			resp.StatusCode(), resp.String())
+	}
+
+	return out, nil
+}
+
+func (t *TaskAPI) UpdateTaskToPvV(headers AuthHeaders, taskID, completion, taskMetadata string) (Response[UpdateTaskToPvVResponse], error) {
+	var out Response[UpdateTaskToPvVResponse]
+
+	vals := url.Values{}
+	vals.Set("metadata", taskMetadata)
+
+	r := t.client.R().
+		SetHeader("X-Hotkey", headers.Hotkey).
+		SetHeader("X-Signature", headers.Signature).
+		SetHeader("X-Message", headers.Message).
+		SetFormDataFromValues(vals).
+		SetResult(&out)
+
+	if completion != "" {
+		r.SetFileReader("files", "index.html", strings.NewReader(completion))
+	}
+
+	resp, err := r.Put(fmt.Sprintf("/validator/tasks/%s/fill-completion", taskID))
+	if err != nil {
+		return Response[UpdateTaskToPvVResponse]{}, fmt.Errorf("update pvp/trap tasks with one missing completion to pvv: %w", err)
+	}
+	if resp.IsError() {
+		return Response[UpdateTaskToPvVResponse]{}, fmt.Errorf("update pvp/trap tasks with one missing completion to pvv returned status %d: %s",
+			resp.StatusCode(), resp.String())
+	}
 	return out, nil
 }

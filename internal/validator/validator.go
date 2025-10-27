@@ -138,6 +138,7 @@ func (v *Validator) Start() {
 		}
 
 		v.sendTaskRound()
+		v.reassignTasks()
 	})
 
 	v.Wg.Add(1)
