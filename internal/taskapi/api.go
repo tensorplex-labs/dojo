@@ -288,7 +288,7 @@ func (t *TaskAPI) UpdateTaskToPvV(headers AuthHeaders, taskID, completion, taskM
 	var out Response[UpdateTaskToPvVResponse]
 
 	vals := url.Values{}
-	vals.Set("metadata", taskMetadata)
+	vals.Set("task_metadata", taskMetadata)
 
 	r := t.client.R().
 		SetHeader("X-Hotkey", headers.Hotkey).
