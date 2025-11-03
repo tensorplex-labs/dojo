@@ -111,12 +111,12 @@ var (
 	}
 	TestIntervalConfig = &IntervalConfig{
 		MetagraphInterval:     30 * time.Second,
-		TaskRoundInterval:     15 * time.Minute,
+		TaskRoundInterval:     3 * time.Hour,
 		BlockInterval:         12 * time.Second,
-		ScoringInterval:       5 * time.Minute,
+		ScoringInterval:       15 * time.Minute,
 		ScoreResetInterval:    24 * time.Hour,
 		WeightSettingInterval: 1 * time.Hour,
-		TaskExpiryDuration:    2 * time.Hour,
+		TaskExpiryDuration:    6 * time.Hour,
 		VotersCacheInterval:   15 * time.Minute,
 	}
 	ProdIntervalConfig = &IntervalConfig{
